@@ -1,0 +1,116 @@
+[
+  {
+    "fixture_id": "shelf_cereal_001",
+    "image_path": "fixtures/shelf_cereal_001.jpg",
+    "store_context": {
+      "store_id": "100",
+      "competitor_name": "Target",
+      "aisle": "A4_Breakfast_Cereal"
+    },
+    "ground_truth": [
+      {
+        "product_name": "Cheerios Gluten Free Cereal 18oz",
+        "brand": "General Mills",
+        "upc": "016000275270",
+        "price": 4.98,
+        "unit_price": 0.2767,
+        "unit_of_measure": "OZ",
+        "bounding_box": {
+          "ymin": 320,
+          "xmin": 150,
+          "ymax": 680,
+          "xmax": 420
+        },
+        "expected_catalog_sku": "SKU_WMT_CHEERIOS_18OZ",
+        "min_similarity_score": 0.88
+      },
+      {
+        "product_name": "Honey Nut Cheerios Cereal 18.8oz",
+        "brand": "General Mills",
+        "upc": "016000275287",
+        "price": 4.98,
+        "unit_price": 0.2649,
+        "unit_of_measure": "OZ",
+        "bounding_box": {
+          "ymin": 315,
+          "xmin": 435,
+          "ymax": 675,
+          "xmax": 710
+        },
+        "expected_catalog_sku": "SKU_WMT_HN_CHEERIOS_18OZ",
+        "min_similarity_score": 0.89
+      }
+    ]
+  },
+  {
+    "fixture_id": "shelf_beverage_002",
+    "image_path": "fixtures/shelf_beverage_002.jpg",
+    "store_context": {
+      "store_id": "104",
+      "competitor_name": "Kroger",
+      "aisle": "B2_Soda_Sparkling"
+    },
+    "ground_truth": [
+      {
+        "product_name": "Coca-Cola Original Taste Soda 12pk 12 fl oz Cans",
+        "brand": "Coca-Cola",
+        "upc": "049000028904",
+        "price": 8.49,
+        "unit_price": 0.0589,
+        "unit_of_measure": "FL_OZ",
+        "bounding_box": {
+          "ymin": 210,
+          "xmin": 100,
+          "ymax": 520,
+          "xmax": 480
+        },
+        "expected_catalog_sku": "SKU_WMT_COKE_12PK_12OZ",
+        "min_similarity_score": 0.92
+      },
+      {
+        "product_name": "Diet Coke Soda 12pk 12 fl oz Cans",
+        "brand": "Coca-Cola",
+        "upc": "049000028911",
+        "price": 8.49,
+        "unit_price": 0.0589,
+        "unit_of_measure": "FL_OZ",
+        "bounding_box": {
+          "ymin": 215,
+          "xmin": 510,
+          "ymax": 525,
+          "xmax": 890
+        },
+        "expected_catalog_sku": "SKU_WMT_DIET_COKE_12PK",
+        "min_similarity_score": 0.91
+      }
+    ]
+  },
+  {
+    "fixture_id": "shelf_snacks_003",
+    "image_path": "fixtures/shelf_snacks_003.jpg",
+    "store_context": {
+      "store_id": "100",
+      "competitor_name": "Target",
+      "aisle": "C1_Chips_Pretzels"
+    },
+    "ground_truth": [
+      {
+        "product_name": "Lay's Classic Potato Chips Party Size 13oz",
+        "brand": "Lay's",
+        "upc": "028400043816",
+        "price": 4.79,
+        "unit_price": 0.3685,
+        "unit_of_measure": "OZ",
+        "bounding_box": {
+          "ymin": 180,
+          "xmin": 200,
+          "ymax": 640,
+          "xmax": 560
+        },
+        "expected_catalog_sku": "SKU_WMT_LAYS_CLASSIC_13OZ",
+        "min_similarity_score": 0.90
+      }
+    ]
+  }
+]
+
