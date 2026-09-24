@@ -1,0 +1,42 @@
+name: go-ci
+
+on:
+  push:
+    branches: [main]
+    paths: ["go/**", ".github/workflows/go-*.yml"]
+  pull_request:
+    paths: ["go/**", ".github/workflows/go-*.yml"]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        working-directory: go
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go/go.mod
+          cache-dependency-path: go/go.sum
+      # Linux runs the real bubblewrap sandbox tests.
+      - name: Install bubblewrap
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y bubblewrap
+          # Ubuntu 24.04 restricts unprivileged user namespaces via AppArmor.
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true
+      - run: gofmt -l cmd pkg | tee /dev/stderr | (! read)
+      - run: go vet ./...
+      - run: go test -race ./...
+      - name: Sandbox enforcement must not be skipped
+        run: go test -count=1 -v -run TestOSSandboxEnforcement ./pkg/tools/ | tee out.txt && ! grep -q -- '--- SKIP' out.txt
+      - run: make cross-compile

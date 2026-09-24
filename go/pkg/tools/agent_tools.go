@@ -2,6 +2,7 @@ package tools
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/retail-cortex/code_puppy/pkg/agents"
 	"google.golang.org/adk/v2/agent"
@@ -34,9 +35,13 @@ func NewListAgentsTool(registry *agents.Registry) (tool.Tool, error) {
 			Description: "List all available agent personas and capabilities",
 		},
 		func(ctx agent.Context, input ListAgentsInput) (ListAgentsOutput, error) {
+			filter := strings.ToLower(input.Filter)
 			list := registry.List()
 			summaries := make([]AgentSummary, 0, len(list))
 			for _, a := range list {
+				if filter != "" && !strings.Contains(strings.ToLower(a.Name), filter) {
+					continue
+				}
 				summaries = append(summaries, AgentSummary{
 					Name:        a.Name,
 					DisplayName: a.DisplayName,
@@ -46,18 +51,6 @@ func NewListAgentsTool(registry *agents.Registry) (tool.Tool, error) {
 			return ListAgentsOutput{Agents: summaries}, nil
 		},
 	)
-}
-
-// InvokeAgentFunc is a callback invoked when an agent transfers or delegates a subtask.
-type InvokeAgentFunc func(agentName, prompt string) (string, error)
-
-var (
-	subagentInvoker InvokeAgentFunc
-)
-
-// SetSubagentInvoker sets the delegator for subagent calls.
-func SetSubagentInvoker(invoker InvokeAgentFunc) {
-	subagentInvoker = invoker
 }
 
 // InvokeAgentInput defines arguments for invoke_agent.
@@ -73,33 +66,33 @@ type InvokeAgentOutput struct {
 	Error     string `json:"error,omitempty"`
 }
 
-// NewInvokeAgentTool creates an ADK tool for subagent delegation.
-func NewInvokeAgentTool(registry *agents.Registry) (tool.Tool, error) {
+// NewInvokeAgentTool creates an ADK tool for subagent delegation. The actual
+// invocation is supplied at runtime through hooks.SetSubagentInvoker.
+func NewInvokeAgentTool(registry *agents.Registry, hooks *Hooks) (tool.Tool, error) {
 	return functiontool.New(
 		functiontool.Config{
 			Name:        "invoke_agent",
 			Description: "Delegate a task to another specialized agent persona and receive their response",
 		},
 		func(ctx agent.Context, input InvokeAgentInput) (InvokeAgentOutput, error) {
+			fail := func(msg string) (InvokeAgentOutput, error) {
+				return InvokeAgentOutput{AgentName: input.AgentName, Error: msg}, nil
+			}
 			if _, ok := registry.Get(input.AgentName); !ok {
-				return InvokeAgentOutput{
-					AgentName: input.AgentName,
-					Error:     fmt.Sprintf("agent '%s' is not registered; use list_agents to inspect available agents", input.AgentName),
-				}, nil
+				return fail(fmt.Sprintf("agent '%s' is not registered; use list_agents to inspect available agents", input.AgentName))
 			}
-
-			if subagentInvoker != nil {
-				res, err := subagentInvoker(input.AgentName, input.Prompt)
-				if err != nil {
-					return InvokeAgentOutput{AgentName: input.AgentName, Error: fmt.Sprintf("subagent failed: %v", err)}, nil
-				}
-				return InvokeAgentOutput{AgentName: input.AgentName, Response: res}, nil
+			if strings.TrimSpace(input.Prompt) == "" {
+				return fail("prompt must not be empty")
 			}
-
-			return InvokeAgentOutput{
-				AgentName: input.AgentName,
-				Response:  fmt.Sprintf("[Subagent %s]: completed task '%s'", input.AgentName, input.Prompt),
-			}, nil
+			invoker := hooks.subagentInvoker()
+			if invoker == nil {
+				return fail("subagent delegation is not available in this session")
+			}
+			res, err := invoker(ctx, input.AgentName, input.Prompt)
+			if err != nil {
+				return fail(fmt.Sprintf("subagent failed: %v", err))
+			}
+			return InvokeAgentOutput{AgentName: input.AgentName, Response: res}, nil
 		},
 	)
 }

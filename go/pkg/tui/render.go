@@ -3,22 +3,24 @@ package tui
 import (
 	"fmt"
 	"strings"
+
+	"github.com/retail-cortex/code_puppy/pkg/textutil"
 )
 
 // ANSI color codes
 const (
-	Reset     = "\033[0m"
-	Bold      = "\033[1m"
-	Dim       = "\033[2m"
-	Red       = "\033[31m"
-	Green     = "\033[32m"
-	Yellow    = "\033[33m"
-	Blue      = "\033[34m"
-	Magenta   = "\033[35m"
-	Cyan      = "\033[36m"
-	White     = "\033[37m"
-	BgBlack   = "\033[40m"
-	BgBlue    = "\033[44m"
+	Reset   = "\033[0m"
+	Bold    = "\033[1m"
+	Dim     = "\033[2m"
+	Red     = "\033[31m"
+	Green   = "\033[32m"
+	Yellow  = "\033[33m"
+	Blue    = "\033[34m"
+	Magenta = "\033[35m"
+	Cyan    = "\033[36m"
+	White   = "\033[37m"
+	BgBlack = "\033[40m"
+	BgBlue  = "\033[44m"
 )
 
 // PrintBanner renders the Code Puppy ASCII splash banner.
@@ -56,36 +58,69 @@ func FormatDiff(diffText string) string {
 	return sb.String()
 }
 
-// PrintToolCall renders an invocation badge for a tool.
-func PrintToolCall(toolName string, args map[string]any) {
-	fmt.Printf("\n%s⚙️  Tool Call:%s %s%s%s", Yellow, Reset, Bold, toolName, Reset)
+// safe prepares untrusted text (model output, tool args/results) for the
+// terminal by removing control sequences.
+func safe(s string) string { return textutil.SanitizeTerminal(s) }
+
+// PrintModelText writes streamed model text with control sequences removed.
+func PrintModelText(text string) { fmt.Print(safe(text)) }
+
+// FormatToolCall renders an invocation badge for a tool.
+func FormatToolCall(toolName string, args map[string]any) string {
+	var sb strings.Builder
+	fmt.Fprintf(&sb, "\n%s⚙️  Tool Call:%s %s%s%s", Yellow, Reset, Bold, safe(toolName), Reset)
 	if path, ok := args["path"].(string); ok && path != "" {
-		fmt.Printf(" (%s%s%s)", Cyan, path, Reset)
+		fmt.Fprintf(&sb, " (%s%s%s)", Cyan, safe(textutil.Ellipsize(path, 120)), Reset)
 	} else if cmd, ok := args["command"].(string); ok && cmd != "" {
-		if len(cmd) > 60 {
-			cmd = cmd[:57] + "..."
-		}
-		fmt.Printf(" (%s%s%s)", Dim, cmd, Reset)
+		fmt.Fprintf(&sb, " (%s%s%s)", Dim, safe(textutil.Ellipsize(cmd, 60)), Reset)
 	} else if q, ok := args["query"].(string); ok && q != "" {
-		fmt.Printf(" (query: %s%s%s)", Cyan, q, Reset)
+		fmt.Fprintf(&sb, " (query: %s%s%s)", Cyan, safe(textutil.Ellipsize(q, 80)), Reset)
 	}
-	fmt.Println()
+	sb.WriteByte('\n')
+	return sb.String()
 }
 
-// PrintToolResult renders a completed tool badge.
-func PrintToolResult(toolName string, success bool, summary string) {
+// PrintToolCall prints FormatToolCall.
+func PrintToolCall(toolName string, args map[string]any) {
+	fmt.Print(FormatToolCall(toolName, args))
+}
+
+// FormatToolResult renders a completed tool badge.
+func FormatToolResult(toolName string, success bool, summary string) string {
 	icon := "✅"
 	color := Green
 	if !success {
 		icon = "❌"
 		color = Red
 	}
+	toolName = safe(toolName)
 	if summary != "" {
-		if len(summary) > 80 {
-			summary = summary[:77] + "..."
-		}
-		fmt.Printf("%s%s [%s]:%s %s\n", color, icon, toolName, Reset, summary)
-	} else {
-		fmt.Printf("%s%s [%s] done%s\n", color, icon, toolName, Reset)
+		// Collapse to one line so multi-line output cannot spoof other UI.
+		summary = strings.Join(strings.Fields(safe(summary)), " ")
+		return fmt.Sprintf("%s%s [%s]:%s %s\n", color, icon, toolName, Reset, textutil.Ellipsize(summary, 80))
 	}
+	return fmt.Sprintf("%s%s [%s] done%s\n", color, icon, toolName, Reset)
+}
+
+// PrintToolResult prints FormatToolResult.
+func PrintToolResult(toolName string, success bool, summary string) {
+	fmt.Print(FormatToolResult(toolName, success, summary))
+}
+
+// SummarizeToolResponse picks a short summary from a function response and
+// reports whether it represents success.
+func SummarizeToolResponse(resp map[string]any) (summary string, success bool) {
+	if resp == nil {
+		return "", true
+	}
+	if errStr, ok := resp["error"].(string); ok && errStr != "" {
+		return errStr, false
+	}
+	if resStr, ok := resp["result"].(string); ok && resStr != "" {
+		return resStr, true
+	}
+	if cnt, ok := resp["content"].(string); ok && cnt != "" {
+		return fmt.Sprintf("%d bytes read", len(cnt)), true
+	}
+	return "", true
 }

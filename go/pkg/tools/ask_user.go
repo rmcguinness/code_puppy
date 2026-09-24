@@ -1,10 +1,7 @@
 package tools
 
 import (
-	"bufio"
 	"fmt"
-	"os"
-	"strings"
 
 	"google.golang.org/adk/v2/agent"
 	"google.golang.org/adk/v2/tool"
@@ -23,20 +20,10 @@ type AskUserQuestionOutput struct {
 	Error  string `json:"error,omitempty"`
 }
 
-// UserPromptFunc is an optional callback to hook interactive prompt responses.
-type UserPromptFunc func(question string, options []string) (string, error)
-
-var (
-	customPromptHandler UserPromptFunc
-)
-
-// SetUserPromptHandler sets a custom prompt handler for interactive UI/TUI.
-func SetUserPromptHandler(handler UserPromptFunc) {
-	customPromptHandler = handler
-}
-
-// NewAskUserQuestionTool creates an ADK tool for asking user questions.
-func NewAskUserQuestionTool() (tool.Tool, error) {
+// NewAskUserQuestionTool creates an ADK tool for asking user questions. The
+// prompt is delegated to hooks so it shares the host's stdin reader instead of
+// competing with it for buffered input.
+func NewAskUserQuestionTool(hooks *Hooks) (tool.Tool, error) {
 	return functiontool.New(
 		functiontool.Config{
 			Name:        "ask_user_question",
@@ -46,31 +33,15 @@ func NewAskUserQuestionTool() (tool.Tool, error) {
 			if input.Question == "" {
 				return AskUserQuestionOutput{Error: "question cannot be empty"}, nil
 			}
-
-			if customPromptHandler != nil {
-				answer, err := customPromptHandler(input.Question, input.Options)
-				if err != nil {
-					return AskUserQuestionOutput{Error: fmt.Sprintf("prompt failed: %v", err)}, nil
-				}
-				return AskUserQuestionOutput{Answer: answer}, nil
+			prompter := hooks.userPrompter()
+			if prompter == nil {
+				return AskUserQuestionOutput{Error: "interactive input is not available; proceed with your best judgement"}, nil
 			}
-
-			// Fallback standard stdin prompt
-			fmt.Printf("\n❓ [Puppy Question]: %s\n", input.Question)
-			if len(input.Options) > 0 {
-				for i, opt := range input.Options {
-					fmt.Printf("   [%d] %s\n", i+1, opt)
-				}
-			}
-			fmt.Print("👉 Answer: ")
-
-			reader := bufio.NewReader(os.Stdin)
-			line, err := reader.ReadString('\n')
+			answer, err := prompter(ctx, input.Question, input.Options)
 			if err != nil {
-				return AskUserQuestionOutput{Error: fmt.Sprintf("failed to read user input: %v", err)}, nil
+				return AskUserQuestionOutput{Error: fmt.Sprintf("prompt failed: %v", err)}, nil
 			}
-
-			return AskUserQuestionOutput{Answer: strings.TrimSpace(line)}, nil
+			return AskUserQuestionOutput{Answer: answer}, nil
 		},
 	)
 }

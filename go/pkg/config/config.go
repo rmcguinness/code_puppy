@@ -26,6 +26,17 @@ type Config struct {
 	Skills    SkillsConfig    `toml:"skills"`
 	Tools     ToolsConfig     `toml:"tools"`
 	Session   SessionConfig   `toml:"session"`
+	Sandbox   SandboxConfig   `toml:"sandbox"`
+
+	UI          UIConfig              `toml:"ui"`
+	Memory      MemoryConfig          `toml:"memory"`
+	Context     ContextConfig         `toml:"context"`
+	Audit       AuditConfig           `toml:"audit"`
+	Checkpoints CheckpointConfig      `toml:"checkpoints"`
+	Hooks       HooksConfig           `toml:"hooks"`
+	MCP         MCPConfig             `toml:"mcp"`
+	Web         WebConfig             `toml:"web"`
+	Pricing     map[string]ModelPrice `toml:"pricing"`
 }
 
 // CodePuppyConfig controls the core persona and behavior settings.
@@ -38,6 +49,11 @@ type CodePuppyConfig struct {
 	Temperature  float64 `toml:"temperature"`
 	MaxTokens    int     `toml:"max_tokens"`
 	AutoApprove  bool    `toml:"auto_approve"`
+	// TrustWorkspace allows agents and skills found inside the current
+	// workspace (./agents, ./skills, .agents/skills) to be loaded. Workspace
+	// content can inject prompts, so it is off by default and can only be
+	// enabled from trusted config or the --trust-workspace flag.
+	TrustWorkspace bool `toml:"trust_workspace"`
 }
 
 // LLMConfig holds provider configurations for LLM backends.
@@ -81,6 +97,59 @@ type ToolsConfig struct {
 	MaxFileSizeBytes    int64  `toml:"max_file_size_bytes"`
 	WorkspaceDir        string `toml:"workspace_dir"`
 	AutoApproveCommands bool   `toml:"auto_approve_commands"`
+	UCToolsDir          string `toml:"uc_tools_dir"`
+	// ApprovalsFile stores "always allow" decisions.
+	ApprovalsFile string `toml:"approvals_file"`
+}
+
+// SandboxConfig bounds what tools may touch.
+//
+// File tools are confined to the workspace plus AllowedPaths (read-write) and
+// ReadOnlyPaths, minus BlockedPaths. Shell commands are checked against the
+// command policy and, when Shell is "auto" or "required", run under the OS
+// sandbox (macOS Seatbelt): writes are limited to the writable roots,
+// ShellWritablePaths and temp/cache dirs, blocked paths can't be read, and
+// network access follows AllowNetwork.
+type SandboxConfig struct {
+	AllowedPaths       []string       `toml:"allowed_paths"`
+	ReadOnlyPaths      []string       `toml:"read_only_paths"`
+	BlockedPaths       []string       `toml:"blocked_paths"`
+	ShellWritablePaths []string       `toml:"shell_writable_paths"`
+	Shell              string         `toml:"shell"` // auto | required | off
+	AllowNetwork       bool           `toml:"allow_network"`
+	ScrubEnv           []string       `toml:"scrub_env"`
+	Commands           CommandsConfig `toml:"commands"`
+}
+
+// CommandsConfig holds shell command patterns. Patterns match a whole simple
+// command ("git status"); "*" matches anything and a trailing " *" also
+// matches the bare command. Deny wins over Allow; if Allow is non-empty only
+// matching commands may run; AutoApprove skips the approval prompt.
+type CommandsConfig struct {
+	Allow       []string `toml:"allow"`
+	Deny        []string `toml:"deny"`
+	AutoApprove []string `toml:"auto_approve"`
+}
+
+// DefaultBlockedPaths are secrets that tools never read or write.
+var DefaultBlockedPaths = []string{
+	".env", ".env.local", ".env.*.local", ".env.toml", ".env.*.toml",
+	"*.pem", "*.key", "*.p12", "id_rsa*", "id_ecdsa*", "id_ed25519*",
+	"~/.ssh", "~/.aws", "~/.gnupg", "~/.config/gcloud", "~/.azure", "~/.kube",
+	"~/.docker/config.json", "~/.netrc", "~/.code_puppy/puppy.cfg",
+}
+
+// DefaultScrubEnv are environment variables withheld from commands the model
+// runs, so they can't read Code Puppy's own credentials.
+var DefaultScrubEnv = []string{
+	"*_API_KEY", "*_API_TOKEN", "*_SECRET", "*_SECRET_KEY", "*_ACCESS_KEY",
+	"AWS_SESSION_TOKEN", "GOOGLE_APPLICATION_CREDENTIALS", "MODENV_*",
+}
+
+// DefaultDeniedCommands are refused regardless of approval.
+var DefaultDeniedCommands = []string{
+	"sudo *", "su *", "doas *",
+	"shutdown *", "reboot *", "halt *", "mkfs *", "mkfs.*", "diskutil erase*",
 }
 
 // SessionConfig configures persistence and session storage.
@@ -96,7 +165,7 @@ func DefaultConfig() *Config {
 		homeDir = "."
 	}
 
-	return &Config{
+	cfg := &Config{
 		CodePuppy: CodePuppyConfig{
 			PuppyName:    "Code Puppy",
 			OwnerName:    "Developer",
@@ -141,27 +210,43 @@ func DefaultConfig() *Config {
 			StorageDir: filepath.Join(homeDir, ".code_puppy", "sessions"),
 			AutoSave:   true,
 		},
+		Sandbox: SandboxConfig{
+			BlockedPaths:       append([]string(nil), DefaultBlockedPaths...),
+			ShellWritablePaths: []string{"~/.cache", "~/go/pkg/mod", "~/.npm"},
+			Shell:              "auto",
+			AllowNetwork:       true,
+			ScrubEnv:           append([]string(nil), DefaultScrubEnv...),
+			Commands: CommandsConfig{
+				Deny: append([]string(nil), DefaultDeniedCommands...),
+			},
+		},
 	}
+	applyFeatureDefaults(cfg)
+	return cfg
 }
 
-// Load loads configuration using retail-cortex/modenv if .env.toml exists,
-// falling back to DefaultConfig with environment variable overrides.
+// Load loads configuration using modenv from a trusted directory, falling back
+// to DefaultConfig with environment variable overrides.
+//
+// The config directory is, in order: prefixDir (the --config flag), the
+// MODENV_PREFIX environment variable, then ~/.code_puppy. The current working
+// directory is deliberately NOT consulted: a cloned repository could otherwise
+// ship a .env.toml that redirects llm.openai.base_url to an attacker's server
+// and receive the user's API key, or enable auto-approval. Pass --config .
+// to opt in to a workspace config explicitly.
 func Load(prefixDir string) (*Config, error) {
 	cfg := DefaultConfig()
 
-	if prefixDir != "" {
-		if err := os.Setenv("MODENV_PREFIX", prefixDir); err != nil {
-			return nil, fmt.Errorf("failed to set MODENV_PREFIX: %w", err)
-		}
+	dir := ConfigDir(prefixDir)
+	if dir == "" {
+		applyEnvOverrides(cfg)
+		return cfg, nil
+	}
+	if err := os.Setenv("MODENV_PREFIX", dir); err != nil {
+		return nil, fmt.Errorf("failed to set MODENV_PREFIX: %w", err)
 	}
 
-	// Check if .env.toml exists in prefixDir or current directory
-	checkPath := ".env.toml"
-	if pfx := os.Getenv("MODENV_PREFIX"); pfx != "" {
-		checkPath = filepath.Join(pfx, ".env.toml")
-	}
-
-	if _, err := os.Stat(checkPath); err == nil {
+	if _, err := os.Stat(filepath.Join(dir, ".env.toml")); err == nil {
 		// Load hierarchical configuration and decrypt secrets via modenv
 		_, loadErr := modenv.Load(cfg)
 		if loadErr != nil {
@@ -173,6 +258,61 @@ func Load(prefixDir string) (*Config, error) {
 	applyEnvOverrides(cfg)
 
 	return cfg, nil
+}
+
+// ConfigDir returns the trusted directory to load .env.toml from, or "" if none.
+func ConfigDir(prefixDir string) string {
+	if prefixDir != "" {
+		return ExpandHome(prefixDir)
+	}
+	if pfx := os.Getenv("MODENV_PREFIX"); pfx != "" {
+		return ExpandHome(pfx)
+	}
+	if home, err := os.UserHomeDir(); err == nil {
+		return filepath.Join(home, ".code_puppy")
+	}
+	return ""
+}
+
+// ExpandHome expands a leading "~" or "~/" to the user's home directory.
+// Other forms (e.g. "~user") are returned unchanged.
+func ExpandHome(p string) string {
+	if p != "~" && !strings.HasPrefix(p, "~/") && !strings.HasPrefix(p, "~"+string(filepath.Separator)) {
+		return p
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return p
+	}
+	return filepath.Join(home, p[1:])
+}
+
+// IsWorkspaceRelative reports whether a configured search path points into the
+// current workspace (a relative path) rather than a user-level location.
+func IsWorkspaceRelative(p string) bool {
+	return !filepath.IsAbs(ExpandHome(p))
+}
+
+// SkillSearchPaths returns skill directories to scan, expanded, with
+// workspace-relative entries removed unless the workspace is trusted.
+func (c *Config) SkillSearchPaths() []string {
+	return filterTrusted(c.Skills.Paths, c.CodePuppy.TrustWorkspace)
+}
+
+// AgentSearchPaths returns directories to scan for user-defined agents.
+func (c *Config) AgentSearchPaths() []string {
+	return filterTrusted([]string{"~/.code_puppy/agents", "./agents"}, c.CodePuppy.TrustWorkspace)
+}
+
+func filterTrusted(paths []string, trustWorkspace bool) []string {
+	out := make([]string, 0, len(paths))
+	for _, p := range paths {
+		if IsWorkspaceRelative(p) && !trustWorkspace {
+			continue
+		}
+		out = append(out, ExpandHome(p))
+	}
+	return out
 }
 
 func applyEnvOverrides(cfg *Config) {

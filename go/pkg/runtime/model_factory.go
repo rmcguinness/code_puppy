@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"iter"
 	"strings"
+	"sync"
 
 	"github.com/retail-cortex/code_puppy/pkg/config"
 	"google.golang.org/adk/v2/model"
@@ -92,10 +93,23 @@ func NewModel(ctx context.Context, cfg *config.Config, overrideModel string) (mo
 }
 
 // MockLLM provides an in-memory LLM implementation for tests and offline validation.
+// It is safe for concurrent use; read CallCount via Calls() while runs are in flight.
 type MockLLM struct {
 	ModelName string
 	Responses []*genai.Content
 	CallCount int
+
+	mu       sync.Mutex
+	Requests []*model.LLMRequest
+	// Usage, if set, is attached to every response.
+	Usage *genai.GenerateContentResponseUsageMetadata
+}
+
+// Calls returns the number of GenerateContent calls so far.
+func (m *MockLLM) Calls() int {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.CallCount
 }
 
 func NewMockLLM(name string, responses ...*genai.Content) *MockLLM {
@@ -114,8 +128,11 @@ func (m *MockLLM) Name() string {
 
 func (m *MockLLM) GenerateContent(ctx context.Context, req *model.LLMRequest, stream bool) iter.Seq2[*model.LLMResponse, error] {
 	return func(yield func(*model.LLMResponse, error) bool) {
+		m.mu.Lock()
 		idx := m.CallCount
 		m.CallCount++
+		m.Requests = append(m.Requests, req)
+		m.mu.Unlock()
 
 		var content *genai.Content
 		if idx < len(m.Responses) {
@@ -125,7 +142,8 @@ func (m *MockLLM) GenerateContent(ctx context.Context, req *model.LLMRequest, st
 		}
 
 		resp := &model.LLMResponse{
-			Content: content,
+			Content:       content,
+			UsageMetadata: m.Usage,
 		}
 		yield(resp, nil)
 	}
@@ -143,7 +161,9 @@ func (m *toolCallParsingModel) Name() string {
 
 func (m *toolCallParsingModel) GenerateContent(ctx context.Context, req *model.LLMRequest, stream bool) iter.Seq2[*model.LLMResponse, error] {
 	return func(yield func(*model.LLMResponse, error) bool) {
-		for resp, err := range m.inner.GenerateContent(ctx, req, stream) {
+		// Text-encoded tool calls can only be recognised in complete responses,
+		// so this wrapper never streams.
+		for resp, err := range m.inner.GenerateContent(ctx, req, false) {
 			if err != nil {
 				if !yield(nil, err) {
 					return
@@ -151,7 +171,7 @@ func (m *toolCallParsingModel) GenerateContent(ctx context.Context, req *model.L
 				continue
 			}
 			if resp != nil && resp.Content != nil {
-				parseTextToolCalls(resp.Content)
+				parseTextToolCalls(resp.Content, offeredTools(req))
 			}
 			if !yield(resp, nil) {
 				return
@@ -160,7 +180,36 @@ func (m *toolCallParsingModel) GenerateContent(ctx context.Context, req *model.L
 	}
 }
 
-func parseTextToolCalls(content *genai.Content) {
+// offeredTools returns the names of tools declared in the request. Only these
+// may be synthesised from text, so a model that merely quotes a JSON snippet
+// (for example, echoing a file it read) cannot trigger an arbitrary tool.
+func offeredTools(req *model.LLMRequest) map[string]bool {
+	names := make(map[string]bool)
+	if req == nil {
+		return names
+	}
+	for name := range req.Tools {
+		names[name] = true
+	}
+	if req.Config != nil {
+		for _, t := range req.Config.Tools {
+			if t == nil {
+				continue
+			}
+			for _, fd := range t.FunctionDeclarations {
+				if fd != nil {
+					names[fd.Name] = true
+				}
+			}
+		}
+	}
+	return names
+}
+
+func parseTextToolCalls(content *genai.Content, allowed map[string]bool) {
+	if len(allowed) == 0 {
+		return
+	}
 	for _, part := range content.Parts {
 		if part.FunctionCall != nil || part.Text == "" {
 			continue
@@ -182,7 +231,7 @@ func parseTextToolCalls(content *genai.Content) {
 				Args       map[string]any `json:"args"`
 				Parameters map[string]any `json:"parameters"`
 			}
-			if err := json.Unmarshal([]byte(trimmed), &call); err == nil && call.Name != "" {
+			if err := json.Unmarshal([]byte(trimmed), &call); err == nil && allowed[call.Name] {
 				args := call.Arguments
 				if len(args) == 0 {
 					args = call.Args

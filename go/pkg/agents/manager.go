@@ -1,6 +1,7 @@
 package agents
 
 import (
+	"errors"
 	"fmt"
 	"io/fs"
 	"os"
@@ -10,18 +11,21 @@ import (
 	"sync"
 
 	"github.com/retail-cortex/code_puppy/pkg/agents/builtin"
+	"github.com/retail-cortex/code_puppy/pkg/config"
 )
 
 // Registry manages discovered and built-in agents.
 type Registry struct {
-	mu     sync.RWMutex
-	agents map[string]*AgentSpec
+	mu      sync.RWMutex
+	agents  map[string]*AgentSpec
+	builtin map[string]bool
 }
 
 // NewRegistry creates a new Registry and loads built-in embedded agent specs.
 func NewRegistry() (*Registry, error) {
 	r := &Registry{
-		agents: make(map[string]*AgentSpec),
+		agents:  make(map[string]*AgentSpec),
+		builtin: make(map[string]bool),
 	}
 
 	if err := r.loadEmbeddedAgents(); err != nil {
@@ -53,17 +57,24 @@ func (r *Registry) loadEmbeddedAgents() error {
 		}
 
 		r.agents[spec.Name] = spec
+		r.builtin[spec.Name] = true
 	}
 
 	return nil
 }
 
 // LoadExternalAgents scans directories for user-defined .md agent specifications.
+// A leading "~" is expanded. External specs may add new agents but may not
+// replace built-in ones, since that would let a directory silently swap the
+// system prompt and tool list of a trusted persona. Rejected or unparsable
+// specs are reported in the returned (joined) error; valid ones are still loaded.
 func (r *Registry) LoadExternalAgents(dirs ...string) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
+	var errs []error
 	for _, dir := range dirs {
+		dir = config.ExpandHome(dir)
 		if _, err := os.Stat(dir); os.IsNotExist(err) {
 			continue
 		}
@@ -75,21 +86,28 @@ func (r *Registry) LoadExternalAgents(dirs ...string) error {
 
 			data, err := os.ReadFile(path)
 			if err != nil {
+				errs = append(errs, fmt.Errorf("%s: %w", path, err))
 				return nil
 			}
 
 			spec, err := ParseMarkdownSpec(data)
-			if err == nil && spec.Name != "" {
-				r.agents[spec.Name] = spec
+			if err != nil {
+				errs = append(errs, fmt.Errorf("%s: %w", path, err))
+				return nil
 			}
+			if r.builtin[spec.Name] {
+				errs = append(errs, fmt.Errorf("%s: agent name %q is reserved by a built-in agent", path, spec.Name))
+				return nil
+			}
+			r.agents[spec.Name] = spec
 			return nil
 		})
 		if err != nil {
-			return err
+			errs = append(errs, err)
 		}
 	}
 
-	return nil
+	return errors.Join(errs...)
 }
 
 // Get retrieves an agent spec by name.

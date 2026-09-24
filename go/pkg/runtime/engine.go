@@ -2,36 +2,101 @@ package runtime
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
+	"sync"
+	"sync/atomic"
 
 	"github.com/retail-cortex/code_puppy/pkg/agents"
+	"github.com/retail-cortex/code_puppy/pkg/audit"
 	"github.com/retail-cortex/code_puppy/pkg/config"
 	"github.com/retail-cortex/code_puppy/pkg/skills"
 	"github.com/retail-cortex/code_puppy/pkg/tools"
 	"google.golang.org/adk/v2/agent"
 	"google.golang.org/adk/v2/agent/llmagent"
+	"google.golang.org/adk/v2/artifact"
+	"google.golang.org/adk/v2/memory"
 	"google.golang.org/adk/v2/model"
 	"google.golang.org/adk/v2/runner"
 	"google.golang.org/adk/v2/session"
+	"google.golang.org/adk/v2/session/compaction"
+	"google.golang.org/adk/v2/tool"
 	"google.golang.org/genai"
 )
 
+const appName = "code-puppy"
+
+// MaxSubagentDepth bounds nested invoke_agent calls so agents cannot recurse forever.
+const MaxSubagentDepth = 3
+
+var (
+	// ErrSubagentDepth is returned when invoke_agent nesting exceeds MaxSubagentDepth.
+	ErrSubagentDepth = errors.New("maximum sub-agent nesting depth exceeded")
+	// ErrMaxTurns is returned when a run exceeds its model-call budget.
+	ErrMaxTurns = errors.New("maximum turns reached")
+)
+
+type (
+	subagentDepthKey struct{}
+	runStateKey      struct{}
+)
+
+// runState is carried in the context of one Execute call.
+type runState struct {
+	sessionID string
+	maxTurns  int
+	turns     atomic.Int64
+}
+
+func stateFrom(ctx context.Context) *runState {
+	s, _ := ctx.Value(runStateKey{}).(*runState)
+	return s
+}
+
+// Option configures an Engine.
+type Option func(*Engine)
+
+// WithSessionService replaces the default in-memory session store (e.g. with
+// a persistent one so conversations can be resumed).
+func WithSessionService(s session.Service) Option { return func(e *Engine) { e.sessions = s } }
+
+// WithStreaming makes Execute deliver partial text events as the model
+// generates them (followed by the usual final events).
+func WithStreaming(on bool) Option { return func(e *Engine) { e.streaming = on } }
+
+// WithInstructions appends text (e.g. project memory) to every agent's instructions.
+func WithInstructions(text string) Option { return func(e *Engine) { e.extraInstructions = text } }
+
 // Engine orchestrates the Google ADK execution lifecycle for Code Puppy.
+// It is safe for concurrent use.
 type Engine struct {
 	cfg       *config.Config
 	agentReg  *agents.Registry
 	skillProv *skills.Provider
 	toolReg   *tools.Registry
-	llm       model.LLM
-	runner    *runner.Runner
-	active    string
+	usage     *UsageTracker
+
+	// Shared across runner rebuilds so switching agent or model keeps history.
+	sessions  session.Service
+	artifacts artifact.Service
+	memories  memory.Service
+
+	subagentSeq atomic.Int64
+
+	mu                sync.RWMutex
+	llm               model.LLM
+	runner            *runner.Runner
+	active            string
+	extraInstructions string
+	streaming         bool
 }
 
 // EventHandler receives events (text tokens, function calls, function responses) from the runner.
 type EventHandler func(ev *session.Event) error
 
-// NewEngine creates and wires the ADK runtime engine.
+// NewEngine creates and wires the ADK runtime engine, registering itself as
+// the sub-agent invoker for the invoke_agent tool.
 func NewEngine(
 	ctx context.Context,
 	cfg *config.Config,
@@ -39,20 +104,32 @@ func NewEngine(
 	skillProv *skills.Provider,
 	toolReg *tools.Registry,
 	llm model.LLM,
+	opts ...Option,
 ) (*Engine, error) {
 	e := &Engine{
 		cfg:       cfg,
 		agentReg:  agentReg,
 		skillProv: skillProv,
 		toolReg:   toolReg,
+		usage:     NewUsageTracker(cfg.Pricing),
+		sessions:  session.InMemoryService(),
+		artifacts: artifact.InMemoryService(),
+		memories:  memory.InMemoryService(),
 		llm:       llm,
 		active:    cfg.CodePuppy.DefaultAgent,
 	}
+	for _, o := range opts {
+		o(e)
+	}
 
-	if err := e.buildRunner(ctx); err != nil {
+	e.mu.Lock()
+	err := e.rebuildLocked()
+	e.mu.Unlock()
+	if err != nil {
 		return nil, fmt.Errorf("failed to initialize ADK runner: %w", err)
 	}
 
+	toolReg.Hooks().SetSubagentInvoker(e.InvokeSubagent)
 	return e, nil
 }
 
@@ -61,19 +138,164 @@ func (e *Engine) SetActiveAgent(ctx context.Context, agentName string) error {
 	if _, ok := e.agentReg.Get(agentName); !ok {
 		return fmt.Errorf("agent '%s' not found", agentName)
 	}
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	prev := e.active
 	e.active = agentName
-	return e.buildRunner(ctx)
+	if err := e.rebuildLocked(); err != nil {
+		e.active = prev
+		return err
+	}
+	return nil
+}
+
+// Rebuild regenerates agent instructions, e.g. after settings change.
+func (e *Engine) Rebuild(ctx context.Context) error {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	return e.rebuildLocked()
+}
+
+// SetInstructions replaces the extra instructions (project memory) and rebuilds.
+func (e *Engine) SetInstructions(ctx context.Context, text string) error {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	prev := e.extraInstructions
+	e.extraInstructions = text
+	if err := e.rebuildLocked(); err != nil {
+		e.extraInstructions = prev
+		return err
+	}
+	return nil
+}
+
+// SetModel swaps the LLM used by all agents.
+func (e *Engine) SetModel(ctx context.Context, llm model.LLM) error {
+	if llm == nil {
+		return errors.New("model must not be nil")
+	}
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	prev := e.llm
+	e.llm = llm
+	if err := e.rebuildLocked(); err != nil {
+		e.llm = prev
+		return err
+	}
+	return nil
 }
 
 // ActiveAgent returns the name of the currently active agent persona.
 func (e *Engine) ActiveAgent() string {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
 	return e.active
 }
 
-func (e *Engine) buildRunner(ctx context.Context) error {
+// ModelName returns the name of the active LLM.
+func (e *Engine) ModelName() string {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+	return e.llm.Name()
+}
+
+// Usage returns the token usage and estimated cost recorded for a session.
+func (e *Engine) Usage(sessionID string) Usage { return e.usage.Session(sessionID) }
+
+func (e *Engine) generateConfig() *genai.GenerateContentConfig {
+	gc := &genai.GenerateContentConfig{}
+	if e.cfg.CodePuppy.Temperature > 0 {
+		gc.Temperature = genai.Ptr(float32(e.cfg.CodePuppy.Temperature))
+	}
+	if e.cfg.CodePuppy.MaxTokens > 0 {
+		gc.MaxOutputTokens = int32(e.cfg.CodePuppy.MaxTokens)
+	}
+	return gc
+}
+
+func (e *Engine) newLLMAgent(spec *agents.AgentSpec, instruction string, subAgents []agent.Agent, toolsets []tool.Toolset) (agent.Agent, error) {
+	return llmagent.New(llmagent.Config{
+		Name:                  spec.Name,
+		Description:           spec.Description,
+		Instruction:           instruction + e.extraInstructions,
+		Model:                 e.llm,
+		Tools:                 e.toolReg.GetToolsForAgent(spec.Tools),
+		Toolsets:              toolsets,
+		SubAgents:             subAgents,
+		GenerateContentConfig: e.generateConfig(),
+		BeforeModelCallbacks:  []llmagent.BeforeModelCallback{e.beforeModel},
+		AfterModelCallbacks:   []llmagent.AfterModelCallback{e.afterModel},
+		BeforeToolCallbacks:   []llmagent.BeforeToolCallback{e.beforeTool},
+		AfterToolCallbacks:    []llmagent.AfterToolCallback{e.afterTool},
+	})
+}
+
+// beforeModel enforces the per-run model-call budget.
+func (e *Engine) beforeModel(ctx agent.Context, _ *model.LLMRequest) (*model.LLMResponse, error) {
+	if st := stateFrom(ctx); st != nil && st.maxTurns > 0 {
+		if n := st.turns.Add(1); n > int64(st.maxTurns) {
+			return nil, fmt.Errorf("%w (%d model calls)", ErrMaxTurns, st.maxTurns)
+		}
+	}
+	return nil, nil
+}
+
+// afterModel records token usage for the run's session.
+func (e *Engine) afterModel(ctx agent.Context, resp *model.LLMResponse, respErr error) (*model.LLMResponse, error) {
+	if resp == nil || resp.Partial || resp.UsageMetadata == nil {
+		return nil, nil
+	}
+	id := "default"
+	if st := stateFrom(ctx); st != nil {
+		id = st.sessionID
+	}
+	e.usage.Record(id, e.ModelName(), resp.UsageMetadata)
+	return nil, nil
+}
+
+// beforeTool audits the call, gates MCP tools, and runs pre_tool hooks.
+// Returning a result map skips the tool and hands that result to the model.
+func (e *Engine) beforeTool(ctx agent.Context, t tool.Tool, args map[string]any) (map[string]any, error) {
+	log := e.toolReg.Hooks().Audit()
+	log.Log(audit.Entry{Kind: audit.KindToolCall, Tool: t.Name(), Args: args})
+
+	if err := e.toolReg.ApproveMCP(ctx, t.Name(), args); err != nil {
+		return map[string]any{"error": err.Error()}, nil
+	}
+	if reason := e.toolReg.ScriptHooks().PreTool(ctx, e.sessionOf(ctx), t.Name(), args); reason != "" {
+		return map[string]any{"error": "blocked by pre_tool hook: " + reason}, nil
+	}
+	return nil, nil
+}
+
+// afterTool runs post_tool hooks and audits the outcome.
+func (e *Engine) afterTool(ctx agent.Context, t tool.Tool, args, result map[string]any, toolErr error) (map[string]any, error) {
+	e.toolReg.ScriptHooks().PostTool(ctx, e.sessionOf(ctx), t.Name(), args, result, toolErr)
+	entry := audit.Entry{Kind: audit.KindToolResult, Tool: t.Name(), Decision: "ok"}
+	if toolErr != nil {
+		entry.Decision, entry.Error = "error", toolErr.Error()
+	} else if msg, _ := result["error"].(string); msg != "" {
+		entry.Decision, entry.Error = "error", msg
+	}
+	e.toolReg.Hooks().Audit().Log(entry)
+	return nil, nil
+}
+
+func (e *Engine) sessionOf(ctx context.Context) string {
+	if st := stateFrom(ctx); st != nil {
+		return st.sessionID
+	}
+	return ""
+}
+
+func (e *Engine) subInstruction(spec *agents.AgentSpec) string {
+	return spec.InterpolatePrompt(e.cfg.CodePuppy.PuppyName, e.cfg.CodePuppy.OwnerName, spec.AgencyLevel)
+}
+
+// rebuildLocked requires e.mu held for writing.
+func (e *Engine) rebuildLocked() error {
 	rootSpec, ok := e.agentReg.Get(e.active)
 	if !ok {
-		// Fallback to code-puppy
 		rootSpec, ok = e.agentReg.Get("code-puppy")
 		if !ok {
 			return fmt.Errorf("default agent 'code-puppy' not found in registry")
@@ -81,92 +303,99 @@ func (e *Engine) buildRunner(ctx context.Context) error {
 		e.active = "code-puppy"
 	}
 
-	// Build sub-agents for all other personas
 	var subAgents []agent.Agent
 	for _, spec := range e.agentReg.List() {
 		if spec.Name == e.active {
 			continue
 		}
-
-		instruction := spec.InterpolatePrompt(
-			e.cfg.CodePuppy.PuppyName,
-			e.cfg.CodePuppy.OwnerName,
-			spec.AgencyLevel,
-		)
-
-		subAgentTools := e.toolReg.GetToolsForAgent(spec.Tools)
-		sub, err := llmagent.New(llmagent.Config{
-			Name:        spec.Name,
-			Description: spec.Description,
-			Instruction: instruction,
-			Model:       e.llm,
-			Tools:       subAgentTools,
-		})
+		sub, err := e.newLLMAgent(spec, e.subInstruction(spec), nil, nil)
 		if err != nil {
 			return fmt.Errorf("failed to build sub-agent %s: %w", spec.Name, err)
 		}
 		subAgents = append(subAgents, sub)
 	}
 
-	// Build root agent
 	rootInstruction := rootSpec.InterpolatePrompt(
 		e.cfg.CodePuppy.PuppyName,
 		e.cfg.CodePuppy.OwnerName,
 		e.cfg.CodePuppy.AgencyLevel,
 	)
-
-	// Append skills catalog awareness if skills are enabled
 	if e.cfg.Skills.Enabled && e.skillProv != nil {
-		allSkills := e.skillProv.List()
-		if len(allSkills) > 0 {
+		if allSkills := e.skillProv.List(); len(allSkills) > 0 {
 			var sb strings.Builder
 			sb.WriteString("\n\n## Available Agent Skills:\n")
 			for _, s := range allSkills {
-				sb.WriteString(fmt.Sprintf("- **%s**: %s\n", s.Name, s.Description))
+				fmt.Fprintf(&sb, "- **%s**: %s\n", s.Name, s.Description)
 			}
 			sb.WriteString("\nUse `activate_skill` to load full skill instructions whenever relevant.\n")
 			rootInstruction += sb.String()
 		}
 	}
 
-	rootTools := e.toolReg.GetToolsForAgent(rootSpec.Tools)
-	rootAgent, err := llmagent.New(llmagent.Config{
-		Name:        rootSpec.Name,
-		Description: rootSpec.Description,
-		Instruction: rootInstruction,
-		Model:       e.llm,
-		Tools:       rootTools,
-		SubAgents:   subAgents,
-	})
+	// MCP tools are offered to the primary agent.
+	rootAgent, err := e.newLLMAgent(rootSpec, rootInstruction, subAgents, e.toolReg.MCP().Toolsets())
 	if err != nil {
 		return fmt.Errorf("failed to build root agent: %w", err)
 	}
 
-	r, err := runner.NewInMemory("code-puppy", rootAgent)
+	rc := runner.Config{
+		AppName:           appName,
+		Agent:             rootAgent,
+		SessionService:    e.sessions,
+		ArtifactService:   e.artifacts,
+		MemoryService:     e.memories,
+		AutoCreateSession: true,
+	}
+	if c := e.cfg.Context; c.Compaction && c.TokenThreshold > 0 {
+		retain := c.RetainEvents
+		if retain <= 0 {
+			retain = 20
+		}
+		rc.Compaction = &compaction.Config{TokenThreshold: c.TokenThreshold, EventRetentionSize: retain}
+	}
+	r, err := runner.New(rc)
 	if err != nil {
-		return fmt.Errorf("failed to instantiate ADK in-memory runner: %w", err)
+		return fmt.Errorf("failed to instantiate ADK runner: %w", err)
 	}
 	e.runner = r
-
 	return nil
 }
 
+// ExecOption configures one Execute call.
+type ExecOption func(*runState)
+
+// WithMaxTurns limits the number of model calls in the run (0 = unlimited).
+func WithMaxTurns(n int) ExecOption { return func(s *runState) { s.maxTurns = n } }
+
 // Execute runs a prompt within a session and streams ADK events to the handler.
-func (e *Engine) Execute(ctx context.Context, sessionID, prompt string, handler EventHandler) error {
-	if e.runner == nil {
+func (e *Engine) Execute(ctx context.Context, sessionID, prompt string, handler EventHandler, opts ...ExecOption) error {
+	e.mu.RLock()
+	r := e.runner
+	e.mu.RUnlock()
+	if r == nil {
 		return fmt.Errorf("runner is not initialized")
 	}
-
 	if sessionID == "" {
 		sessionID = "default"
 	}
+	st := &runState{sessionID: sessionID}
+	for _, o := range opts {
+		o(st)
+	}
+	ctx = context.WithValue(ctx, runStateKey{}, st)
+	rc := agent.RunConfig{}
+	if e.streaming {
+		rc.StreamingMode = agent.StreamingModeSSE
+	}
+	return drain(r.Run(ctx, "user", sessionID, genai.NewContentFromText(prompt, genai.RoleUser), rc), handler)
+}
 
-	userMsg := genai.NewContentFromText(prompt, genai.RoleUser)
-	runCfg := agent.RunConfig{}
-
-	events := e.runner.Run(ctx, "user", sessionID, userMsg, runCfg)
+func drain(events func(yield func(*session.Event, error) bool), handler EventHandler) error {
 	for ev, err := range events {
 		if err != nil {
+			if errors.Is(err, ErrMaxTurns) {
+				return err
+			}
 			return fmt.Errorf("agent execution error: %w", err)
 		}
 		if handler != nil && ev != nil {
@@ -175,6 +404,49 @@ func (e *Engine) Execute(ctx context.Context, sessionID, prompt string, handler 
 			}
 		}
 	}
-
 	return nil
+}
+
+// InvokeSubagent runs a single registered agent on prompt in a fresh, isolated
+// session and returns the text it produced. Nesting is limited to
+// MaxSubagentDepth to stop agents delegating to each other indefinitely.
+// Usage and turn limits of the calling run still apply.
+func (e *Engine) InvokeSubagent(ctx context.Context, agentName, prompt string) (string, error) {
+	depth, _ := ctx.Value(subagentDepthKey{}).(int)
+	if depth >= MaxSubagentDepth {
+		return "", fmt.Errorf("%w (%d)", ErrSubagentDepth, MaxSubagentDepth)
+	}
+	spec, ok := e.agentReg.Get(agentName)
+	if !ok {
+		return "", fmt.Errorf("agent '%s' not found", agentName)
+	}
+
+	e.mu.RLock()
+	sub, err := e.newLLMAgent(spec, e.subInstruction(spec), nil, nil)
+	e.mu.RUnlock()
+	if err != nil {
+		return "", fmt.Errorf("failed to build sub-agent %s: %w", agentName, err)
+	}
+
+	r, err := runner.NewInMemory(appName+"-subagent", sub)
+	if err != nil {
+		return "", fmt.Errorf("failed to create sub-agent runner: %w", err)
+	}
+
+	subCtx := context.WithValue(ctx, subagentDepthKey{}, depth+1)
+	sessionID := fmt.Sprintf("subagent-%s-%d", agentName, e.subagentSeq.Add(1))
+	var out strings.Builder
+	err = drain(r.Run(subCtx, "user", sessionID, genai.NewContentFromText(prompt, genai.RoleUser), agent.RunConfig{}),
+		func(ev *session.Event) error {
+			if ev.Author != agentName || ev.Partial || ev.Content == nil {
+				return nil
+			}
+			for _, part := range ev.Content.Parts {
+				if part.Text != "" && !part.Thought {
+					out.WriteString(part.Text)
+				}
+			}
+			return nil
+		})
+	return out.String(), err
 }

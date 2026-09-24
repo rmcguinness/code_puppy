@@ -4,6 +4,7 @@ display_name: "Planning Agent 📋"
 description: "Breaks down complex coding tasks into actionable steps, architectural roadmaps, and verification gates"
 agency_level: "medium"
 tools:
+  - web_fetch
   - list_files
   - read_file
   - grep

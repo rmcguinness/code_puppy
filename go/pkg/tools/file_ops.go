@@ -2,16 +2,20 @@ package tools
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
+	"io"
 	"io/fs"
-	"os"
-	"path/filepath"
+	"strconv"
 	"strings"
 
 	"google.golang.org/adk/v2/agent"
 	"google.golang.org/adk/v2/tool"
 	"google.golang.org/adk/v2/tool/functiontool"
 )
+
+// maxReadOutputBytes caps how much file content read_file returns in one call.
+const maxReadOutputBytes = 512 * 1024
 
 // ReadFileInput defines arguments for reading a file.
 type ReadFileInput struct {
@@ -25,54 +29,115 @@ type ReadFileOutput struct {
 	Path       string `json:"path"`
 	Content    string `json:"content"`
 	TotalLines int    `json:"total_lines"`
+	Truncated  bool   `json:"truncated,omitempty"`
 	Error      string `json:"error,omitempty"`
 }
 
 // NewReadFileTool creates an ADK tool for reading files.
-func NewReadFileTool(workspaceDir string) (tool.Tool, error) {
+func NewReadFileTool(ws *Workspace) (tool.Tool, error) {
 	return functiontool.New(
 		functiontool.Config{
 			Name:        "read_file",
 			Description: "Read contents of a file with line numbers and optional line slicing",
 		},
 		func(ctx agent.Context, input ReadFileInput) (ReadFileOutput, error) {
-			targetPath := resolveSafePath(workspaceDir, input.Path)
-			data, err := os.ReadFile(targetPath)
+			out, err := readFileLines(ws, input)
 			if err != nil {
 				return ReadFileOutput{Path: input.Path, Error: fmt.Sprintf("failed to read file: %v", err)}, nil
 			}
-
-			lines := strings.Split(string(data), "\n")
-			totalLines := len(lines)
-
-			start := 1
-			if input.StartLine > 1 {
-				start = input.StartLine
-			}
-			end := totalLines
-			if input.EndLine > 0 && input.EndLine < totalLines {
-				end = input.EndLine
-			}
-
-			if start > totalLines {
-				start = totalLines
-			}
-			if end < start {
-				end = start
-			}
-
-			var sb strings.Builder
-			for i := start; i <= end; i++ {
-				sb.WriteString(fmt.Sprintf("%4d: %s\n", i, lines[i-1]))
-			}
-
-			return ReadFileOutput{
-				Path:       input.Path,
-				Content:    sb.String(),
-				TotalLines: totalLines,
-			}, nil
+			return out, nil
 		},
 	)
+}
+
+// readFileLines streams the file once, keeping only the requested line range.
+func readFileLines(ws *Workspace, input ReadFileInput) (ReadFileOutput, error) {
+	rel, err := ws.Rel(input.Path)
+	if err != nil {
+		return ReadFileOutput{}, err
+	}
+	f, err := ws.Open(rel)
+	if err != nil {
+		return ReadFileOutput{}, err
+	}
+	defer f.Close()
+
+	info, err := f.Stat()
+	if err != nil {
+		return ReadFileOutput{}, err
+	}
+	if info.IsDir() {
+		return ReadFileOutput{}, fmt.Errorf("%s is a directory", input.Path)
+	}
+	if info.Size() > ws.MaxFileSize() {
+		return ReadFileOutput{}, fmt.Errorf("file is %d bytes, exceeding the %d byte limit; use grep or run_shell_command with head/tail instead", info.Size(), ws.MaxFileSize())
+	}
+
+	start := 1
+	if input.StartLine > 1 {
+		start = input.StartLine
+	}
+	end := input.EndLine // 0 means "to EOF"
+	if end > 0 && end < start {
+		end = start
+	}
+
+	var (
+		sb        strings.Builder
+		lineNo    int
+		truncated bool
+		numBuf    []byte
+		lastLine  string
+	)
+	writeLine := func(n int, text string) bool {
+		if sb.Len()+len(text)+8 > maxReadOutputBytes {
+			return false
+		}
+		numBuf = strconv.AppendInt(numBuf[:0], int64(n), 10)
+		for pad := 4 - len(numBuf); pad > 0; pad-- {
+			sb.WriteByte(' ')
+		}
+		sb.Write(numBuf)
+		sb.WriteString(": ")
+		sb.WriteString(text)
+		sb.WriteByte('\n')
+		return true
+	}
+	r := bufio.NewReaderSize(io.LimitReader(f, ws.MaxFileSize()), 64*1024)
+	for {
+		line, readErr := r.ReadString('\n')
+		if readErr != nil && readErr != io.EOF {
+			return ReadFileOutput{}, readErr
+		}
+		// A trailing "\n" yields a final empty line, matching strings.Split semantics.
+		lineNo++
+		text := strings.TrimSuffix(line, "\n")
+		inRange := lineNo >= start && (end <= 0 || lineNo <= end)
+		if inRange && !truncated && !writeLine(lineNo, text) {
+			truncated = true
+		}
+		if readErr == io.EOF {
+			lastLine = text
+			break
+		}
+	}
+	totalLines := lineNo
+
+	// Out-of-range starts clamp to the last line.
+	if start > totalLines && !writeLine(totalLines, lastLine) {
+		truncated = true
+	}
+
+	content := sb.String()
+	if truncated {
+		content += fmt.Sprintf("\n... [output truncated at %d bytes; use start_line/end_line to page]\n", maxReadOutputBytes)
+	}
+	return ReadFileOutput{
+		Path:       input.Path,
+		Content:    content,
+		TotalLines: totalLines,
+		Truncated:  truncated,
+	}, nil
 }
 
 // FileEntry represents a file in directory listing.
@@ -98,7 +163,7 @@ type ListFilesOutput struct {
 }
 
 // NewListFilesTool creates an ADK tool for listing directory files.
-func NewListFilesTool(workspaceDir string) (tool.Tool, error) {
+func NewListFilesTool(ws *Workspace) (tool.Tool, error) {
 	return functiontool.New(
 		functiontool.Config{
 			Name:        "list_files",
@@ -109,51 +174,40 @@ func NewListFilesTool(workspaceDir string) (tool.Tool, error) {
 			if dirPath == "" {
 				dirPath = "."
 			}
-			resolvedDir := resolveSafePath(workspaceDir, dirPath)
-
 			max := input.MaxEntries
 			if max <= 0 || max > 500 {
 				max = 200
 			}
 
-			var files []FileEntry
-			walkErr := filepath.WalkDir(resolvedDir, func(path string, d fs.DirEntry, err error) error {
-				if err != nil {
+			files := make([]FileEntry, 0, 32)
+			walkErr := ws.Walk(dirPath, func(e WalkEntry) error {
+				if e.IsRoot {
 					return nil
 				}
-				if path == resolvedDir {
-					return nil
+				if ctx.Err() != nil {
+					return ctx.Err()
 				}
-
+				d := e.Entry
 				name := d.Name()
-				if strings.HasPrefix(name, ".") && name != "." && name != ".." && name != ".env.toml" {
+				if strings.HasPrefix(name, ".") {
 					if d.IsDir() {
-						return filepath.SkipDir
+						return fs.SkipDir
 					}
 					return nil
 				}
 
-				rel, _ := filepath.Rel(workspaceDir, path)
-				info, err := d.Info()
-				var size int64 = 0
-				if err == nil {
+				var size int64
+				if info, err := d.Info(); err == nil {
 					size = info.Size()
 				}
-
-				files = append(files, FileEntry{
-					Path:  rel,
-					IsDir: d.IsDir(),
-					Size:  size,
-				})
+				files = append(files, FileEntry{Path: e.Path, IsDir: d.IsDir(), Size: size})
 
 				if len(files) >= max {
 					return fs.SkipAll
 				}
-
 				if !input.Recursive && d.IsDir() {
-					return filepath.SkipDir
+					return fs.SkipDir
 				}
-
 				return nil
 			})
 
@@ -186,39 +240,50 @@ type CreateFileOutput struct {
 }
 
 // NewCreateFileTool creates an ADK tool for creating files.
-func NewCreateFileTool(workspaceDir string) (tool.Tool, error) {
+func NewCreateFileTool(ws *Workspace, hooks *Hooks) (tool.Tool, error) {
 	return functiontool.New(
 		functiontool.Config{
 			Name:        "create_file",
 			Description: "Create a new file with the specified content",
 		},
 		func(ctx agent.Context, input CreateFileInput) (CreateFileOutput, error) {
-			targetPath := resolveSafePath(workspaceDir, input.Path)
+			fail := func(msg string) (CreateFileOutput, error) {
+				return CreateFileOutput{Path: input.Path, Error: msg}, nil
+			}
+			rel, err := ws.WritablePath(input.Path)
+			if err != nil {
+				return fail(err.Error())
+			}
+			if rel == "." {
+				return fail("path must name a file")
+			}
 
-			if !input.Overwrite {
-				if _, err := os.Stat(targetPath); err == nil {
-					return CreateFileOutput{
-						Path:    input.Path,
-						Success: false,
-						Error:   fmt.Sprintf("file '%s' already exists; set overwrite=true to overwrite", input.Path),
-					}, nil
+			verb, before := "Create", ""
+			if existing, err := ws.ReadFile(rel); err == nil {
+				if !input.Overwrite {
+					return fail(fmt.Sprintf("file '%s' already exists; set overwrite=true to overwrite", input.Path))
+				}
+				verb, before = "Overwrite", string(existing)
+			}
+			if err := hooks.Approve(ctx, writeApproval(ws, "create_file", fmt.Sprintf("%s %s (%d bytes)", verb, rel, len(input.Content)),
+				unifiedDiff(rel, before, input.Content))); err != nil {
+				return fail(err.Error())
+			}
+
+			data := []byte(input.Content)
+			if input.Overwrite {
+				err = ws.WriteFileAtomic(rel, data)
+			} else {
+				err = ws.CreateExclusive(rel, data)
+				if errors.Is(err, fs.ErrExist) {
+					return fail(fmt.Sprintf("file '%s' already exists; set overwrite=true to overwrite", input.Path))
 				}
 			}
-
-			dir := filepath.Dir(targetPath)
-			if err := os.MkdirAll(dir, 0755); err != nil {
-				return CreateFileOutput{Path: input.Path, Success: false, Error: fmt.Sprintf("failed to create directories: %v", err)}, nil
+			if err != nil {
+				return fail(fmt.Sprintf("failed to write file: %v", err))
 			}
 
-			if err := os.WriteFile(targetPath, []byte(input.Content), 0644); err != nil {
-				return CreateFileOutput{Path: input.Path, Success: false, Error: fmt.Sprintf("failed to write file: %v", err)}, nil
-			}
-
-			return CreateFileOutput{
-				Path:         input.Path,
-				Success:      true,
-				BytesWritten: len([]byte(input.Content)),
-			}, nil
+			return CreateFileOutput{Path: input.Path, Success: true, BytesWritten: len(data)}, nil
 		},
 	)
 }
@@ -236,38 +301,48 @@ type DeleteFileOutput struct {
 }
 
 // NewDeleteFileTool creates an ADK tool for deleting files.
-func NewDeleteFileTool(workspaceDir string) (tool.Tool, error) {
+func NewDeleteFileTool(ws *Workspace, hooks *Hooks) (tool.Tool, error) {
 	return functiontool.New(
 		functiontool.Config{
 			Name:        "delete_file",
 			Description: "Delete a file from the workspace",
 		},
 		func(ctx agent.Context, input DeleteFileInput) (DeleteFileOutput, error) {
-			targetPath := resolveSafePath(workspaceDir, input.Path)
-			if err := os.Remove(targetPath); err != nil {
-				return DeleteFileOutput{Path: input.Path, Success: false, Error: fmt.Sprintf("failed to delete: %v", err)}, nil
+			rel, err := ws.WritablePath(input.Path)
+			if err != nil {
+				return DeleteFileOutput{Path: input.Path, Error: err.Error()}, nil
+			}
+			var diff string
+			if data, err := ws.ReadFile(rel); err == nil {
+				diff = unifiedDiff(rel, string(data), "")
+			}
+			if err := hooks.Approve(ctx, ApprovalRequest{
+				Tool:     "delete_file",
+				Kind:     ActionDelete,
+				Detail:   "Delete " + rel,
+				Diff:     diff,
+				Key:      "delete:" + ws.Dir(),
+				KeyLabel: "file deletions in " + ws.Dir(),
+			}); err != nil {
+				return DeleteFileOutput{Path: input.Path, Error: err.Error()}, nil
+			}
+			if err := ws.RemoveFile(rel); err != nil {
+				return DeleteFileOutput{Path: input.Path, Error: fmt.Sprintf("failed to delete: %v", err)}, nil
 			}
 			return DeleteFileOutput{Path: input.Path, Success: true}, nil
 		},
 	)
 }
 
-func resolveSafePath(workspaceDir, p string) string {
-	if filepath.IsAbs(p) {
-		return p
+// writeApproval builds an approval request for a file edit. Remembered
+// approvals cover all edits within the workspace.
+func writeApproval(ws *Workspace, tool, detail, diff string) ApprovalRequest {
+	return ApprovalRequest{
+		Tool:     tool,
+		Kind:     ActionWrite,
+		Detail:   detail,
+		Diff:     diff,
+		Key:      "write:" + ws.Dir(),
+		KeyLabel: "file edits in " + ws.Dir(),
 	}
-	if workspaceDir == "" || workspaceDir == "." {
-		return p
-	}
-	return filepath.Join(workspaceDir, p)
-}
-
-// CountLines helper
-func countLines(data []byte) int {
-	scanner := bufio.NewScanner(strings.NewReader(string(data)))
-	count := 0
-	for scanner.Scan() {
-		count++
-	}
-	return count
 }

@@ -4,6 +4,7 @@ display_name: "Code-Puppy 🐶"
 description: "The most loyal digital puppy, helping with all coding tasks"
 agency_level: "high"
 tools:
+  - web_fetch
   - read_file
   - list_files
   - create_file
@@ -14,6 +15,7 @@ tools:
   - grep
   - apply_patch
   - run_shell_command
+  - manage_background_process
   - ask_user_question
   - list_or_search_skills
   - activate_skill

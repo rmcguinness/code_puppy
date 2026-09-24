@@ -1,27 +1,30 @@
 package skills
 
 import (
+	"errors"
 	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
 	"sort"
-	"strings"
 	"sync"
 
+	"github.com/retail-cortex/code_puppy/pkg/config"
 	"github.com/retail-cortex/code_puppy/pkg/skills/builtin"
 )
 
 // Provider discovers, indexes, and activates skills across embedded and external paths.
 type Provider struct {
-	mu     sync.RWMutex
-	skills map[string]*Skill
+	mu      sync.RWMutex
+	skills  map[string]*Skill
+	builtin map[string]bool
 }
 
 // NewProvider initializes the skills provider with embedded built-in skills.
 func NewProvider() (*Provider, error) {
 	p := &Provider{
-		skills: make(map[string]*Skill),
+		skills:  make(map[string]*Skill),
+		builtin: make(map[string]bool),
 	}
 
 	if err := p.loadEmbeddedSkills(); err != nil {
@@ -45,6 +48,7 @@ func (p *Provider) loadEmbeddedSkills() error {
 		skill, err := ParseSkillMD(data, "builtin://"+path)
 		if err == nil && skill.Name != "" {
 			p.skills[skill.Name] = skill
+			p.builtin[skill.Name] = true
 		}
 		return nil
 	})
@@ -52,18 +56,16 @@ func (p *Provider) loadEmbeddedSkills() error {
 	return err
 }
 
-// DiscoverExternal scans search directories for SKILL.md files.
+// DiscoverExternal scans search directories for SKILL.md files. External
+// skills cannot replace built-in ones; conflicts are reported in the returned
+// (joined) error while other skills still load.
 func (p *Provider) DiscoverExternal(dirs []string) error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
-	homeDir, _ := os.UserHomeDir()
-
+	var errs []error
 	for _, dir := range dirs {
-		expandedDir := dir
-		if strings.HasPrefix(expandedDir, "~") {
-			expandedDir = filepath.Join(homeDir, expandedDir[1:])
-		}
+		expandedDir := config.ExpandHome(dir)
 
 		if _, err := os.Stat(expandedDir); os.IsNotExist(err) {
 			continue
@@ -80,6 +82,10 @@ func (p *Provider) DiscoverExternal(dirs []string) error {
 			}
 
 			skill, err := ParseSkillMD(data, path)
+			if err == nil && p.builtin[skill.Name] {
+				errs = append(errs, fmt.Errorf("%s: skill name %q is reserved by a built-in skill", path, skill.Name))
+				return nil
+			}
 			if err == nil && skill.Name != "" {
 				// Discover any neighboring resource files
 				skillDir := filepath.Dir(path)
@@ -97,14 +103,19 @@ func (p *Provider) DiscoverExternal(dirs []string) error {
 		})
 	}
 
-	return nil
+	return errors.Join(errs...)
 }
 
 // List returns all discovered skills sorted by name.
 func (p *Provider) List() []*Skill {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
+	return p.listLocked()
+}
 
+// listLocked requires p.mu to be held. Search uses it rather than List because
+// re-acquiring an RWMutex read lock can deadlock when a writer is waiting.
+func (p *Provider) listLocked() []*Skill {
 	result := make([]*Skill, 0, len(p.skills))
 	for _, skill := range p.skills {
 		result = append(result, skill)
@@ -123,7 +134,7 @@ func (p *Provider) Search(query string) []*Skill {
 	defer p.mu.RUnlock()
 
 	if query == "" {
-		return p.List()
+		return p.listLocked()
 	}
 
 	matches := []*Skill{}

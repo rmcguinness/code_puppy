@@ -2,26 +2,19 @@ package tui
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 
-	"github.com/retail-cortex/code_puppy/pkg/agents"
-	"github.com/retail-cortex/code_puppy/pkg/config"
-	"github.com/retail-cortex/code_puppy/pkg/runtime"
 	"github.com/retail-cortex/code_puppy/pkg/session"
 	"github.com/retail-cortex/code_puppy/pkg/skills"
 )
 
+// ErrExit is returned by HandleCommand when the user asks to quit.
+var ErrExit = errors.New("exit")
+
 // HandleCommand processes slash commands. Returns true if input was a slash command.
-func HandleCommand(
-	ctx context.Context,
-	input string,
-	cfg *config.Config,
-	eng *runtime.Engine,
-	agentReg *agents.Registry,
-	skillProv *skills.Provider,
-	storage *session.Storage,
-) (bool, error) {
+func HandleCommand(ctx context.Context, input string, app *App) (bool, error) {
 	trimmed := strings.TrimSpace(input)
 	if !strings.HasPrefix(trimmed, "/") {
 		return false, nil
@@ -34,6 +27,7 @@ func HandleCommand(
 
 	cmd := strings.ToLower(parts[0])
 	args := parts[1:]
+	cfg, eng := app.Cfg, app.Engine
 
 	switch cmd {
 	case "help":
@@ -41,42 +35,55 @@ func HandleCommand(
 
 	case "agents":
 		fmt.Printf("\n%s🤖 Available Agents:%s\n", Bold, Reset)
-		for _, a := range agentReg.List() {
+		active := eng.ActiveAgent()
+		for _, a := range app.Agents.List() {
 			marker := "  "
-			if a.Name == eng.ActiveAgent() {
+			if a.Name == active {
 				marker = "👉"
 			}
-			fmt.Printf("%s %s%s%s (%s): %s\n", marker, Bold, a.DisplayName, Reset, a.Name, a.Description)
+			fmt.Printf("%s %s%s%s (%s): %s\n", marker, Bold, safe(a.DisplayName), Reset, safe(a.Name), safe(a.Description))
 		}
 		fmt.Println()
 
 	case "agent":
 		if len(args) == 0 {
-			spec, _ := agentReg.Get(eng.ActiveAgent())
-			fmt.Printf("Current agent: %s%s%s (%s)\n", Bold, spec.DisplayName, Reset, spec.Name)
+			if spec, ok := app.Agents.Get(eng.ActiveAgent()); ok {
+				fmt.Printf("Current agent: %s%s%s (%s)\n", Bold, safe(spec.DisplayName), Reset, safe(spec.Name))
+			}
 			return true, nil
 		}
 		target := args[0]
 		if err := eng.SetActiveAgent(ctx, target); err != nil {
-			fmt.Printf("%s❌ Error switching agent: %v%s\n", Red, err, Reset)
-		} else {
-			spec, _ := agentReg.Get(target)
-			fmt.Printf("%s Switched active agent to: %s%s%s\n", Green, Bold, spec.DisplayName, Reset)
+			fmt.Printf("%s❌ Error switching agent: %v%s\n", Red, safe(err.Error()), Reset)
+		} else if spec, ok := app.Agents.Get(target); ok {
+			fmt.Printf("%s Switched active agent to: %s%s%s\n", Green, Bold, safe(spec.DisplayName), Reset)
 		}
 
 	case "model":
 		if len(args) == 0 {
-			fmt.Printf("Current model: %s%s%s (Provider: %s)\n", Cyan, cfg.CodePuppy.DefaultModel, Reset, cfg.LLM.Provider)
+			fmt.Printf("Current model: %s%s%s (Provider: %s)\n", Cyan, safe(eng.ModelName()), Reset, cfg.LLM.Provider)
+			return true, nil
+		}
+		if app.NewModel == nil {
+			fmt.Printf("%sModel switching is not available%s\n", Yellow, Reset)
+			return true, nil
+		}
+		llm, err := app.NewModel(ctx, cfg, args[0])
+		if err == nil {
+			err = eng.SetModel(ctx, llm)
+		}
+		if err != nil {
+			fmt.Printf("%s❌ Could not switch model: %v%s\n", Red, safe(err.Error()), Reset)
 			return true, nil
 		}
 		cfg.CodePuppy.DefaultModel = args[0]
-		fmt.Printf("%s Model set to: %s%s%s\n", Green, Cyan, args[0], Reset)
+		fmt.Printf("%s Model set to: %s%s%s\n", Green, Cyan, safe(args[0]), Reset)
 
 	case "skills":
-		handleSkillsCommand(args, skillProv)
+		handleSkillsCommand(args, app.Skills)
 
 	case "session":
-		handleSessionCommand(args, storage)
+		handleSessionCommand(args, app)
 
 	case "set":
 		if len(args) == 0 {
@@ -88,52 +95,84 @@ func HandleCommand(
 			fmt.Printf("  Active Agent: %s\n\n", eng.ActiveAgent())
 			return true, nil
 		}
-		kv := strings.SplitN(args[0], "=", 2)
-		if len(kv) == 2 {
-			k := strings.ToLower(kv[0])
-			v := kv[1]
-			switch k {
-			case "agency", "agency_level":
-				cfg.CodePuppy.AgencyLevel = v
-				_ = eng.SetActiveAgent(ctx, eng.ActiveAgent())
-				fmt.Printf("%s Agency level updated to: %s%s\n", Green, v, Reset)
-			case "puppy_name":
-				cfg.CodePuppy.PuppyName = v
-				fmt.Printf("%s Puppy name updated to: %s%s\n", Green, v, Reset)
-			case "owner_name":
-				cfg.CodePuppy.OwnerName = v
-				fmt.Printf("%s Owner name updated to: %s%s\n", Green, v, Reset)
-			default:
-				fmt.Printf("%sUnknown configuration setting '%s'%s\n", Yellow, k, Reset)
-			}
+		kv := strings.SplitN(strings.Join(args, " "), "=", 2)
+		if len(kv) != 2 {
+			fmt.Printf("%sUsage: /set key=value%s\n", Yellow, Reset)
+			return true, nil
 		}
+		k, v := strings.ToLower(strings.TrimSpace(kv[0])), strings.TrimSpace(kv[1])
+		switch k {
+		case "agency", "agency_level":
+			switch strings.ToLower(v) {
+			case "low", "medium", "high", "extreme":
+			default:
+				fmt.Printf("%sAgency must be one of: low, medium, high, extreme%s\n", Yellow, Reset)
+				return true, nil
+			}
+			cfg.CodePuppy.AgencyLevel = strings.ToLower(v)
+		case "puppy_name":
+			cfg.CodePuppy.PuppyName = v
+		case "owner_name":
+			cfg.CodePuppy.OwnerName = v
+		default:
+			fmt.Printf("%sUnknown configuration setting '%s'%s\n", Yellow, safe(k), Reset)
+			return true, nil
+		}
+		// Instructions embed these values, so rebuild the agent tree.
+		if err := eng.Rebuild(ctx); err != nil {
+			fmt.Printf("%s❌ Failed to apply setting: %v%s\n", Red, err, Reset)
+			return true, nil
+		}
+		fmt.Printf("%s %s updated to: %s%s\n", Green, k, safe(v), Reset)
 
 	case "clear":
 		fmt.Print("\033[H\033[2J")
 
+	case "sandbox":
+		fmt.Printf("\n%s🛡️  Sandbox Policy:%s\n", Bold, Reset)
+		for _, line := range app.SandboxSummary {
+			fmt.Printf("  %s\n", safe(line))
+		}
+		fmt.Println()
+
 	case "exit", "quit":
-		fmt.Printf("\n🐾 %sPuppy is going to take a nap. Goodbye!%s\n", Cyan, Reset)
-		return true, fmt.Errorf("exit")
+		return true, ErrExit
 
 	default:
-		fmt.Printf("%sUnknown command '/%s'. Type /help for a list of commands.%s\n", Yellow, cmd, Reset)
+		if handleExtraCommand(ctx, cmd, args, app) {
+			return true, nil
+		}
+		fmt.Printf("%sUnknown command '/%s'. Type /help for a list of commands.%s\n", Yellow, safe(cmd), Reset)
 	}
 
 	return true, nil
 }
 
 func printHelp() {
+	rows := [][2]string{
+		{"/agents", "List all available agent personas"},
+		{"/agent [name]", "Switch or show the active agent"},
+		{"/model [name]", "Switch or show the active LLM model"},
+		{"/skills list|search <q>", "List or search Agent Skills"},
+		{"/session list|new|load <id>", "Manage saved sessions (/resume <id> also works)"},
+		{"/undo [--force]", "Revert the file changes from the last turn"},
+		{"/checkpoints", "List turns with file changes"},
+		{"/diff [git]", "Show this session's file changes (or git diff)"},
+		{"/cost", "Token usage and estimated cost"},
+		{"/context", "Context size and compaction threshold"},
+		{"/memory [reload|add <note>]", "Show, reload, or add project instructions"},
+		{"/approvals [revoke <n>|clear]", "Remembered approval rules"},
+		{"/mcp", "Configured MCP servers"},
+		{"/sandbox", "File, command, and OS sandbox policy"},
+		{"/set [key=value]", "View or update settings (agency, puppy_name, owner_name)"},
+		{"/clear", "Clear the terminal screen"},
+		{"/exit, /quit", "Exit Code Puppy"},
+	}
 	fmt.Printf("\n%s🐾 Code Puppy Commands:%s\n", Bold, Reset)
-	fmt.Printf("  %s/agents%s               List all available agent personas\n", Bold, Reset)
-	fmt.Printf("  %s/agent [name]%s          Switch or show the active agent\n", Bold, Reset)
-	fmt.Printf("  %s/model [name]%s          Switch or show the active LLM model\n", Bold, Reset)
-	fmt.Printf("  %s/skills list%s           List all available Agent Skills\n", Bold, Reset)
-	fmt.Printf("  %s/skills search [query]%s Search skills by keyword\n", Bold, Reset)
-	fmt.Printf("  %s/session list%s          List saved sessions\n", Bold, Reset)
-	fmt.Printf("  %s/session new%s           Start a clean session\n", Bold, Reset)
-	fmt.Printf("  %s/set [key=value]%s       View or update settings (agency, puppy_name, etc.)\n", Bold, Reset)
-	fmt.Printf("  %s/clear%s                 Clear the terminal screen\n", Bold, Reset)
-	fmt.Printf("  %s/exit%s or %s/quit%s         Exit Code Puppy\n\n", Bold, Reset, Bold, Reset)
+	for _, r := range rows {
+		fmt.Printf("  %s%-30s%s %s\n", Bold, r[0], Reset, r[1])
+	}
+	fmt.Printf("\n  %sInput: end a line with \\ to continue it, wrap blocks in \"\"\", Tab completes commands and @paths.%s\n\n", Dim, Reset)
 }
 
 func handleSkillsCommand(args []string, prov *skills.Provider) {
@@ -156,7 +195,7 @@ func handleSkillsCommand(args []string, prov *skills.Provider) {
 			if len(s.Tags) > 0 {
 				tags = fmt.Sprintf("[%s]", strings.Join(s.Tags, ", "))
 			}
-			fmt.Printf("  • %s%s%s %s: %s\n", Bold, s.Name, Reset, Dim+tags+Reset, s.Description)
+			fmt.Printf("  • %s%s%s %s: %s\n", Bold, safe(s.Name), Reset, Dim+safe(tags)+Reset, safe(s.Description))
 		}
 		fmt.Println()
 
@@ -166,15 +205,16 @@ func handleSkillsCommand(args []string, prov *skills.Provider) {
 			query = strings.Join(args[1:], " ")
 		}
 		matched := prov.Search(query)
-		fmt.Printf("\n%s🔍 Search Results for '%s' (%d):%s\n", Bold, query, len(matched), Reset)
+		fmt.Printf("\n%s🔍 Search Results for '%s' (%d):%s\n", Bold, safe(query), len(matched), Reset)
 		for _, s := range matched {
-			fmt.Printf("  • %s%s%s: %s\n", Bold, s.Name, Reset, s.Description)
+			fmt.Printf("  • %s%s%s: %s\n", Bold, safe(s.Name), Reset, safe(s.Description))
 		}
 		fmt.Println()
 	}
 }
 
-func handleSessionCommand(args []string, storage *session.Storage) {
+func handleSessionCommand(args []string, app *App) {
+	storage := app.Storage
 	if storage == nil {
 		fmt.Println("Session storage is disabled.")
 		return
@@ -194,12 +234,19 @@ func handleSessionCommand(args []string, storage *session.Storage) {
 		}
 		fmt.Printf("\n%s📁 Saved Sessions (%d):%s\n", Bold, len(list), Reset)
 		for _, s := range list {
-			fmt.Printf("  • %s%s%s (%s): %s [%d messages]\n", Bold, s.ID, Reset, s.Agent, s.Title, len(s.Messages))
+			fmt.Printf("  • %s%s%s (%s): %s [%d messages]\n", Bold, safe(s.ID), Reset, safe(s.Agent), safe(s.Title), s.MessageCount)
 		}
 		fmt.Println()
 
+	case "load", "resume":
+		cmdSessionLoad(args[1:], app)
+
 	case "new":
-		rec := storage.CreateSession("", "New Chat", "code-puppy")
+		rec, err := storage.CreateSession(session.NewSessionID(), "New Chat", app.Engine.ActiveAgent())
+		if err != nil {
+			fmt.Printf("%s❌ Failed to create session: %v%s\n", Red, err, Reset)
+			return
+		}
 		fmt.Printf("%s Started new session: %s%s\n", Green, rec.ID, Reset)
 	}
 }

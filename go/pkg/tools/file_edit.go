@@ -2,7 +2,6 @@ package tools
 
 import (
 	"fmt"
-	"os"
 	"strings"
 
 	"google.golang.org/adk/v2/agent"
@@ -27,56 +26,52 @@ type ReplaceInFileOutput struct {
 }
 
 // NewReplaceInFileTool creates an ADK tool for targeted search-and-replace.
-func NewReplaceInFileTool(workspaceDir string) (tool.Tool, error) {
+func NewReplaceInFileTool(ws *Workspace, hooks *Hooks) (tool.Tool, error) {
 	return functiontool.New(
 		functiontool.Config{
 			Name:        "replace_in_file",
 			Description: "Replace exact text snippet in an existing file with replacement text",
 		},
 		func(ctx agent.Context, input ReplaceInFileInput) (ReplaceInFileOutput, error) {
-			targetPath := resolveSafePath(workspaceDir, input.Path)
-			data, err := os.ReadFile(targetPath)
+			fail := func(msg string) (ReplaceInFileOutput, error) {
+				return ReplaceInFileOutput{Path: input.Path, Error: msg}, nil
+			}
+			if input.TargetContent == "" {
+				return fail("target_content must not be empty")
+			}
+			rel, err := ws.WritablePath(input.Path)
 			if err != nil {
-				return ReplaceInFileOutput{Path: input.Path, Success: false, Error: fmt.Sprintf("failed to read file: %v", err)}, nil
+				return fail(err.Error())
+			}
+			data, err := ws.ReadFile(rel)
+			if err != nil {
+				return fail(fmt.Sprintf("failed to read file: %v", err))
 			}
 
 			content := string(data)
 			occurrences := strings.Count(content, input.TargetContent)
 			if occurrences == 0 {
-				return ReplaceInFileOutput{
-					Path:    input.Path,
-					Success: false,
-					Error:   "target_content not found in file",
-				}, nil
+				return fail("target_content not found in file")
 			}
-
 			if occurrences > 1 && !input.AllowMultiple {
-				return ReplaceInFileOutput{
-					Path:    input.Path,
-					Success: false,
-					Error:   fmt.Sprintf("target_content matched %d times; set allow_multiple=true or provide more surrounding lines for uniqueness", occurrences),
-				}, nil
+				return fail(fmt.Sprintf("target_content matched %d times; set allow_multiple=true or provide more surrounding lines for uniqueness", occurrences))
 			}
 
-			var newContent string
-			var count int
+			count := 1
 			if input.AllowMultiple {
-				newContent = strings.ReplaceAll(content, input.TargetContent, input.ReplacementContent)
 				count = occurrences
-			} else {
-				newContent = strings.Replace(content, input.TargetContent, input.ReplacementContent, 1)
-				count = 1
+			}
+			newContent := strings.Replace(content, input.TargetContent, input.ReplacementContent, count)
+			if err := hooks.Approve(ctx, writeApproval(ws, "replace_in_file",
+				fmt.Sprintf("Edit %s (%d replacement(s))", rel, count), unifiedDiff(rel, content, newContent))); err != nil {
+				return fail(err.Error())
 			}
 
-			if err := os.WriteFile(targetPath, []byte(newContent), 0644); err != nil {
-				return ReplaceInFileOutput{Path: input.Path, Success: false, Error: fmt.Sprintf("failed to write updated file: %v", err)}, nil
+			if err := ws.WriteFileAtomic(rel, []byte(newContent)); err != nil {
+				return fail(fmt.Sprintf("failed to write updated file: %v", err))
 			}
 
-			return ReplaceInFileOutput{
-				Path:              input.Path,
-				Success:           true,
-				ReplacementsCount: count,
-			}, nil
+			return ReplaceInFileOutput{Path: input.Path, Success: true, ReplacementsCount: count}, nil
 		},
 	)
 }
@@ -95,29 +90,40 @@ type DeleteSnippetOutput struct {
 }
 
 // NewDeleteSnippetTool creates an ADK tool for removing code snippets.
-func NewDeleteSnippetTool(workspaceDir string) (tool.Tool, error) {
+func NewDeleteSnippetTool(ws *Workspace, hooks *Hooks) (tool.Tool, error) {
 	return functiontool.New(
 		functiontool.Config{
 			Name:        "delete_snippet",
 			Description: "Delete an exact code snippet from a file",
 		},
 		func(ctx agent.Context, input DeleteSnippetInput) (DeleteSnippetOutput, error) {
-			targetPath := resolveSafePath(workspaceDir, input.Path)
-			data, err := os.ReadFile(targetPath)
+			fail := func(msg string) (DeleteSnippetOutput, error) {
+				return DeleteSnippetOutput{Path: input.Path, Error: msg}, nil
+			}
+			if input.Snippet == "" {
+				return fail("snippet must not be empty")
+			}
+			rel, err := ws.WritablePath(input.Path)
 			if err != nil {
-				return DeleteSnippetOutput{Path: input.Path, Success: false, Error: fmt.Sprintf("failed to read file: %v", err)}, nil
+				return fail(err.Error())
+			}
+			data, err := ws.ReadFile(rel)
+			if err != nil {
+				return fail(fmt.Sprintf("failed to read file: %v", err))
 			}
 
 			content := string(data)
 			if !strings.Contains(content, input.Snippet) {
-				return DeleteSnippetOutput{Path: input.Path, Success: false, Error: "snippet not found in file"}, nil
+				return fail("snippet not found in file")
 			}
-
 			newContent := strings.Replace(content, input.Snippet, "", 1)
-			if err := os.WriteFile(targetPath, []byte(newContent), 0644); err != nil {
-				return DeleteSnippetOutput{Path: input.Path, Success: false, Error: fmt.Sprintf("failed to save file: %v", err)}, nil
+			if err := hooks.Approve(ctx, writeApproval(ws, "delete_snippet",
+				fmt.Sprintf("Remove a %d byte snippet from %s", len(input.Snippet), rel), unifiedDiff(rel, content, newContent))); err != nil {
+				return fail(err.Error())
 			}
-
+			if err := ws.WriteFileAtomic(rel, []byte(newContent)); err != nil {
+				return fail(fmt.Sprintf("failed to save file: %v", err))
+			}
 			return DeleteSnippetOutput{Path: input.Path, Success: true}, nil
 		},
 	)
