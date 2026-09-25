@@ -113,6 +113,7 @@ trust_workspace = false     # load ./agents and ./skills from the project
 provider = "gemini"         # gemini | anthropic | openai | ollama
 max_retries = 3             # retries for rate limits, overload, 5xx and dropped connections
 stall_timeout_seconds = 600 # fail a model request that sends nothing for this long
+# fallback_models = ["anthropic/claude-sonnet-5", "gemini-2.5-flash-lite"]  # tried in order if the model fails
 
 [llm.gemini]
 # api_key = "..."           # or export GEMINI_API_KEY

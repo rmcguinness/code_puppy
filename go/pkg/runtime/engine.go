@@ -14,6 +14,7 @@ import (
 	"github.com/retail-cortex/code_puppy/pkg/agents"
 	"github.com/retail-cortex/code_puppy/pkg/audit"
 	"github.com/retail-cortex/code_puppy/pkg/config"
+	"github.com/retail-cortex/code_puppy/pkg/i18n"
 	"github.com/retail-cortex/code_puppy/pkg/observability"
 	"github.com/retail-cortex/code_puppy/pkg/skills"
 	"github.com/retail-cortex/code_puppy/pkg/tools"
@@ -85,6 +86,10 @@ type TurnStore interface {
 // WithTurnStore chains turn spans per session through s.
 func WithTurnStore(s TurnStore) Option { return func(e *Engine) { e.turns = s } }
 
+// WithNotice sets where the engine reports events the user should know
+// about, such as a fallback model taking over (default: nowhere).
+func WithNotice(f func(string)) Option { return func(e *Engine) { e.notice = f } }
+
 // WithInstructions appends text (e.g. project memory) to every agent's instructions.
 func WithInstructions(text string) Option { return func(e *Engine) { e.extraInstructions = text } }
 
@@ -107,6 +112,10 @@ type Engine struct {
 
 	steerMu sync.Mutex
 	steers  map[string][]string // session ID -> messages sent mid-turn
+
+	notice     func(string)
+	fallbackMu sync.Mutex
+	fallbackBy string // fallback model answering now; "" when the primary is
 
 	mu                sync.RWMutex
 	llm               model.LLM
@@ -266,7 +275,11 @@ func (e *Engine) beforeModel(ctx agent.Context, _ *model.LLMRequest) (*model.LLM
 
 // afterModel records token usage for the run's session.
 func (e *Engine) afterModel(ctx agent.Context, resp *model.LLMResponse, respErr error) (*model.LLMResponse, error) {
-	if resp == nil || resp.Partial || resp.UsageMetadata == nil {
+	if resp == nil || resp.Partial {
+		return nil, nil
+	}
+	e.noteFallback(resp)
+	if resp.UsageMetadata == nil {
 		return nil, nil
 	}
 	id := "default"
@@ -290,6 +303,28 @@ func (e *Engine) afterModel(ctx agent.Context, resp *model.LLMResponse, respErr 
 	}
 	e.usage.RecordWrites(id, served, resp.UsageMetadata, writes)
 	return nil, nil
+}
+
+// noteFallback tells the user when a fallback model starts answering and
+// when the primary is back, once per change rather than on every call.
+func (e *Engine) noteFallback(resp *model.LLMResponse) {
+	primary, _ := resp.CustomMetadata[FallbackFromKey].(string)
+	served := ""
+	if primary != "" {
+		served = resp.ModelVersion
+	}
+	e.fallbackMu.Lock()
+	prev := e.fallbackBy
+	e.fallbackBy = served
+	e.fallbackMu.Unlock()
+	if served == prev || e.notice == nil {
+		return
+	}
+	if served != "" {
+		e.notice(i18n.T("model.fallback", "primary", primary, "model", served))
+	} else {
+		e.notice(i18n.T("model.fallback_recovered", "model", e.ModelName()))
+	}
 }
 
 // beforeTool audits the call, gates MCP tools, and runs pre_tool hooks.

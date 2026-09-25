@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"iter"
+	"log/slog"
 	"strings"
 	"sync"
 
@@ -23,7 +24,71 @@ func NewModel(ctx context.Context, cfg *config.Config, overrideModel string) (mo
 	if overrideModel != "" {
 		modelName = overrideModel
 	}
+	primary, err := newProviderModel(ctx, cfg, provider, modelName)
+	if err != nil || len(cfg.LLM.FallbackModels) == 0 {
+		return primary, err
+	}
+	chain := []model.LLM{primary}
+	for _, ref := range cfg.LLM.FallbackModels {
+		p, name := ParseModelRef(ref, provider)
+		m, err := newProviderModel(ctx, cfg, p, name)
+		if err != nil {
+			// Usually missing credentials; `code-puppy doctor` lists each fallback.
+			slog.WarnContext(ctx, "fallback model unavailable", "model", ref, "error", err)
+			continue
+		}
+		chain = append(chain, m)
+	}
+	return newFallbackModel(chain), nil
+}
 
+// NewModelRef builds the single model a fallback reference names (no
+// chain), e.g. for `doctor` to check each fallback on its own.
+func NewModelRef(ctx context.Context, cfg *config.Config, ref string) (model.LLM, error) {
+	p, name := ParseModelRef(ref, cfg.LLM.Provider)
+	return newProviderModel(ctx, cfg, p, name)
+}
+
+// knownProviders are the provider prefixes recognised in model references.
+var knownProviders = map[string]bool{"gemini": true, "anthropic": true, "openai": true, "ollama": true}
+
+// ParseModelRef splits "provider/model" into its parts. Without a known
+// provider prefix the whole reference is a model of defaultProvider, so
+// OpenRouter-style names ("anthropic/claude-…" on the openai provider) need
+// the provider spelled out: "openai/anthropic/claude-…".
+func ParseModelRef(ref, defaultProvider string) (provider, name string) {
+	ref = strings.TrimSpace(ref)
+	if p, rest, ok := strings.Cut(ref, "/"); ok && knownProviders[strings.ToLower(p)] && rest != "" {
+		return strings.ToLower(p), rest
+	}
+	return strings.ToLower(defaultProvider), ref
+}
+
+const (
+	defaultOpenAIBaseURL = "https://api.openai.com/v1"
+	defaultOllamaBaseURL = "http://localhost:11434/v1"
+)
+
+// openAICompatEndpoint returns the key and base URL for the openai and
+// ollama providers, which share the [llm.openai] section. Its defaults point
+// at OpenAI, so Ollama uses localhost unless another base_url was set, and
+// never receives the OpenAI key.
+func openAICompatEndpoint(c config.OpenAIConfig, provider string) (apiKey, baseURL string) {
+	apiKey, baseURL = c.APIKey, c.BaseURL
+	if provider == "ollama" {
+		if baseURL == "" || baseURL == defaultOpenAIBaseURL {
+			baseURL = defaultOllamaBaseURL
+		}
+		apiKey = "ollama"
+	}
+	if apiKey == "" {
+		apiKey = "ollama"
+	}
+	return apiKey, baseURL
+}
+
+// newProviderModel builds one model of the given provider.
+func newProviderModel(ctx context.Context, cfg *config.Config, provider, modelName string) (model.LLM, error) {
 	pol := policyFrom(cfg.LLM)
 	switch provider {
 	case "gemini":
@@ -42,14 +107,7 @@ func NewModel(ctx context.Context, cfg *config.Config, overrideModel string) (mo
 		return gemini.NewModel(ctx, modelName, clientCfg)
 
 	case "openai", "ollama":
-		apiKey := cfg.LLM.OpenAI.APIKey
-		if apiKey == "" {
-			apiKey = "ollama"
-		}
-		baseURL := cfg.LLM.OpenAI.BaseURL
-		if baseURL == "" && provider == "ollama" {
-			baseURL = "http://localhost:11434/v1"
-		}
+		apiKey, baseURL := openAICompatEndpoint(cfg.LLM.OpenAI, provider)
 		return newOpenAIModel(ctx, modelName, apiKey, baseURL, pol.openAIOptions()...)
 
 	case "anthropic":
@@ -76,7 +134,7 @@ func NewModel(ctx context.Context, cfg *config.Config, overrideModel string) (mo
 			return newOpenAIModel(ctx, modelName, apiKey, cfg.LLM.OpenAI.BaseURL, pol.openAIOptions()...)
 		}
 		// Default to local Ollama if available
-		return newOpenAIModel(ctx, modelName, "ollama", "http://localhost:11434/v1", pol.openAIOptions()...)
+		return newOpenAIModel(ctx, modelName, "ollama", defaultOllamaBaseURL, pol.openAIOptions()...)
 
 	default:
 		// Fallback to Gemini if configured

@@ -160,6 +160,14 @@ endpoint = "http://localhost:4318"
 
 **Resilience** — model requests are retried on rate limits, overload, 5xx responses and dropped connections, with exponential backoff that honours `Retry-After` (`llm.max_retries`, default 3; `0` disables retries). A request that sends nothing for `llm.stall_timeout_seconds` (default 600: no response headers, or a stream that goes quiet) fails instead of hanging the turn. Keep this above your longest non-streamed generation. A stream that fails partway through is not retried, because the text has already been shown. At most `tools.max_parallel` (default 8) tool calls from one model response run at once. Each sub-agent's calls are capped separately.
 
+**Fallback models** — if the model fails before answering (after its retries: an outage, rate limit or bad credentials), the next one in `llm.fallback_models` answers instead:
+```toml
+[llm]
+provider = "gemini"
+fallback_models = ["anthropic/claude-sonnet-5", "gemini-2.5-flash-lite"]   # "provider/model", or a model of the same provider
+```
+Each provider uses its own credentials section. A failed model is skipped for 15 s, doubling up to 5 minutes, then tried again. You see one notice when a fallback takes over and one when the primary is back. Cost is priced by the model that answered. A model that fails after it started answering isn't replaced, because part of the answer is already on screen. For OpenRouter names that contain a slash, write the provider first: `openai/anthropic/claude-sonnet-5`. `code-puppy doctor --online` checks each model separately.
+
 **Context & cost** — history is compacted automatically once a prompt reaches `context.token_threshold` tokens, or on demand with `/compact`. Estimated list prices for the default models are built in; override or add them under `[pricing."model-name"]` (`input_per_mtok`, `output_per_mtok`, `cached_input_per_mtok`, `cache_write_per_mtok`). Costs use the model that actually answered, so refusal fallbacks are priced correctly; `doctor` warns when the active model has no price.
 
 ---

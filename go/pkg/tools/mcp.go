@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"github.com/retail-cortex/code_puppy/pkg/breaker"
 	"github.com/retail-cortex/code_puppy/pkg/config"
 	"google.golang.org/adk/v2/agent"
 	"google.golang.org/adk/v2/model"
@@ -35,10 +36,12 @@ type mcpServer struct {
 	toolset   tool.Toolset
 	allowed   map[string]bool // optional allow-list
 	transport *stdioTransport // stdio servers only
-	health    *breaker
+	health    *breaker.Breaker
 }
 
 const (
+	// mcpFailThreshold failures in a row pause a server.
+	mcpFailThreshold = 2
 	// mcpListTimeout bounds connecting to a server and listing its tools,
 	// which happens before every model call.
 	mcpListTimeout = 30 * time.Second
@@ -125,7 +128,7 @@ func NewMCPManager(cfgs []config.MCPServerConfig, env *ExecEnv, reserved []strin
 			return nil, fmt.Errorf("mcp server %q: set exactly one of command or url", c.Name)
 		}
 
-		srv := &mcpServer{cfg: c, health: newBreaker()}
+		srv := &mcpServer{cfg: c, health: breaker.New(mcpFailThreshold)}
 		if len(c.Tools) > 0 {
 			srv.allowed = map[string]bool{}
 			for _, t := range c.Tools {
@@ -190,7 +193,7 @@ func NewMCPManagerFromToolsets(servers []MCPToolset, reserved []string) *MCPMana
 		m.reserved[r] = true
 	}
 	for _, s := range servers {
-		srv := &mcpServer{cfg: s.Config, toolset: s.Toolset, health: newBreaker()}
+		srv := &mcpServer{cfg: s.Config, toolset: s.Toolset, health: breaker.New(mcpFailThreshold)}
 		if len(s.Config.Tools) > 0 {
 			srv.allowed = map[string]bool{}
 			for _, t := range s.Config.Tools {
@@ -296,7 +299,7 @@ func (r *recordingToolset) Name() string { return "mcp:" + r.srv.cfg.Name }
 // before every model call, so an unhealthy server is skipped (its tools are
 // simply absent) until its circuit breaker lets a trial through.
 func (r *recordingToolset) Tools(ctx agent.ReadonlyContext) ([]tool.Tool, error) {
-	if ok, _ := r.srv.health.allow(); !ok {
+	if ok, _ := r.srv.health.Allow(); !ok {
 		return nil, nil
 	}
 	lctx, cancel := context.WithTimeout(ctx, mcpListTimeout)
@@ -372,7 +375,7 @@ func (p *managedTool) Declaration() *genai.FunctionDeclaration {
 }
 
 func (p *managedTool) Run(ctx agent.Context, args any) (map[string]any, error) {
-	if ok, retryIn := p.srv.health.allow(); !ok {
+	if ok, retryIn := p.srv.health.Allow(); !ok {
 		return nil, fmt.Errorf("MCP server %q is unavailable after repeated failures; retrying in %s", p.srv.cfg.Name, retryIn.Round(time.Second))
 	}
 	cctx, cancel := context.WithTimeout(ctx, p.srv.callTimeout())
@@ -410,7 +413,7 @@ func (p *managedTool) ProcessRequest(ctx agent.Context, req *model.LLMRequest) e
 // failed call; the log gets each one.
 func (m *MCPManager) recordFailure(ctx context.Context, s *mcpServer, err error) {
 	slog.WarnContext(ctx, "mcp server call failed", "server", s.cfg.Name, "error", err)
-	switch streak, opened, cooldown := s.health.failure(); {
+	switch streak, opened, cooldown := s.health.Failure(); {
 	case opened:
 		m.Warn(fmt.Sprintf("mcp server %q keeps failing; its tools are paused for %s", s.cfg.Name, cooldown))
 	case streak == 1:
@@ -419,7 +422,7 @@ func (m *MCPManager) recordFailure(ctx context.Context, s *mcpServer, err error)
 }
 
 func (m *MCPManager) recordSuccess(ctx context.Context, s *mcpServer) {
-	if s.health.success() {
+	if s.health.Success() {
 		slog.InfoContext(ctx, "mcp server recovered", "server", s.cfg.Name)
 		m.Warn(fmt.Sprintf("mcp server %q is available again", s.cfg.Name))
 	}

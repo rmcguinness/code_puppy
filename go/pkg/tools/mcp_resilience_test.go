@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"github.com/retail-cortex/code_puppy/pkg/breaker"
 	"github.com/retail-cortex/code_puppy/pkg/config"
 	"google.golang.org/adk/v2/agent"
 	"google.golang.org/adk/v2/tool"
@@ -20,54 +21,6 @@ type fakeClock struct{ t time.Time }
 
 func (c *fakeClock) now() time.Time          { return c.t }
 func (c *fakeClock) advance(d time.Duration) { c.t = c.t.Add(d) }
-
-func TestBreakerOpensBacksOffAndRecovers(t *testing.T) {
-	clk := &fakeClock{t: time.Unix(0, 0)}
-	b := &breaker{now: clk.now}
-
-	if ok, _ := b.allow(); !ok {
-		t.Fatal("new breaker refused a call")
-	}
-	if _, opened, _ := b.failure(); opened {
-		t.Fatal("opened after one failure")
-	}
-	_, opened, cd := b.failure()
-	if !opened || cd != initialCooldown {
-		t.Fatalf("second failure: opened=%v cooldown=%v", opened, cd)
-	}
-	if ok, retryIn := b.allow(); ok || retryIn != initialCooldown {
-		t.Fatalf("open breaker: ok=%v retryIn=%v", ok, retryIn)
-	}
-
-	clk.advance(initialCooldown)
-	if ok, _ := b.allow(); !ok {
-		t.Fatal("no trial after the cooldown")
-	}
-	if ok, _ := b.allow(); ok {
-		t.Fatal("a second caller got through during the trial")
-	}
-	if _, opened, cd := b.failure(); !opened || cd != 2*initialCooldown {
-		t.Fatalf("failed trial: opened=%v cooldown=%v", opened, cd)
-	}
-
-	for range 10 { // back-off is capped
-		clk.advance(maxCooldown)
-		b.allow()
-		b.failure()
-	}
-	if b.cooldown != maxCooldown {
-		t.Fatalf("cooldown = %v, want cap %v", b.cooldown, maxCooldown)
-	}
-
-	clk.advance(maxCooldown)
-	b.allow()
-	if !b.success() {
-		t.Fatal("successful trial did not report recovery")
-	}
-	if ok, _ := b.allow(); !ok || b.success() {
-		t.Fatal("breaker not closed after recovery")
-	}
-}
 
 // failingToolset fails while broken is set and counts how often it is asked.
 type failingToolset struct {
@@ -92,7 +45,7 @@ func TestUnhealthyServerIsSkippedUntilCooldown(t *testing.T) {
 	var warnings []string
 	m.Warn = func(s string) { warnings = append(warnings, s) }
 	clk := &fakeClock{t: time.Unix(0, 0)}
-	m.servers[0].health.now = clk.now
+	m.servers[0].health.SetClock(clk.now)
 	ts := m.Toolsets()[0]
 
 	for range 5 { // model calls while the server is down
@@ -100,15 +53,15 @@ func TestUnhealthyServerIsSkippedUntilCooldown(t *testing.T) {
 			t.Fatalf("down server: %v %v", tl, err)
 		}
 	}
-	if n := fts.calls.Load(); n != failThreshold {
-		t.Fatalf("server contacted %d times while down; want %d then paused", n, failThreshold)
+	if n := fts.calls.Load(); n != mcpFailThreshold {
+		t.Fatalf("server contacted %d times while down; want %d then paused", n, mcpFailThreshold)
 	}
 	if len(warnings) != 2 || !strings.Contains(warnings[0], "connection refused") || !strings.Contains(warnings[1], "paused") {
 		t.Fatalf("warnings = %q", warnings)
 	}
 
 	fts.broken.Store(false)
-	clk.advance(initialCooldown)
+	clk.advance(breaker.InitialCooldown)
 	tl, err := ts.Tools(createTestToolContext())
 	if err != nil || len(tl) != 1 {
 		t.Fatalf("recovered server: %v %v", tl, err)
@@ -189,7 +142,7 @@ func TestCrashedStdioServerIsRestarted(t *testing.T) {
 	if first == second {
 		t.Fatalf("same process answered before and after the crash: %s", first)
 	}
-	if ok, _ := m.servers[0].health.allow(); !ok {
+	if ok, _ := m.servers[0].health.Allow(); !ok {
 		t.Fatal("breaker open after a successful call")
 	}
 }
@@ -204,15 +157,15 @@ func TestSlowMCPCallTimesOutAndToolErrorsKeepServerHealthy(t *testing.T) {
 	if d := time.Since(start); d > 5*time.Second {
 		t.Fatalf("timeout took %v", d)
 	}
-	if m.servers[0].health.failures != 1 {
-		t.Fatalf("timeout not counted: %d failures", m.servers[0].health.failures)
+	if m.servers[0].health.Failures() != 1 {
+		t.Fatalf("timeout not counted: %d failures", m.servers[0].health.Failures())
 	}
 
 	// A tool-level error means the server is working: it resets the streak.
 	if _, err := tools["fail"].Run(createTestToolContext(), map[string]any{"text": "x"}); err == nil || !strings.Contains(err.Error(), "bad input") {
 		t.Fatalf("fail tool: %v", err)
 	}
-	if m.servers[0].health.failures != 0 {
+	if m.servers[0].health.Failures() != 0 {
 		t.Fatal("a tool error was counted as a server failure")
 	}
 }

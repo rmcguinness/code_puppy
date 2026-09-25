@@ -35,7 +35,7 @@ Go measurements were taken on 2026-09-24 on Apple Silicon (arm64), macOS, warm c
 
 | Area | Python | Go | Go notes |
 |---|---|---|---|
-| **Providers** | ✅ many (Gemini, OpenAI/Codex, Anthropic, Z.ai, Gemini Code Assist, round-robin, model catalogue) | ➖ Gemini, Anthropic, OpenAI-compatible, Ollama | No model picker/catalogue; no round-robin |
+| **Providers** | ✅ many (Gemini, OpenAI/Codex, Anthropic, Z.ai, Gemini Code Assist, round-robin, model catalogue) | ➖ Gemini, Anthropic, OpenAI-compatible, Ollama | No model picker/catalogue; fallback chain instead of round-robin |
 | **Agents** | ✅ Python classes + JSON | ✅ Markdown + YAML frontmatter, embedded | `./agents` only with `--trust-workspace`; built-ins can't be overridden |
 | **Sub-agent delegation** | ✅ | ✅ | Depth-limited `invoke_agent` |
 | **Skills** | ✅ | ✅ | |
@@ -64,7 +64,8 @@ Go measurements were taken on 2026-09-24 on Apple Silicon (arm64), macOS, warm c
 | **Secret handling** | ✅ secret store backends | ✅ env scrubbing, redacted audit log, owner-only files | |
 | **Audit log** | ➖ | ✅ JSONL of prompts, tools, approvals, hooks, undo | |
 | **Diagnostic log** | ✅ error log (`error_logging.py`) | ✅ `slog` JSONL, async writer, secrets masked | Trace IDs on each line when telemetry is on |
-| **Resilience** | ✅ HTTP retry, MCP circuit breaker / health monitor / retry manager | ✅ retries with backoff for every provider, stall timeouts, MCP restart + circuit breaker + timeouts, parallel tool cap | No MCP health dashboard or model round-robin |
+| **Resilience** | ✅ HTTP retry, MCP circuit breaker / health monitor / retry manager | ✅ retries with backoff for every provider, stall timeouts, MCP restart + circuit breaker + timeouts, parallel tool cap | No MCP health dashboard |
+| **Model fallback** | ✅ round-robin model | ✅ ordered `llm.fallback_models`, across providers | Failover (not load balancing): per-model circuit breaker, notices, priced by the answering model |
 | **Telemetry** | ✅ opt-in Logfire | ✅ opt-in OpenTelemetry (OTLP/HTTP traces + logs) | Turn → agent → model/tool spans; content stripped unless `capture_content` |
 | **Release** | PyPI | ✅ GoReleaser: SBOMs, keyless cosign signatures, reproducible builds | |
 

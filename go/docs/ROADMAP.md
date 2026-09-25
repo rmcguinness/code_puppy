@@ -174,6 +174,24 @@ Also fixed: the model name now resolves per provider (`code_puppy.default_model`
 
 ---
 
+## 15. Model fallback — ✅ done (M)
+
+**Config.** `llm.fallback_models = ["provider/model", …]`, tried in order. A bare name uses the primary's provider. The prefix must be a known provider (`gemini`, `anthropic`, `openai`, `ollama`), so OpenRouter names are written `openai/anthropic/…`. It's named `fallback_models` so it isn't confused with `llm.anthropic.fallbacks`, Anthropic's server-side refusal fallback.
+
+**Approach.** `NewModel` builds the primary and wraps it in a `fallbackModel` when fallbacks are configured, so `/model <name>` keeps the chain. A fallback that can't be built (e.g. no credentials) is logged and left out; `doctor` shows why.
+- **When to switch:** only on an error before any output, and never on cancellation. Errors aren't classified further, because SDK error types differ and failures such as unknown-model 404s or schema quirks are provider-specific. An error after output was yielded ends the call as before.
+- **Breakers:** each model gets a circuit breaker (threshold 1, since SDK retries already ran). It's moved from `pkg/tools` to `pkg/breaker` so MCP and models share it, with `Abandon` added for cancelled trials. `Allow` is asked just before each attempt, because asking all breakers up front would reserve and strand a half-open trial on a model never tried. If every breaker is open, all models are tried rather than none.
+- **Responses:** a fallback's responses carry `ModelVersion` and `code_puppy_fallback_from`. The engine prices usage by the answering model and sends one notice on switching and one on recovery (`WithNotice`).
+- **`doctor`:** checks the primary and each fallback on its own, since the chain would make a dead primary look healthy. A broken fallback is a warning.
+
+**Also fixed.** `provider = "ollama"` without `base_url` sent requests to `https://api.openai.com/v1`, the `[llm.openai]` default, with the key "ollama". Ollama now uses localhost unless a different `base_url` is set, and never receives the OpenAI key.
+
+**Not done.** Per-agent model pinning (`/pin_model`) and per-model settings (`/model_settings`), from Python; they're next.
+
+**Tests.** Takeover, cooldown, trial and recovery on a fake clock. No switch after output or on cancellation. Everything failing, and a retry with every breaker open. Two regression tests, each confirmed to fail against the bug it guards: a cancelled trial is released, and an untried backup's trial isn't stranded. `ParseModelRef`, including OpenRouter and Ollama tags. The Ollama endpoint fix. A real `NewModel` chain from a failing OpenAI server to an Anthropic one. Engine notices once per change.
+
+---
+
 ## 9. Real-environment verification — 🔜 needs a person; see [MANUAL_VERIFICATION.md](MANUAL_VERIFICATION.md)
 
 Not automatable here; run once and record results in this file:

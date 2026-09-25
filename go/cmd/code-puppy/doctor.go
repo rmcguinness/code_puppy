@@ -127,21 +127,37 @@ func runDoctor(ctx context.Context, g *globalFlags, online bool) []check {
 		add("telemetry", statusOK, "OTLP/HTTP to %s; %s", endpoint, content)
 	}
 
-	llm, err := runtime.NewModel(ctx, cfg, "")
-	if err != nil {
-		add("model", statusFail, "%s", modelErrorSummary(err, cfg))
-	} else {
-		add("model", statusOK, "%s initialised", llm.Name())
-		if online {
-			octx, cancel := context.WithTimeout(ctx, 30*time.Second)
-			err := pingModel(octx, llm)
-			cancel()
-			if err != nil {
-				add("model request", statusFail, "%s", modelErrorSummary(err, cfg))
-			} else {
-				add("model request", statusOK, "model responded")
-			}
+	checkModel := func(label string, m model.LLM, err error, ref string) {
+		fail := statusFail
+		if ref != "" { // a broken fallback is a warning: the session still works
+			fail = statusWarn
 		}
+		if err != nil {
+			add(label, fail, "%s%s", refPrefix(ref), modelErrorSummary(err, cfg))
+			return
+		}
+		add(label, statusOK, "%s%s initialised", refPrefix(ref), m.Name())
+		if !online {
+			return
+		}
+		octx, cancel := context.WithTimeout(ctx, 30*time.Second)
+		err = pingModel(octx, m)
+		cancel()
+		if err != nil {
+			add(label+" request", fail, "%s", modelErrorSummary(err, cfg))
+		} else {
+			add(label+" request", statusOK, "model responded")
+		}
+	}
+	// Each model is checked on its own: through the fallback chain a dead
+	// primary would look healthy.
+	primaryCfg := *cfg
+	primaryCfg.LLM.FallbackModels = nil
+	llm, err := runtime.NewModel(ctx, &primaryCfg, "")
+	checkModel("model", llm, err, "")
+	for i, ref := range cfg.LLM.FallbackModels {
+		m, err := runtime.NewModelRef(ctx, cfg, ref)
+		checkModel(fmt.Sprintf("fallback %d", i+1), m, err, ref)
 	}
 
 	for _, bin := range []string{"bash", "git"} {
@@ -306,4 +322,11 @@ func countMCPTools(ctx context.Context, reg *tools.Registry, name string) (int, 
 		return len(list), nil
 	}
 	return 0, fmt.Errorf("not found")
+}
+
+func refPrefix(ref string) string {
+	if ref == "" {
+		return ""
+	}
+	return ref + ": "
 }

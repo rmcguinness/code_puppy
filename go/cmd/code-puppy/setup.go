@@ -151,6 +151,7 @@ func buildEnv(ctx context.Context, cfg *config.Config, o envOptions) (*env, erro
 		runtime.WithInstructions(e.instructions()),
 		runtime.WithStreaming(o.streaming),
 		runtime.WithTurnStore(e.storage),
+		runtime.WithNotice(o.warn),
 	)
 	if err != nil {
 		e.Close()

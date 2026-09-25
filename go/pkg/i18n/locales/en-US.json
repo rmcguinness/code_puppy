@@ -197,6 +197,8 @@
     "tools.title": "Tools for {agent}",
     "tools.mcp_all": "all tools from this MCP server",
     "tools.mcp_prefix": "(named {prefix}…)",
-    "tools.legend": "● also available in /plan. Tools that change files or run commands ask for approval unless auto-approved."
+    "tools.legend": "● also available in /plan. Tools that change files or run commands ask for approval unless auto-approved.",
+    "model.fallback": "{primary} is unavailable; answering with fallback {model} for now.",
+    "model.fallback_recovered": "{model} is answering again."
   }
 }

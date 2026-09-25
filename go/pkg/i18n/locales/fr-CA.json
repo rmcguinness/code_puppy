@@ -197,6 +197,8 @@
     "tools.title": "Outils de {agent}",
     "tools.mcp_all": "tous les outils de ce serveur MCP",
     "tools.mcp_prefix": "(nommés {prefix}…)",
-    "tools.legend": "● aussi disponible dans /plan. Les outils qui modifient des fichiers ou exécutent des commandes demandent une approbation, sauf s’ils sont approuvés d’office."
+    "tools.legend": "● aussi disponible dans /plan. Les outils qui modifient des fichiers ou exécutent des commandes demandent une approbation, sauf s’ils sont approuvés d’office.",
+    "model.fallback": "{primary} n’est pas disponible; le modèle de relève {model} répond pour l’instant.",
+    "model.fallback_recovered": "{model} répond de nouveau."
   }
 }

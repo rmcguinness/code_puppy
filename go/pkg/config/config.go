@@ -71,6 +71,13 @@ type LLMConfig struct {
 	// can't block a turn forever. It must exceed the longest non-streamed
 	// generation.
 	StallTimeoutSeconds int `toml:"stall_timeout_seconds"`
+	// FallbackModels are tried in order when the model in use fails before
+	// answering (after its retries): "provider/model" (e.g.
+	// "anthropic/claude-sonnet-5") or just "model" for the same provider.
+	// Credentials come from each provider's own section. For names that
+	// contain a slash (OpenRouter), write the provider first:
+	// "openai/anthropic/claude-sonnet-5".
+	FallbackModels []string `toml:"fallback_models"`
 
 	Gemini    GeminiConfig    `toml:"gemini"`
 	OpenAI    OpenAIConfig    `toml:"openai"`
@@ -225,7 +232,7 @@ func DefaultConfig() *Config {
 			},
 			OpenAI: OpenAIConfig{
 				APIKey:  os.Getenv("OPENAI_API_KEY"),
-				BaseURL: "https://api.openai.com/v1",
+				BaseURL: "https://api.openai.com/v1", // runtime.defaultOpenAIBaseURL
 				Model:   "gpt-4o",
 			},
 			Anthropic: AnthropicConfig{

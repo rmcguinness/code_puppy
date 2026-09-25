@@ -239,3 +239,13 @@ Use a real screenshot (e.g. a UI with visible text) saved in the workspace as `s
 - [ ] 💲 `code-puppy --plan "…" --output-format json | jq .result`. **Expected:** a plan; no changes.
 - [ ] `/tools`. **Expected:** the active agent's tools with ● on read-only ones; configured MCP servers listed for the primary agent only (unless `agents` says otherwise).
 
+## 26. Model fallback 💲
+
+Set `fallback_models = ["anthropic/claude-sonnet-5"]` with a working Anthropic key, and the primary on Gemini.
+- [ ] `code-puppy doctor --online`. **Expected:** `model` and `fallback 1` each initialised and responding.
+- [ ] Break the primary: an invalid `GEMINI_API_KEY`. Ask something. **Expected:** one notice "gemini-… is unavailable; answering with fallback claude-sonnet-5", then the answer. Ask again: no second notice and no delay from the primary.
+- [ ] `/cost`. **Expected:** priced at Claude's rates.
+- [ ] Fix the key, wait 15 s or more, and ask. **Expected:** "gemini-… is answering again".
+- [ ] `fallback_models = ["anthropic/no-such-model"]` with a broken primary. **Expected:** a clear "every model failed" error listing both reasons.
+- [ ] `provider = "ollama"` with no `base_url` and Ollama running locally. **Expected:** it works (it used to call api.openai.com).
+

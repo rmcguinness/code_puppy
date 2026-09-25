@@ -197,6 +197,8 @@
     "tools.title": "Herramientas de {agent}",
     "tools.mcp_all": "todas las herramientas de este servidor MCP",
     "tools.mcp_prefix": "(con el nombre {prefix}…)",
-    "tools.legend": "● también disponible en /plan. Las herramientas que cambian archivos o ejecutan comandos piden aprobación salvo que estén autoaprobadas."
+    "tools.legend": "● también disponible en /plan. Las herramientas que cambian archivos o ejecutan comandos piden aprobación salvo que estén autoaprobadas.",
+    "model.fallback": "{primary} no está disponible; por ahora responde el modelo de respaldo {model}.",
+    "model.fallback_recovered": "{model} vuelve a responder."
   }
 }
