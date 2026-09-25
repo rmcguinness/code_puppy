@@ -28,6 +28,9 @@ func HandleCommand(ctx context.Context, input string, app *App) (bool, error) {
 
 	cmd := strings.ToLower(parts[0])
 	args := parts[1:]
+	if cmd == "show" { // Python's /show: the settings, like /set with no arguments
+		cmd, args = "set", nil
+	}
 	cfg, eng := app.Cfg, app.Engine
 
 	switch cmd {
@@ -166,11 +169,14 @@ func printHelp() {
 		{"/memory [reload|add <note>]", "help.memory"},
 		{"/approvals [revoke <n>|clear]", "help.approvals"},
 		{"/mcp", "help.mcp"},
+		{"/tools", "help.tools"},
+		{"/plan <goal>", "help.plan"},
+		{"!<command>", "help.shell"},
 		{"/sandbox", "help.sandbox"},
 		{"/attach [path|clear]", "help.attach"},
 		{"/paste", "help.paste"},
 		{"/locale [code]", "help.locale"},
-		{"/set [key=value]", "help.set"},
+		{"/set [key=value], /show", "help.set"},
 		{"/clear", "help.clear"},
 		{"/exit, /quit", "help.exit"},
 	}

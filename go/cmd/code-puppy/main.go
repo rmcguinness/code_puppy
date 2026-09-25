@@ -29,6 +29,7 @@ type rootOptions struct {
 	cont         bool
 	outputFormat string
 	maxTurns     int
+	plan         bool
 	images       []string
 }
 
@@ -86,6 +87,7 @@ Exit codes: 0 success, 1 error, 2 usage, 3 --max-turns reached,
 	f.BoolVarP(&o.cont, "continue", "C", false, "Continue the most recent session")
 	f.StringVar(&o.outputFormat, "output-format", formatText, "Output for one-shot runs: text, json, or stream-json")
 	f.IntVar(&o.maxTurns, "max-turns", 0, "Stop after this many model calls in a one-shot run (0 = unlimited)")
+	f.BoolVar(&o.plan, "plan", false, "One-shot plan: the agent may read and search but not edit or run commands")
 	f.StringArrayVar(&o.images, "image", nil, "Attach an image to the first prompt (repeatable); @file.png in a prompt also works")
 
 	root.AddCommand(newDoctorCommand(&o.global), newConfigCommand(&o.global))
@@ -112,6 +114,9 @@ func runRoot(cmd *cobra.Command, o *rootOptions, args []string) (err error) {
 		return err
 	}
 	oneShot := prompt != "" && !o.interactive
+	if !oneShot && o.plan {
+		return withCode(exitUsage, errors.New("--plan requires a prompt (in a session, use /plan <goal>)"))
+	}
 	if !oneShot && o.outputFormat != formatText {
 		return withCode(exitUsage, errors.New("--output-format json/stream-json requires a prompt"))
 	}
@@ -214,7 +219,7 @@ func runRoot(cmd *cobra.Command, o *rootOptions, args []string) (err error) {
 
 	if oneShot {
 		return runOneShot(ctx, e, oneShotOptions{
-			prompt: prompt, sessionID: sess.ID, format: o.outputFormat, maxTurns: o.maxTurns,
+			prompt: prompt, sessionID: sess.ID, format: o.outputFormat, maxTurns: o.maxTurns, plan: o.plan,
 			input: input, stdinTTY: stdinTTY && !stdinUsed, stdout: os.Stdout,
 			markdown: pretty && cfg.UI.Markdown, spinner: pretty && cfg.UI.Spinner, width: terminalWidth(),
 			usageLines: pretty, images: attached,
@@ -301,7 +306,8 @@ func firstLine(s string, n int) string {
 func newCompleter(e *env) *tui.Completer {
 	c := tui.NewCompleter(e.tools.Workspace().Dir())
 	for _, cmd := range []string{"help", "agents", "model", "skills", "session", "set", "clear", "sandbox", "exit", "quit",
-		"undo", "checkpoints", "diff", "cost", "context", "compact", "memory", "approvals", "mcp", "resume", "locale", "attach", "paste"} {
+		"undo", "checkpoints", "diff", "cost", "context", "compact", "memory", "approvals", "mcp", "resume", "locale", "attach", "paste",
+		"tools", "plan", "show"} {
 		c.Command(cmd)
 	}
 	c.Command("skills", "list", "search")

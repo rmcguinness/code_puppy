@@ -280,16 +280,30 @@ func RunREPL(ctx context.Context, app *App) error {
 		if line == "" {
 			continue
 		}
-
-		handled, err := HandleCommand(ctx, line, app)
-		if errors.Is(err, ErrExit) {
-			if ConfirmExit(ctx, app.Input, app.Processes, interrupts, exitPrompt) {
-				return goodbye()
-			}
+		if cmd, ok := strings.CutPrefix(line, "!"); ok {
+			runShellPassthrough(ctx, app, cmd, interrupts)
 			continue
 		}
-		if handled {
-			continue
+		plan := false
+		if goal, ok := strings.CutPrefix(line, "/plan"); ok && (goal == "" || goal[0] == ' ') {
+			if line = strings.TrimSpace(goal); line == "" {
+				fmt.Printf("%s%s%s\n", Yellow, i18n.T("plan.usage"), Reset)
+				continue
+			}
+			plan = true
+		}
+
+		if !plan { // a plan goal is text for the agent, even if it starts with "/"
+			handled, err := HandleCommand(ctx, line, app)
+			if errors.Is(err, ErrExit) {
+				if ConfirmExit(ctx, app.Input, app.Processes, interrupts, exitPrompt) {
+					return goodbye()
+				}
+				continue
+			}
+			if handled {
+				continue
+			}
 		}
 
 		// Re-read each turn: /session new and /session load switch sessions.
@@ -298,26 +312,39 @@ func RunREPL(ctx context.Context, app *App) error {
 			fmt.Printf("%s❌ %s%s\n", Red, i18n.T("session.none_active"), Reset)
 			continue
 		}
-		runTurn(ctx, app, active.ID, line, interrupts, false)
+		runTurn(ctx, app, active.ID, line, interrupts, turnOptions{plan: plan})
 	}
 }
 
-// runTurn sends one prompt to the agent and renders the result. accepted
-// means the prompt already passed prompt_submit hooks and was recorded
-// (a steer message that arrived too late to be read mid-turn).
-func runTurn(ctx context.Context, app *App, sessionID, line string, interrupts <-chan os.Signal, accepted bool) {
-	if !accepted && !acceptPrompt(ctx, app, sessionID, line) {
+// turnOptions change how runTurn treats its prompt.
+type turnOptions struct {
+	// accepted: the prompt already passed prompt_submit hooks and was
+	// recorded (a steer message that arrived too late to be read mid-turn).
+	accepted bool
+	// plan: the prompt is a goal to plan for; tools that change anything
+	// are refused for the whole turn (see runtime.WithPlanOnly).
+	plan bool
+}
+
+// runTurn sends one prompt to the agent and renders the result.
+func runTurn(ctx context.Context, app *App, sessionID, line string, interrupts <-chan os.Signal, o turnOptions) {
+	if !o.accepted && !acceptPrompt(ctx, app, sessionID, line) {
 		return
 	}
 	attached, ok := takeAttachments(app, line)
 	if !ok {
 		return
 	}
-	if app.Tools != nil {
-		app.Tools.Checkpoints().Begin(textutil.Ellipsize(strings.Join(strings.Fields(line), " "), 60))
+	prompt, recorded := line, line
+	if o.plan {
+		prompt, recorded = runtime.PlanPrompt(line), "/plan "+line
+		fmt.Printf("%s📝 %s%s\n", Dim, i18n.T("plan.mode"), Reset)
 	}
-	if !accepted {
-		warnOnErr(app.Storage.AddMessage("user", line+AttachmentNote(attached)))
+	if app.Tools != nil {
+		app.Tools.Checkpoints().Begin(textutil.Ellipsize(strings.Join(strings.Fields(recorded), " "), 60))
+	}
+	if !o.accepted {
+		warnOnErr(app.Storage.AddMessage("user", recorded+AttachmentNote(attached)))
 	}
 
 	fmt.Println()
@@ -337,8 +364,11 @@ func runTurn(ctx context.Context, app *App, sessionID, line string, interrupts <
 	for _, img := range attached {
 		execOpts = append(execOpts, runtime.WithAttachments(images.Part(img)))
 	}
+	if o.plan {
+		execOpts = append(execOpts, runtime.WithPlanOnly())
+	}
 	stopSteering := watchSteering(turnCtx, app, sessionID, printer)
-	streamErr := app.Engine.Execute(turnCtx, sessionID, line, printer.Handle, execOpts...)
+	streamErr := app.Engine.Execute(turnCtx, sessionID, prompt, printer.Handle, execOpts...)
 	stopSteering() // waits for a message being typed, so it isn't lost
 	printer.End()
 	turnInterrupted := turnCtx.Err() != nil
@@ -368,7 +398,7 @@ func runTurn(ctx context.Context, app *App, sessionID, line string, interrupts <
 			return
 		}
 		fmt.Printf("%s%s%s\n", Cyan, i18n.T("steer.sending"), Reset)
-		runTurn(ctx, app, sessionID, text, interrupts, true)
+		runTurn(ctx, app, sessionID, text, interrupts, turnOptions{accepted: true})
 	}
 }
 

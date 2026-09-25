@@ -229,3 +229,13 @@ Use a real screenshot (e.g. a UI with visible text) saved in the workspace as `s
 - [ ] After quitting, type in the shell. **Expected:** echo and line editing work normally (the terminal mode was restored).
 - [ ] Linux desktop: the same basic check.
 
+## 25. `!`, `/plan`, `/tools`
+
+- [ ] `!git status` and `!ls`. **Expected:** output as in your terminal, then `✅ Done (…)`; the agent's next answer doesn't know about it.
+- [ ] `!vim README.md` (or `!less README.md`), then quit it. **Expected:** the program works normally; the REPL prompt comes back intact.
+- [ ] `!sleep 30`, then Ctrl+C. **Expected:** `⚡ Interrupted`; the session continues (no exit prompt).
+- [ ] `!exit 3`. **Expected:** `❌ Exit code 3`. The audit log has a `user_shell` entry.
+- [ ] 💲 `/plan add input validation to the signup handler`. **Expected:** a "Plan mode" note; the agent reads files; any attempt to edit or run a command comes back as "plan mode: … disabled"; the answer is a numbered plan and no files change (`git status` clean).
+- [ ] 💲 `code-puppy --plan "…" --output-format json | jq .result`. **Expected:** a plan; no changes.
+- [ ] `/tools`. **Expected:** the active agent's tools with ● on read-only ones; configured MCP servers listed for the primary agent only (unless `agents` says otherwise).
+

@@ -24,6 +24,7 @@ const (
 	KindHook       = "hook"
 	KindUndo       = "undo"
 	KindAttachment = "attachment" // an image sent to the model: path and hash only
+	KindUserShell  = "user_shell" // a command the user ran with "!" (not an agent action)
 )
 
 // Entry is one audit record.

@@ -183,6 +183,20 @@
     "steer.queued": "↪ Envoyé. L’agent le lira après son étape en cours.",
     "steer.cancelled": "↪ Rien n’a été envoyé.",
     "steer.sending": "↪ L’agent a terminé avant de lire votre message; envoi maintenant.",
-    "steer.dropped": "↪ Tour interrompu; votre message n’a pas été envoyé : {text}"
+    "steer.dropped": "↪ Tour interrompu; votre message n’a pas été envoyé : {text}",
+    "help.tools": "Outils de l’agent actif (● = permis dans /plan)",
+    "help.plan": "Planifier sans rien modifier : lecture et recherche seulement",
+    "help.shell": "Exécuter vous-même une commande; l’agent ne la voit pas",
+    "plan.usage": "Utilisation : /plan <objectif>",
+    "plan.mode": "Mode plan : l’agent peut lire et chercher; les modifications et les commandes sont désactivées pour ce tour.",
+    "shell.usage": "Utilisation : !<commande>  (p. ex. !git status)",
+    "shell.direct": "votre shell · non transmis à l’agent",
+    "shell.done": "Terminé",
+    "shell.exit_code": "Code de sortie {code}",
+    "shell.error": "Impossible d’exécuter la commande : {error}",
+    "tools.title": "Outils de {agent}",
+    "tools.mcp_all": "tous les outils de ce serveur MCP",
+    "tools.mcp_prefix": "(nommés {prefix}…)",
+    "tools.legend": "● aussi disponible dans /plan. Les outils qui modifient des fichiers ou exécutent des commandes demandent une approbation, sauf s’ils sont approuvés d’office."
   }
 }

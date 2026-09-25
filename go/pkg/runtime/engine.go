@@ -55,6 +55,7 @@ type runState struct {
 	maxTurns    int
 	turns       atomic.Int64
 	attachments []*genai.Part
+	planOnly    bool // refuse tools that could change anything (see WithPlanOnly)
 }
 
 func stateFrom(ctx context.Context) *runState {
@@ -297,6 +298,9 @@ func (e *Engine) beforeTool(ctx agent.Context, t tool.Tool, args map[string]any)
 	log := e.toolReg.Hooks().Audit()
 	log.Log(audit.Entry{Kind: audit.KindToolCall, Tool: t.Name(), Args: args})
 
+	if r := planRefusal(stateFrom(ctx), t.Name()); r != nil {
+		return r, nil
+	}
 	if err := e.toolReg.ApproveMCP(ctx, t.Name(), args); err != nil {
 		return map[string]any{"error": err.Error()}, nil
 	}
@@ -459,6 +463,7 @@ func (e *Engine) Execute(ctx context.Context, sessionID, prompt string, handler 
 		attribute.Int("prompt.chars", len(prompt)),
 		attribute.Int("attachments", len(st.attachments)),
 		attribute.Int("max_turns", st.maxTurns),
+		attribute.Bool("plan_only", st.planOnly),
 	)
 	defer e.recordTurn(ctx, sessionID, span, index)
 	before := e.usage.Session(sessionID)

@@ -101,6 +101,7 @@ func TestRootFlagValidation(t *testing.T) {
 		"json no prompt": {"--output-format", "json", "-i"},
 		"negative turns": {"--max-turns", "-1", "hi"},
 		"bad dir":        {"-d", "/definitely/not/here", "hi"},
+		"plan no prompt": {"--plan", "-i"},
 	} {
 		_, err := runCLI(t, args...)
 		if exitCodeFor(err) != exitUsage {
@@ -362,5 +363,26 @@ func TestDoctorPricingCheck(t *testing.T) {
 	}
 	if !found {
 		t.Error("doctor has no pricing check")
+	}
+}
+
+func TestOneShotPlanRefusesEdits(t *testing.T) {
+	e := testEnv(t,
+		toolCall("create_file", map[string]any{"path": "x.txt", "content": "x"}),
+		genai.NewContentFromText("1. make x.txt", genai.RoleModel))
+	sess, _ := e.storage.CreateSession("", "t", "code-puppy")
+	var out bytes.Buffer
+	if err := runOneShot(context.Background(), e, oneShotOptions{prompt: "add x.txt", sessionID: sess.ID, format: formatJSON, plan: true, stdout: &out}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(e.tools.Workspace().Dir(), "x.txt")); err == nil {
+		t.Fatal("--plan created a file")
+	}
+	var res runResult
+	if err := json.Unmarshal(out.Bytes(), &res); err != nil || res.Result != "1. make x.txt" {
+		t.Fatalf("result %+v %v", res, err)
+	}
+	if e, _ := res.ToolCalls[0].Result["error"].(string); !strings.Contains(e, "plan mode") {
+		t.Fatalf("create_file result %+v", res.ToolCalls[0])
 	}
 }

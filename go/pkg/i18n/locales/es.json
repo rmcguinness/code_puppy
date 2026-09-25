@@ -183,6 +183,20 @@
     "steer.queued": "↪ Enviado. El agente lo leerá tras su paso actual.",
     "steer.cancelled": "↪ No se envió nada.",
     "steer.sending": "↪ El agente terminó antes de leer tu mensaje; enviándolo ahora.",
-    "steer.dropped": "↪ Turno interrumpido; tu mensaje no se envió: {text}"
+    "steer.dropped": "↪ Turno interrumpido; tu mensaje no se envió: {text}",
+    "help.tools": "Herramientas del agente activo (● = permitidas en /plan)",
+    "help.plan": "Planificar sin cambiar nada: solo lectura y búsqueda",
+    "help.shell": "Ejecutar tú mismo un comando; el agente no lo ve",
+    "plan.usage": "Uso: /plan <objetivo>",
+    "plan.mode": "Modo plan: el agente puede leer y buscar; las ediciones y los comandos están desactivados en este turno.",
+    "shell.usage": "Uso: !<comando>  (p. ej. !git status)",
+    "shell.direct": "tu shell · no se envía al agente",
+    "shell.done": "Hecho",
+    "shell.exit_code": "Código de salida {code}",
+    "shell.error": "No se pudo ejecutar el comando: {error}",
+    "tools.title": "Herramientas de {agent}",
+    "tools.mcp_all": "todas las herramientas de este servidor MCP",
+    "tools.mcp_prefix": "(con el nombre {prefix}…)",
+    "tools.legend": "● también disponible en /plan. Las herramientas que cambian archivos o ejecutan comandos piden aprobación salvo que estén autoaprobadas."
   }
 }

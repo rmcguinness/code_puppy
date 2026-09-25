@@ -58,6 +58,7 @@ type oneShotOptions struct {
 	sessionID  string
 	format     string
 	maxTurns   int
+	plan       bool // --plan: read-only tools, answer with a plan
 	input      tui.Input
 	stdinTTY   bool
 	stdout     io.Writer
@@ -86,7 +87,11 @@ func runOneShot(ctx context.Context, e *env, o oneShotOptions) error {
 	if runErr == nil {
 		e.tools.Checkpoints().Begin(o.prompt)
 		e.audit.Log(audit.Entry{Kind: audit.KindPrompt, Session: sid, Detail: o.prompt})
-		_ = e.storage.AddMessage("user", o.prompt+tui.AttachmentNote(o.images))
+		recorded, modelPrompt := o.prompt, o.prompt
+		if o.plan {
+			recorded, modelPrompt = "/plan "+o.prompt, runtime.PlanPrompt(o.prompt)
+		}
+		_ = e.storage.AddMessage("user", recorded+tui.AttachmentNote(o.images))
 
 		var handler runtime.EventHandler
 		var printer *tui.Printer
@@ -107,7 +112,10 @@ func runOneShot(ctx context.Context, e *env, o oneShotOptions) error {
 		for _, img := range o.images {
 			execOpts = append(execOpts, runtime.WithAttachments(images.Part(img)))
 		}
-		runErr = e.engine.Execute(ctx, sid, o.prompt, handler, execOpts...)
+		if o.plan {
+			execOpts = append(execOpts, runtime.WithPlanOnly())
+		}
+		runErr = e.engine.Execute(ctx, sid, modelPrompt, handler, execOpts...)
 		if printer != nil {
 			printer.End()
 			fmt.Fprintln(out)

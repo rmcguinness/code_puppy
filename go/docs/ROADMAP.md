@@ -157,6 +157,23 @@ Also fixed: the model name now resolves per provider (`code_puppy.default_model`
 
 ---
 
+## 14. Python command parity — ✅ done (S), with deliberate gaps
+
+**Done.**
+- **`!<command>`** runs a command as the user: bash (or sh; `cmd` on Windows) in the workspace, with the terminal attached and the full environment. It isn't an agent action, so the sandbox, command policy and approvals don't apply. It's recorded in the audit log (`user_shell`) and the diagnostic log, and isn't shown to the agent (as in Python). Ctrl+C reaches the command; the REPL swallows its own copy of the signal so it doesn't count as "exit" at the next prompt.
+- **`/plan <goal>`** and **`--plan`** (one-shot). Python only asks the model not to use tools. Here `runtime.WithPlanOnly` refuses every tool outside a read-only list (read, list, grep, view_image, web_fetch, web_search, list_agents, invoke_agent, skills, ask_user_question). Sub-agents run within the same run state, so they're restricted too; MCP tools are refused because their effects are unknown. The transcript records `/plan <goal>`, and a goal beginning with `/` is sent to the agent, not run as a command.
+- **`/tools`** lists the active agent's tools (● marks those allowed in `/plan`) and the MCP servers offered to it. **`/show`** is an alias for `/set` with no arguments.
+
+**Not ported, and why.**
+- `/cd`: in Go the workspace is the sandbox root (`os.Root`, Seatbelt/bubblewrap profile, blocked paths), plus project memory and session scoping. Changing it mid-session means rebuilding all of those; `code-puppy -d <dir>` does it safely at start.
+- `/truncate N`: deletes history. `/compact [focus]` shrinks the context without losing what was decided.
+- `/dump_context`, `/load_context`: sessions are already saved and resumable; named snapshots would fit under `/session`, and can be added if wanted.
+- `/tutorial`, `/pin_model`, `/unpin`, `/model_settings`, `/add_model`, `/refresh_models`: belong with model management (roadmap: model fallback and a model catalog).
+
+**Tests.** Plan mode refuses edits and still reads, covers sub-agents (the sub-agent's refused `create_file` is checked, not just the missing file), and leaves normal turns alone. `/plan` usage, goal recording, a goal that starts with `/`, `--plan` in JSON output and its flag validation. `!` runs in the workspace, reports exit codes, and isn't recorded as a prompt. A stale Ctrl+C after `!` must not end the session; this test was confirmed to fail without the fix once input arrives with realistic timing. `/tools` marking and MCP scoping; `/show` equals `/set`.
+
+---
+
 ## 9. Real-environment verification — 🔜 needs a person; see [MANUAL_VERIFICATION.md](MANUAL_VERIFICATION.md)
 
 Not automatable here; run once and record results in this file:

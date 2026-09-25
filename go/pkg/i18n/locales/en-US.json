@@ -183,6 +183,20 @@
     "steer.queued": "↪ Sent. The agent will read it after its current step.",
     "steer.cancelled": "↪ Nothing sent.",
     "steer.sending": "↪ The agent finished before reading your message; sending it now.",
-    "steer.dropped": "↪ Turn interrupted; your message was not sent: {text}"
+    "steer.dropped": "↪ Turn interrupted; your message was not sent: {text}",
+    "help.tools": "Tools the active agent can use (● = allowed in /plan)",
+    "help.plan": "Plan without changing anything: reads and searches only",
+    "help.shell": "Run a shell command yourself; the agent doesn't see it",
+    "plan.usage": "Usage: /plan <goal>",
+    "plan.mode": "Plan mode: the agent can read and search; edits and commands are disabled for this turn.",
+    "shell.usage": "Usage: !<command>  (e.g. !git status)",
+    "shell.direct": "your shell · not sent to the agent",
+    "shell.done": "Done",
+    "shell.exit_code": "Exit code {code}",
+    "shell.error": "Could not run the command: {error}",
+    "tools.title": "Tools for {agent}",
+    "tools.mcp_all": "all tools from this MCP server",
+    "tools.mcp_prefix": "(named {prefix}…)",
+    "tools.legend": "● also available in /plan. Tools that change files or run commands ask for approval unless auto-approved."
   }
 }

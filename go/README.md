@@ -33,6 +33,7 @@ code-puppy --resume session-2026…            # resume a specific session (or -
 code-puppy --output-format json "…"          # one JSON result object on stdout
 code-puppy --output-format stream-json "…"   # one JSON object per event, then the result
 code-puppy --max-turns 20 "…"                # cap model calls in a one-shot run
+code-puppy --plan "add rate limiting"         # a plan only: reads and searches, no edits or commands
 code-puppy --image ui.png "why is this misaligned?"   # attach images (repeatable; @ui.png in the prompt works too)
 ```
 
@@ -68,10 +69,12 @@ Subcommands: `doctor [--online]`, `config init|show|path`, `completion bash|zsh|
 | `/approvals [revoke <n>\|clear]` | Remembered approval rules |
 | `/session list [--all]\|new\|load <id>`, `/resume <id>` | Saved sessions — scoped to the current workspace; `--all` shows every directory |
 | `/agents`, `/agent <name>`, `/model <name>` | Personas and models |
-| `/sandbox`, `/mcp` | Active policy; MCP servers |
+| `/sandbox`, `/mcp`, `/tools` | Active policy; MCP servers; the tools the active agent can use |
+| `/plan <goal>` | Ask for a plan without changing anything. The agent can read, search and delegate, but edits, commands and MCP tools are refused for that turn |
+| `!<command>` | Run a command yourself, like in your own terminal: in the workspace, with your environment, outside the agent's sandbox and approvals. The agent doesn't see it; the audit log records it |
 | `/attach [path\|clear]`, `/paste` | Queue an image (or the clipboard's) for your next message |
 | `/locale [code]` | Interface language (see below) |
-| `/skills`, `/set`, `/clear`, `/exit` | |
+| `/skills`, `/set` (`/show`), `/clear`, `/exit` | |
 
 ### Images
 

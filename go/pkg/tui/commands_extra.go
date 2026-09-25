@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os/exec"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -47,6 +48,8 @@ func handleExtraCommand(ctx context.Context, cmd string, args []string, app *App
 		cmdPaste(ctx, app)
 	case "locale", "lang", "language":
 		cmdLocale(ctx, args, app)
+	case "tools":
+		cmdTools(app)
 	default:
 		return false
 	}
@@ -336,6 +339,65 @@ func cmdMCP(app *App) {
 		fmt.Printf("  • %s%s%s: %s %s(%s)%s\n", Bold, safe(s.Name), Reset, safe(target), Dim, approval, Reset)
 	}
 	fmt.Println()
+}
+
+// cmdTools lists what the active agent can use: its built-in tools and the
+// MCP servers offered to it. ● marks tools that stay available in /plan.
+func cmdTools(app *App) {
+	if !needTools(app) {
+		return
+	}
+	active := app.Engine.ActiveAgent()
+	spec, ok := app.Agents.Get(active)
+	if !ok {
+		return
+	}
+	list := app.Tools.GetToolsForAgent(spec.Tools)
+	sort.Slice(list, func(i, j int) bool { return list[i].Name() < list[j].Name() })
+	fmt.Printf("\n%s🧰 %s%s\n", Bold, i18n.T("tools.title", "agent", safe(active)), Reset)
+	for _, t := range list {
+		mark := " "
+		if runtime.PlanAllows(t.Name()) {
+			mark = Green + "●" + Reset
+		}
+		fmt.Printf("  %s %s%-26s%s %s\n", mark, Bold, safe(t.Name()), Reset, safe(textutil.Ellipsize(firstSentence(t.Description()), 70)))
+	}
+	for _, s := range app.Cfg.MCP.Servers {
+		if !mcpOfferedTo(s.Agents, active) {
+			continue
+		}
+		detail := i18n.T("tools.mcp_all")
+		if len(s.Tools) > 0 {
+			detail = strings.Join(s.Tools, ", ")
+		}
+		if s.Prefix != "" {
+			detail += " " + i18n.T("tools.mcp_prefix", "prefix", s.Prefix+"__")
+		}
+		fmt.Printf("  %s %s%-26s%s %s\n", " ", Bold, "mcp:"+safe(s.Name), Reset, safe(detail))
+	}
+	fmt.Printf("\n  %s%s%s\n\n", Dim, i18n.T("tools.legend"), Reset)
+}
+
+// mcpOfferedTo mirrors the MCP manager's rule for the primary agent: no
+// agents list means the primary agent only; "*" means every agent.
+func mcpOfferedTo(agents []string, active string) bool {
+	if len(agents) == 0 {
+		return true
+	}
+	for _, a := range agents {
+		if a == "*" || a == active {
+			return true
+		}
+	}
+	return false
+}
+
+func firstSentence(s string) string {
+	s = strings.TrimSpace(strings.SplitN(s, "\n", 2)[0])
+	if i := strings.Index(s, ". "); i >= 0 {
+		s = s[:i+1]
+	}
+	return s
 }
 
 func cmdSessionLoad(args []string, app *App) {
