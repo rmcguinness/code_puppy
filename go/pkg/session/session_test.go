@@ -273,3 +273,43 @@ func TestLegacySessionAdoptedOnResume(t *testing.T) {
 		t.Errorf("owned session re-assigned to %q", rec.Workspace)
 	}
 }
+
+func TestLastTurnPersistsForActiveAndOtherSessions(t *testing.T) {
+	dir := t.TempDir()
+	s, err := NewStorage(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	a, _ := s.CreateSession("a", "A", "code-puppy")
+	b, _ := s.CreateSession("b", "B", "code-puppy") // b is now active
+
+	if tp, n := s.LastTurn(a.ID); tp != "" || n != 0 {
+		t.Fatalf("new session has a last turn: %q %d", tp, n)
+	}
+	const tpA, tpB = "00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01", "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01"
+	if err := s.SetLastTurn(a.ID, tpA, 3); err != nil { // not active: via its file
+		t.Fatal(err)
+	}
+	if err := s.SetLastTurn(b.ID, tpB, 1); err != nil { // active
+		t.Fatal(err)
+	}
+	if err := s.AddMessage("user", "hi"); err != nil { // rewrites b's meta: must keep LastTurn
+		t.Fatal(err)
+	}
+
+	s2, _ := NewStorage(dir) // a later process, e.g. --resume
+	for id, want := range map[string]string{a.ID: tpA, b.ID: tpB} {
+		if tp, _ := s2.LastTurn(id); tp != want {
+			t.Errorf("%s: LastTurn = %q, want %q", id, tp, want)
+		}
+	}
+	if _, n := s2.LastTurn(a.ID); n != 3 {
+		t.Errorf("index = %d, want 3", n)
+	}
+	if tp, _ := s2.LastTurn("../escape"); tp != "" {
+		t.Error("invalid id accepted")
+	}
+	if err := s2.SetLastTurn("missing", tpA, 1); err == nil {
+		t.Error("SetLastTurn on a missing session should fail")
+	}
+}

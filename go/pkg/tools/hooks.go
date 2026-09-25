@@ -8,6 +8,8 @@ import (
 	"sync"
 
 	"github.com/retail-cortex/code_puppy/pkg/audit"
+	"github.com/retail-cortex/code_puppy/pkg/observability"
+	"go.opentelemetry.io/otel/attribute"
 )
 
 // ActionKind classifies a sensitive tool action for approval purposes.
@@ -210,7 +212,12 @@ func (h *Hooks) Approve(ctx context.Context, req ApprovalRequest) error {
 		return fmt.Errorf("%w: %s requires approval but no interactive approver is available (enable auto-approve in config to allow it)", ErrNotApproved, req.Tool)
 	}
 
-	decision, err := approver(ctx, req)
+	// The span isolates time spent waiting for the user from tool runtime.
+	actx, span := observability.Start(ctx, "approval",
+		attribute.String("tool", req.Tool), attribute.String("kind", string(req.Kind)))
+	decision, err := approver(actx, req)
+	span.SetAttributes(attribute.String("decision", decision.String()))
+	observability.End(span, err)
 	if err != nil {
 		record("error")
 		return fmt.Errorf("%w: %v", ErrNotApproved, err)

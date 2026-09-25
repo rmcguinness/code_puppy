@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"os/signal"
 	"strings"
@@ -345,6 +346,7 @@ func cancelOnSignal(parent context.Context, sigs <-chan os.Signal) (context.Cont
 
 func warnOnErr(err error) {
 	if err != nil {
+		slog.Warn("session save failed", "error", err)
 		fmt.Printf("%s⚠️  %s%s\n", Yellow, i18n.T("session.save_failed", "error", err), Reset)
 	}
 }

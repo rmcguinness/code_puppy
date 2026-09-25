@@ -105,6 +105,8 @@ On Linux, install `bubblewrap` and allow unprivileged user namespaces. Ubuntu 24
 
 **Audit log.** `~/.code_puppy/audit/audit-YYYY-MM-DD.jsonl` records prompts, tool calls and results, approvals, denials, hook decisions, and undos.
 
+**Diagnostic log.** `~/.code_puppy/logs/code-puppy-YYYY-MM-DD.jsonl` (owner-only, secrets masked, kept `log.retain_days` = 14) records warnings, failed turns and errors, with trace IDs when telemetry is on. `log.level` (or `CODE_PUPPY_LOG_LEVEL`) is `debug`, `info`, `warn`, `error` or `off`. A background goroutine writes it, so logging never waits on the disk.
+
 **Web.** `web_fetch` only reaches public addresses (checked after DNS resolution and on every redirect — no `localhost`, private ranges, or cloud metadata), needs approval per host unless in `web.allow_domains`, and caps response size.
 
 ---
@@ -143,6 +145,14 @@ command = "grep -qv 'password' || { echo 'no secrets' >&2; exit 2; }"
 **Web search** — set `web.search_provider` to `brave`, `tavily` (key in `web.search_api_key` or `BRAVE_API_KEY` / `TAVILY_API_KEY`) or `searxng` (`web.search_url`). Each search needs approval (rememberable per provider) because the query leaves your machine; results from `web.deny_domains` are dropped.
 
 **Forged tools** — tools built by `universal_constructor` are saved with a manifest in `~/.code_puppy/uc_tools` and reloaded on start; `action: "delete"` removes one.
+
+**Telemetry (OpenTelemetry)** — off by default, and nothing is sent unless you turn it on. With `[telemetry] enabled = true` (or `CODE_PUPPY_TELEMETRY=1`), traces and logs are exported over OTLP/HTTP to `telemetry.endpoint`, else `OTEL_EXPORTER_OTLP_ENDPOINT`, else `http://localhost:4318`. Other `OTEL_EXPORTER_OTLP_*` settings (headers, timeouts) apply. Each prompt is one trace: a `turn` span (agent, model, token counts, cost) containing the ADK's agent, model-call and tool spans, plus `approval` (time spent waiting on you), `hook` and `compact` spans. A session is a chain of turns, not one long trace, because sessions last days and resume in new processes. Every span carries the session as `gen_ai.conversation.id`, and each `turn` has a `turn.index` and a span link to the previous turn, even after `--resume`. Search by `gen_ai.conversation.id` to list a session, or follow the links turn by turn. Prompts, replies, tool arguments and tool results are **not** exported. The ADK attaches tool arguments and results to every tool span, so Code Puppy removes them before export. Set `capture_content = true` to include them, with secrets masked. Export runs on background goroutines and gives up after 3 s at exit if the collector is unreachable.
+```toml
+[telemetry]
+enabled = true
+endpoint = "http://localhost:4318"
+# capture_content = false
+```
 
 **Context & cost** — history is compacted automatically once a prompt reaches `context.token_threshold` tokens, or on demand with `/compact`. Estimated list prices for the default models are built in; override or add them under `[pricing."model-name"]` (`input_per_mtok`, `output_per_mtok`, `cached_input_per_mtok`, `cache_write_per_mtok`). Costs use the model that actually answered, so refusal fallbacks are priced correctly; `doctor` warns when the active model has no price.
 

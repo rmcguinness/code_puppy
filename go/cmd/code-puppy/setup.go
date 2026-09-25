@@ -3,7 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
-	"github.com/retail-cortex/code_puppy/pkg/images"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
@@ -13,7 +13,9 @@ import (
 	"github.com/retail-cortex/code_puppy/pkg/audit"
 	"github.com/retail-cortex/code_puppy/pkg/config"
 	"github.com/retail-cortex/code_puppy/pkg/i18n"
+	"github.com/retail-cortex/code_puppy/pkg/images"
 	"github.com/retail-cortex/code_puppy/pkg/memory"
+	"github.com/retail-cortex/code_puppy/pkg/observability"
 	"github.com/retail-cortex/code_puppy/pkg/redact"
 	"github.com/retail-cortex/code_puppy/pkg/runtime"
 	"github.com/retail-cortex/code_puppy/pkg/session"
@@ -118,13 +120,7 @@ func buildEnv(ctx context.Context, cfg *config.Config, o envOptions) (*env, erro
 	}
 
 	if cfg.Audit.Enabled {
-		secrets := []string{cfg.LLM.Gemini.APIKey, cfg.LLM.OpenAI.APIKey, cfg.LLM.Anthropic.APIKey, cfg.Web.SearchAPIKey}
-		for _, s := range cfg.MCP.Servers {
-			for _, v := range s.Env {
-				secrets = append(secrets, v)
-			}
-		}
-		if e.audit, err = audit.Open(config.ExpandHome(cfg.Audit.Dir), redact.FromEnv(cfg.Sandbox.ScrubEnv, secrets...)); err != nil {
+		if e.audit, err = audit.Open(config.ExpandHome(cfg.Audit.Dir), secretRedactor(cfg)); err != nil {
 			o.warn("audit log disabled: " + err.Error())
 		}
 		e.tools.SetAudit(e.audit)
@@ -154,12 +150,49 @@ func buildEnv(ctx context.Context, cfg *config.Config, o envOptions) (*env, erro
 		runtime.WithSessionService(events),
 		runtime.WithInstructions(e.instructions()),
 		runtime.WithStreaming(o.streaming),
+		runtime.WithTurnStore(e.storage),
 	)
 	if err != nil {
 		e.Close()
 		return nil, fmt.Errorf("failed to initialize engine: %w", err)
 	}
 	return e, nil
+}
+
+// secretRedactor masks configured credentials and the values of scrubbed
+// environment variables in audit entries, logs and telemetry.
+func secretRedactor(cfg *config.Config) *redact.Redactor {
+	secrets := []string{cfg.LLM.Gemini.APIKey, cfg.LLM.OpenAI.APIKey, cfg.LLM.Anthropic.APIKey, cfg.Web.SearchAPIKey}
+	for _, s := range cfg.MCP.Servers {
+		for _, v := range s.Env {
+			secrets = append(secrets, v)
+		}
+	}
+	return redact.FromEnv(cfg.Sandbox.ScrubEnv, secrets...)
+}
+
+// startObservability opens the diagnostic log and, when enabled, OpenTelemetry
+// export, and makes the log the slog default. The returned func flushes both.
+// Failures only disable the affected part: diagnostics must never stop a session.
+func startObservability(ctx context.Context, cfg *config.Config, warn func(string)) func() {
+	r := secretRedactor(cfg)
+	tel, err := observability.StartTelemetry(ctx, cfg.Telemetry, version, r)
+	if err != nil {
+		warn("telemetry disabled: " + err.Error())
+	}
+	logger, logFile, err := observability.OpenLog(cfg.Log, r, tel.LogHandler())
+	if err != nil {
+		warn("diagnostic log disabled: " + err.Error())
+		logger, logFile, _ = observability.OpenLog(config.LogConfig{Level: "off"}, r, tel.LogHandler())
+	}
+	slog.SetDefault(logger)
+	slog.Info("start", "version", version, "provider", cfg.LLM.Provider, "model", cfg.ModelName(), "telemetry", tel != nil)
+	return func() {
+		if err := tel.Shutdown(context.WithoutCancel(ctx)); err != nil {
+			slog.Debug("telemetry shutdown", "error", err)
+		}
+		logFile.Close()
+	}
 }
 
 // reloadMemory re-reads instruction files into the engine.

@@ -37,6 +37,8 @@ type Config struct {
 	Hooks       HooksConfig           `toml:"hooks"`
 	MCP         MCPConfig             `toml:"mcp"`
 	Web         WebConfig             `toml:"web"`
+	Log         LogConfig             `toml:"log"`
+	Telemetry   TelemetryConfig       `toml:"telemetry"`
 	Pricing     map[string]ModelPrice `toml:"pricing"`
 }
 
@@ -370,6 +372,15 @@ func applyEnvOverrides(cfg *Config) {
 	}
 	if agency := os.Getenv("CODE_PUPPY_AGENCY"); agency != "" {
 		cfg.CodePuppy.AgencyLevel = strings.ToLower(agency)
+	}
+	if level := os.Getenv("CODE_PUPPY_LOG_LEVEL"); level != "" {
+		cfg.Log.Level = strings.ToLower(level)
+	}
+	switch strings.ToLower(os.Getenv("CODE_PUPPY_TELEMETRY")) {
+	case "1", "true", "yes", "on":
+		cfg.Telemetry.Enabled = true
+	case "0", "false", "no", "off":
+		cfg.Telemetry.Enabled = false
 	}
 
 	// Fallback to reading legacy ~/.code_puppy/puppy.cfg if keys still empty

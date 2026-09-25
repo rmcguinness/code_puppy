@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"os/signal"
 	"strings"
@@ -32,6 +33,9 @@ type rootOptions struct {
 }
 
 func main() {
+	// Until startObservability installs the log file, slog's default would
+	// print to stderr and duplicate the terminal warnings.
+	slog.SetDefault(slog.New(slog.DiscardHandler))
 	root := newRootCommand()
 	err := root.Execute()
 	if err != nil {
@@ -129,7 +133,16 @@ func runRoot(cmd *cobra.Command, o *rootOptions, args []string) (err error) {
 	textMode := o.outputFormat == formatText
 	pretty := textMode && stdoutIsTerminal()
 	warnOut := os.Stderr
-	warnFn := func(msg string) { fmt.Fprintf(warnOut, "%s⚠️  %s%s\n", tui.Yellow, msg, tui.Reset) }
+	warnFn := func(msg string) {
+		slog.Warn(msg)
+		fmt.Fprintf(warnOut, "%s⚠️  %s%s\n", tui.Yellow, msg, tui.Reset)
+	}
+	defer startObservability(ctx, cfg, warnFn)()
+	defer func() { // runs before the log closes
+		if err != nil {
+			slog.Error("exit", "code", exitCodeFor(err), "error", err)
+		}
+	}()
 
 	e, err := buildEnv(ctx, cfg, envOptions{streaming: pretty, warn: warnFn})
 	if err != nil {

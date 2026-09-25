@@ -8,6 +8,8 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/retail-cortex/code_puppy/pkg/observability"
+	"go.opentelemetry.io/otel/attribute"
 	"google.golang.org/adk/v2/session"
 	"google.golang.org/adk/v2/session/compaction"
 	"google.golang.org/genai"
@@ -36,10 +38,19 @@ const compactPromptTemplate = "Summarize the conversation below between a user a
 // the summary instead of the covered events. focus, if set, tells the
 // summarizer what to emphasise. The cut is always made at the start of a user
 // turn so a tool call is never separated from its result.
-func (e *Engine) Compact(ctx context.Context, sessionID, focus string, keepTurns int) (CompactResult, error) {
+func (e *Engine) Compact(ctx context.Context, sessionID, focus string, keepTurns int) (out CompactResult, err error) {
 	if keepTurns < 1 {
 		keepTurns = 1
 	}
+	ctx, span := observability.Start(ctx, "compact",
+		observability.ConversationID.String(sessionID),
+		attribute.Int("keep_turns", keepTurns),
+		attribute.Bool("focus", focus != ""),
+	)
+	defer func() {
+		span.SetAttributes(attribute.Int("events.compacted", out.EventsCompacted), attribute.Int("summary.chars", out.SummaryChars))
+		observability.End(span, err)
+	}()
 	got, err := e.sessions.Get(ctx, &session.GetRequest{AppName: appName, UserID: "user", SessionID: sessionID})
 	if err != nil {
 		return CompactResult{}, fmt.Errorf("%w: no conversation in this session", ErrNothingToCompact)

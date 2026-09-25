@@ -13,6 +13,7 @@ import (
 
 	"github.com/retail-cortex/code_puppy/pkg/config"
 	"github.com/retail-cortex/code_puppy/pkg/memory"
+	"github.com/retail-cortex/code_puppy/pkg/observability"
 	"github.com/retail-cortex/code_puppy/pkg/runtime"
 	"github.com/retail-cortex/code_puppy/pkg/tools"
 	"github.com/retail-cortex/code_puppy/pkg/tui"
@@ -100,6 +101,30 @@ func runDoctor(ctx context.Context, g *globalFlags, online bool) []check {
 		add("pricing", statusWarn, "no price for %q; /cost will show tokens only (add [pricing.%q])", cfg.ModelName(), cfg.ModelName())
 	} else {
 		add("pricing", statusOK, "estimates use [pricing] for %s", cfg.ModelName())
+	}
+
+	switch _, on, err := observability.ParseLevel(cfg.Log.Level); {
+	case err != nil:
+		add("log", statusWarn, "%v", err)
+	case !on:
+		add("log", statusOK, "off")
+	default:
+		add("log", statusOK, "%s level to %s", cfg.Log.Level, config.ExpandHome(cfg.Log.Dir))
+	}
+	switch endpoint := cfg.Telemetry.Endpoint; {
+	case !cfg.Telemetry.Enabled:
+		add("telemetry", statusOK, "off")
+	case endpoint == "" && os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT") == "" && os.Getenv("OTEL_EXPORTER_OTLP_TRACES_ENDPOINT") == "":
+		add("telemetry", statusWarn, "on, but no endpoint set; exporting to the OTLP default %s", observability.DefaultEndpoint)
+	default:
+		if endpoint == "" {
+			endpoint = "OTEL_EXPORTER_OTLP_* endpoint"
+		}
+		content := "names, timings and token counts only"
+		if cfg.Telemetry.CaptureContent {
+			content = "including prompts and tool content (secrets masked)"
+		}
+		add("telemetry", statusOK, "OTLP/HTTP to %s; %s", endpoint, content)
 	}
 
 	llm, err := runtime.NewModel(ctx, cfg, "")

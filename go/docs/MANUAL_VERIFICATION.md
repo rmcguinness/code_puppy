@@ -195,3 +195,15 @@ Use a real screenshot (e.g. a UI with visible text) saved in the workspace as `s
 - [ ] `@~/Desktop/x.png` (outside the workspace) and `@id_rsa_screenshot.png`. **Expected:** refused; "Nothing was sent".
 - [ ] Quit and `--continue "what was in that image?"`. **Expected:** the model can still see it. Check `ls -la ~/.code_puppy/images` (files mode 600) and that the session file under `~/.code_puppy/sessions` is small (no base64).
 - [ ] `code-puppy --image shot.png "describe" --output-format json | jq .result` **Expected:** a description.
+
+## 22. Diagnostic log and telemetry
+
+- [ ] After any session: `ls -la ~/.code_puppy/logs`. **Expected:** directory mode 700, `code-puppy-YYYY-MM-DD.jsonl` mode 600 with a `start` line; a failed turn adds an `ERROR` line.
+- [ ] `CODE_PUPPY_LOG_LEVEL=off code-puppy "hi"`. **Expected:** nothing new in the log.
+- [ ] Run a local collector, e.g. Jaeger: `docker run --rm -p 16686:16686 -p 4318:4318 jaegertracing/jaeger:latest`. Then `CODE_PUPPY_TELEMETRY=1 code-puppy` 💲 and do a turn that reads and edits a file.
+  **Expected:** in Jaeger (http://localhost:16686, service `code-puppy`), one trace per prompt: `turn` → `invoke_agent` → `generate_content …` and `execute_tool …`, with `approval` under the edit's tool span. No file content, prompt text or tool arguments in any attribute.
+- [ ] Two prompts, quit, then `--continue` with a third. In Jaeger search by tag `gen_ai.conversation.id=<session id>`. **Expected:** three `turn` traces with `turn.index` 1–3; turns 2 and 3 each show a link ("References") to the previous turn, including across the restart.
+- [ ] Same with `capture_content = true`. **Expected:** prompts and tool arguments appear; your API key does not.
+- [ ] Stop the collector, then run and quit a session. **Expected:** exit is not delayed by more than about 3 s; no telemetry errors in the terminal (they go to the log at debug level).
+- [ ] `code-puppy doctor`. **Expected:** `log` and `telemetry` lines matching your settings.
+

@@ -168,6 +168,14 @@ retain_events   = 20
 [audit]
 enabled = true
 
+[log]
+level = "info"   # debug | info | warn | error | off; ~/.code_puppy/logs, secrets masked
+
+[telemetry]
+enabled = false   # export OpenTelemetry traces and logs over OTLP/HTTP (or CODE_PUPPY_TELEMETRY=1)
+# endpoint = "http://localhost:4318"   # default: OTEL_EXPORTER_OTLP_ENDPOINT
+# capture_content = false              # true adds prompts, replies, tool args and results (secrets masked)
+
 [checkpoints]
 enabled = true
 

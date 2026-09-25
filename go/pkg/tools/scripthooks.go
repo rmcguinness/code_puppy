@@ -5,12 +5,15 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"path"
 	"strings"
 	"time"
 
 	"github.com/retail-cortex/code_puppy/pkg/audit"
 	"github.com/retail-cortex/code_puppy/pkg/config"
+	"github.com/retail-cortex/code_puppy/pkg/observability"
+	"go.opentelemetry.io/otel/attribute"
 )
 
 const defaultHookTimeout = 30 * time.Second
@@ -112,6 +115,7 @@ func (s *ScriptHooks) runAll(ctx context.Context, hooks []config.HookConfig, too
 		case err != nil:
 			entry.Error = err.Error()
 			s.audit.Log(entry)
+			slog.WarnContext(ctx, "hook failed", "event", ev.Event, "command", h.Command, "error", err)
 			if h.FailClosed {
 				return fmt.Sprintf("hook %q failed and is fail_closed: %v", h.Command, err)
 			}
@@ -124,6 +128,12 @@ func (s *ScriptHooks) runAll(ctx context.Context, hooks []config.HookConfig, too
 // run executes one hook. Exit 0 continues unless stdout is a JSON block
 // decision; exit 2 blocks with stderr as the reason; other failures are errors.
 func (s *ScriptHooks) run(ctx context.Context, h config.HookConfig, ev HookEvent) (blocked bool, reason string, err error) {
+	ctx, span := observability.Start(ctx, "hook "+ev.Event,
+		attribute.String("hook.event", ev.Event), attribute.String("tool", ev.Tool))
+	defer func() {
+		span.SetAttributes(attribute.Bool("blocked", blocked))
+		observability.End(span, err)
+	}()
 	timeout := defaultHookTimeout
 	if h.TimeoutSeconds > 0 {
 		timeout = time.Duration(h.TimeoutSeconds) * time.Second

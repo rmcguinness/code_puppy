@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"math"
 	"slices"
 	"strings"
@@ -13,8 +14,11 @@ import (
 	"github.com/retail-cortex/code_puppy/pkg/agents"
 	"github.com/retail-cortex/code_puppy/pkg/audit"
 	"github.com/retail-cortex/code_puppy/pkg/config"
+	"github.com/retail-cortex/code_puppy/pkg/observability"
 	"github.com/retail-cortex/code_puppy/pkg/skills"
 	"github.com/retail-cortex/code_puppy/pkg/tools"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 	"google.golang.org/adk/v2/agent"
 	"google.golang.org/adk/v2/agent/llmagent"
 	"google.golang.org/adk/v2/artifact"
@@ -68,6 +72,17 @@ func WithSessionService(s session.Service) Option { return func(e *Engine) { e.s
 // generates them (followed by the usual final events).
 func WithStreaming(on bool) Option { return func(e *Engine) { e.streaming = on } }
 
+// TurnStore remembers each session's latest turn so the next turn's span
+// can link to it, across processes when the store is persistent.
+// session.Storage implements it.
+type TurnStore interface {
+	LastTurn(sessionID string) (traceparent string, index int)
+	SetLastTurn(sessionID, traceparent string, index int) error
+}
+
+// WithTurnStore chains turn spans per session through s.
+func WithTurnStore(s TurnStore) Option { return func(e *Engine) { e.turns = s } }
+
 // WithInstructions appends text (e.g. project memory) to every agent's instructions.
 func WithInstructions(text string) Option { return func(e *Engine) { e.extraInstructions = text } }
 
@@ -86,6 +101,7 @@ type Engine struct {
 	memories  memory.Service
 
 	subagentSeq atomic.Int64
+	turns       TurnStore // nil: turns are not chained
 
 	mu                sync.RWMutex
 	llm               model.LLM
@@ -425,7 +441,67 @@ func (e *Engine) Execute(ctx context.Context, sessionID, prompt string, handler 
 	if e.streaming {
 		rc.StreamingMode = agent.StreamingModeSSE
 	}
-	return drain(r.Run(ctx, "user", sessionID, userContent(prompt, st.attachments), rc), handler)
+
+	ctx, span, index := e.startTurn(ctx, sessionID,
+		attribute.String("agent", e.ActiveAgent()),
+		attribute.String("model", e.ModelName()),
+		attribute.Int("prompt.chars", len(prompt)),
+		attribute.Int("attachments", len(st.attachments)),
+		attribute.Int("max_turns", st.maxTurns),
+	)
+	defer e.recordTurn(ctx, sessionID, span, index)
+	before := e.usage.Session(sessionID)
+	err := drain(r.Run(ctx, "user", sessionID, userContent(prompt, st.attachments), rc), handler)
+	after := e.usage.Session(sessionID)
+	span.SetAttributes(
+		attribute.Int64("model_calls", int64(after.Calls-before.Calls)),
+		attribute.Int64("tokens.input", after.Input-before.Input),
+		attribute.Int64("tokens.output", after.Output-before.Output),
+	)
+	if after.Priced {
+		span.SetAttributes(attribute.Float64("cost_usd", after.CostUSD-before.CostUSD))
+	}
+	observability.End(span, err)
+	if err != nil && ctx.Err() == nil {
+		slog.ErrorContext(ctx, "turn failed", "session", sessionID, "error", err)
+	}
+	return err
+}
+
+// startTurn starts the span for one turn. Each turn is its own trace (a
+// session can last days and resume in another process, so it can't be one
+// long-lived span); turns of a session share gen_ai.conversation.id and each
+// links to the previous turn, so a session reads as a chain.
+func (e *Engine) startTurn(ctx context.Context, sessionID string, attrs ...attribute.KeyValue) (context.Context, trace.Span, int) {
+	index := 1
+	opts := []trace.SpanStartOption{trace.WithNewRoot()}
+	if e.turns != nil {
+		tp, last := e.turns.LastTurn(sessionID)
+		index = last + 1
+		if prev, ok := observability.ParseTraceparent(tp); ok {
+			opts = append(opts, trace.WithLinks(trace.Link{
+				SpanContext: prev,
+				Attributes:  []attribute.KeyValue{attribute.String("link.type", "previous_turn"), attribute.Int("turn.index", last)},
+			}))
+		}
+	}
+	attrs = append(attrs, observability.ConversationID.String(sessionID), attribute.Int("turn.index", index))
+	opts = append(opts, trace.WithAttributes(attrs...))
+	ctx, span := observability.StartWith(ctx, "turn", opts...)
+	return ctx, span, index
+}
+
+// recordTurn saves the turn as the session's latest. With telemetry off the
+// span has no trace context and nothing is written.
+func (e *Engine) recordTurn(ctx context.Context, sessionID string, span trace.Span, index int) {
+	if e.turns == nil {
+		return
+	}
+	if tp := observability.Traceparent(span); tp != "" {
+		if err := e.turns.SetLastTurn(sessionID, tp, index); err != nil {
+			slog.WarnContext(ctx, "could not save turn trace link", "session", sessionID, "error", err)
+		}
+	}
 }
 
 func drain(events func(yield func(*session.Event, error) bool), handler EventHandler) error {

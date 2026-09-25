@@ -60,6 +60,28 @@ type AuditConfig struct {
 	Dir     string `toml:"dir"`
 }
 
+// LogConfig controls the diagnostic log (<dir>/code-puppy-YYYY-MM-DD.jsonl).
+// Secrets are masked before writing, as in the audit log.
+type LogConfig struct {
+	Level      string `toml:"level"`       // debug, info, warn, error, or off
+	Dir        string `toml:"dir"`         // owner-only
+	RetainDays int    `toml:"retain_days"` // older log files are deleted (0 = keep)
+}
+
+// TelemetryConfig controls OpenTelemetry trace and log export over OTLP/HTTP.
+// It is off by default; CODE_PUPPY_TELEMETRY=1 also turns it on. Standard
+// OTEL_EXPORTER_OTLP_* variables (headers, timeouts) apply.
+type TelemetryConfig struct {
+	Enabled bool `toml:"enabled"`
+	// Endpoint is the collector's base URL, e.g. http://localhost:4318.
+	// Empty uses OTEL_EXPORTER_OTLP_ENDPOINT, then the OTLP default.
+	Endpoint string `toml:"endpoint"`
+	// CaptureContent exports prompts, model replies, tool arguments and tool
+	// results (secrets masked). Off, spans carry only names, timings, token
+	// counts and outcomes.
+	CaptureContent bool `toml:"capture_content"`
+}
+
 // CheckpointConfig controls file snapshots used by /undo.
 type CheckpointConfig struct {
 	Enabled  bool  `toml:"enabled"`
@@ -167,6 +189,7 @@ func applyFeatureDefaults(c *Config) {
 	c.Context = ContextConfig{Compaction: true, TokenThreshold: 120_000, RetainEvents: 20}
 	c.Tools.ApprovalsFile = filepath.Join(dir, "approvals.json")
 	c.Audit = AuditConfig{Enabled: true, Dir: filepath.Join(dir, "audit")}
+	c.Log = LogConfig{Level: "info", Dir: filepath.Join(dir, "logs"), RetainDays: 14}
 	c.Checkpoints = CheckpointConfig{Enabled: true, MaxBytes: 64 * 1024 * 1024}
 	c.Images = ImagesConfig{Enabled: true, Dir: filepath.Join(dir, "images"), MaxDimension: 1568, MaxInputMB: 20, RetainDays: 30}
 	c.Web = WebConfig{Enabled: true, MaxBytes: 2 * 1024 * 1024, TimeoutSeconds: 20}

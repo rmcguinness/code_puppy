@@ -44,6 +44,9 @@ type SessionRecord struct {
 	// Workspace is the canonical workspace directory the session belongs to;
 	// empty for sessions created before sessions were workspace-scoped.
 	Workspace string `json:"workspace,omitempty"`
+	// LastTurn identifies the trace of the most recent turn so the next one,
+	// even in a later process, can link to it. Empty with telemetry off.
+	LastTurn *TurnRef `json:"last_turn,omitempty"`
 	// Messages is populated by Load and for the active session; List leaves it
 	// empty and reports MessageCount instead.
 	Messages []Message `json:"messages,omitempty"`
@@ -243,6 +246,55 @@ func (s *Storage) Load(id string) (*SessionRecord, error) {
 	}
 	s.active = rec
 	return rec, nil
+}
+
+// TurnRef is the W3C traceparent of a turn's span and the turn's number
+// within the session (1-based).
+type TurnRef struct {
+	Traceparent string `json:"traceparent"`
+	Index       int    `json:"index"`
+}
+
+// LastTurn returns the latest turn recorded for session id: from memory
+// for the active session, otherwise from its metadata file. It returns
+// ("", 0) when there is none.
+func (s *Storage) LastTurn(id string) (traceparent string, index int) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	rec := s.active
+	if rec == nil || rec.ID != id {
+		if ValidateID(id) != nil {
+			return "", 0
+		}
+		var err error
+		if rec, err = s.readMeta(id); err != nil {
+			return "", 0
+		}
+	}
+	if rec.LastTurn == nil {
+		return "", 0
+	}
+	return rec.LastTurn.Traceparent, rec.LastTurn.Index
+}
+
+// SetLastTurn records the latest turn of session id in its metadata.
+func (s *Storage) SetLastTurn(id, traceparent string, index int) error {
+	if err := ValidateID(id); err != nil {
+		return err
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	ref := &TurnRef{Traceparent: traceparent, Index: index}
+	if s.active != nil && s.active.ID == id {
+		s.active.LastTurn = ref
+		return s.writeMeta(s.active)
+	}
+	rec, err := s.readMeta(id)
+	if err != nil {
+		return err
+	}
+	rec.LastTurn = ref
+	return s.writeMeta(rec)
 }
 
 // List returns saved session metadata sorted by update time descending.
