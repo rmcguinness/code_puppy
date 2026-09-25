@@ -212,3 +212,64 @@ func TestActiveReturnsSnapshot(t *testing.T) {
 		t.Error("Active should return an independent copy")
 	}
 }
+
+func TestWorkspaceScopedSessions(t *testing.T) {
+	s, dir := newStorage(t)
+	s.SetWorkspace("/work/a")
+	a1, _ := s.CreateSession("", "a1", "x")
+	time.Sleep(5 * time.Millisecond)
+	s.SetWorkspace("/work/b")
+	b1, _ := s.CreateSession("", "b1", "x")
+	time.Sleep(5 * time.Millisecond)
+	s.SetWorkspace("/work/a")
+	a2, _ := s.CreateSession("", "a2", "x")
+
+	if a1.Workspace != "/work/a" || b1.Workspace != "/work/b" {
+		t.Errorf("workspace not recorded: %q %q", a1.Workspace, b1.Workspace)
+	}
+	listA, _ := s.ListWorkspace("/work/a")
+	if len(listA) != 2 || listA[0].ID != a2.ID || listA[1].ID != a1.ID {
+		t.Errorf("workspace a sessions: %+v", listA)
+	}
+	if listB, _ := s.ListWorkspace("/work/b"); len(listB) != 1 || listB[0].ID != b1.ID {
+		t.Errorf("workspace b sessions: %+v", listB)
+	}
+	if all, _ := s.List(); len(all) != 3 {
+		t.Errorf("List should include every workspace, got %d", len(all))
+	}
+	if none, _ := s.ListWorkspace("/work/c"); len(none) != 0 {
+		t.Errorf("unknown workspace should be empty: %+v", none)
+	}
+
+	// Workspace survives restarts (it's in the metadata file).
+	s2, _ := NewStorage(dir)
+	if l, _ := s2.ListWorkspace("/work/b"); len(l) != 1 {
+		t.Error("workspace not persisted")
+	}
+}
+
+func TestLegacySessionAdoptedOnResume(t *testing.T) {
+	s, dir := newStorage(t)
+	legacy, _ := s.CreateSession("", "old", "x") // no workspace set: legacy record
+	if legacy.Workspace != "" {
+		t.Fatal("expected legacy session without workspace")
+	}
+	s2, _ := NewStorage(dir)
+	s2.SetWorkspace("/work/a")
+	if l, _ := s2.ListWorkspace("/work/a"); len(l) != 0 {
+		t.Error("legacy sessions must not appear in a workspace listing before being resumed")
+	}
+	rec, err := s2.Load(legacy.ID)
+	if err != nil || rec.Workspace != "/work/a" {
+		t.Fatalf("legacy session not adopted: %+v %v", rec, err)
+	}
+	s3, _ := NewStorage(dir)
+	if l, _ := s3.ListWorkspace("/work/a"); len(l) != 1 {
+		t.Error("adoption not persisted")
+	}
+	// Sessions that already have a workspace keep it when loaded elsewhere.
+	s3.SetWorkspace("/work/b")
+	if rec, _ := s3.Load(legacy.ID); rec.Workspace != "/work/a" {
+		t.Errorf("owned session re-assigned to %q", rec.Workspace)
+	}
+}

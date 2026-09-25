@@ -5,6 +5,7 @@ description: "Documentation crawler, technical research, and structured data ext
 agency_level: "high"
 tools:
   - web_fetch
+  - web_search
   - list_files
   - read_file
   - grep

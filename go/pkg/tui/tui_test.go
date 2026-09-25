@@ -210,6 +210,7 @@ func newTestApp(t *testing.T, factory ModelFactory) *App {
 	t.Helper()
 	cfg := config.DefaultConfig()
 	cfg.Tools.WorkspaceDir = t.TempDir()
+	cfg.Images.Dir = t.TempDir()
 	agentReg, _ := agents.NewRegistry()
 	skillProv, _ := skills.NewProvider()
 	toolReg, err := tools.NewRegistry(cfg, agentReg, skillProv)

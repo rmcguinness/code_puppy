@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -44,9 +46,10 @@ type (
 
 // runState is carried in the context of one Execute call.
 type runState struct {
-	sessionID string
-	maxTurns  int
-	turns     atomic.Int64
+	sessionID   string
+	maxTurns    int
+	turns       atomic.Int64
+	attachments []*genai.Part
 }
 
 func stateFrom(ctx context.Context) *runState {
@@ -115,7 +118,7 @@ func NewEngine(
 		sessions:  session.InMemoryService(),
 		artifacts: artifact.InMemoryService(),
 		memories:  memory.InMemoryService(),
-		llm:       llm,
+		llm:       withImages(llm, toolReg.Images()),
 		active:    cfg.CodePuppy.DefaultAgent,
 	}
 	for _, o := range opts {
@@ -177,7 +180,7 @@ func (e *Engine) SetModel(ctx context.Context, llm model.LLM) error {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	prev := e.llm
-	e.llm = llm
+	e.llm = withImages(llm, e.toolReg.Images())
 	if err := e.rebuildLocked(); err != nil {
 		e.llm = prev
 		return err
@@ -217,7 +220,7 @@ func (e *Engine) newLLMAgent(spec *agents.AgentSpec, instruction string, subAgen
 	return llmagent.New(llmagent.Config{
 		Name:                  spec.Name,
 		Description:           spec.Description,
-		Instruction:           instruction + e.extraInstructions,
+		Instruction:           instruction + e.imageInstruction(spec) + e.extraInstructions,
 		Model:                 e.llm,
 		Tools:                 e.toolReg.GetToolsForAgent(spec.Tools),
 		Toolsets:              toolsets,
@@ -249,7 +252,22 @@ func (e *Engine) afterModel(ctx agent.Context, resp *model.LLMResponse, respErr 
 	if st := stateFrom(ctx); st != nil {
 		id = st.sessionID
 	}
-	e.usage.Record(id, e.ModelName(), resp.UsageMetadata)
+	// Price by the model that actually answered: with server-side fallback
+	// it can differ from the configured one.
+	served := resp.ModelVersion
+	if served == "" || !e.usage.HasPrice(served) {
+		served = e.ModelName()
+	}
+	var writes int64
+	switch v := resp.CustomMetadata[CacheWriteTokensKey].(type) {
+	case int64:
+		writes = v
+	case int:
+		writes = int64(v)
+	case float64:
+		writes = int64(v)
+	}
+	e.usage.RecordWrites(id, served, resp.UsageMetadata, writes)
 	return nil, nil
 }
 
@@ -288,6 +306,20 @@ func (e *Engine) sessionOf(ctx context.Context) string {
 	return ""
 }
 
+// imageInstruction tells agents they can see images. Without it, personas
+// that describe themselves as code assistants tend to claim they can't,
+// even when the picture is in the request.
+func (e *Engine) imageInstruction(spec *agents.AgentSpec) string {
+	if e.toolReg.Images() == nil {
+		return ""
+	}
+	text := "\n\n## Images\nYou can see images. When the user attaches an image or screenshot, it is included in their message: look at it and answer about what it actually shows (text, UI, diagrams, errors)."
+	if slices.Contains(spec.Tools, "view_image") {
+		text += " To look at an image file in the workspace, call view_image with its path; the picture follows the tool result."
+	}
+	return text
+}
+
 func (e *Engine) subInstruction(spec *agents.AgentSpec) string {
 	return spec.InterpolatePrompt(e.cfg.CodePuppy.PuppyName, e.cfg.CodePuppy.OwnerName, spec.AgencyLevel)
 }
@@ -308,7 +340,7 @@ func (e *Engine) rebuildLocked() error {
 		if spec.Name == e.active {
 			continue
 		}
-		sub, err := e.newLLMAgent(spec, e.subInstruction(spec), nil, nil)
+		sub, err := e.newLLMAgent(spec, e.subInstruction(spec), nil, e.toolReg.MCP().ToolsetsFor(spec.Name, false))
 		if err != nil {
 			return fmt.Errorf("failed to build sub-agent %s: %w", spec.Name, err)
 		}
@@ -332,8 +364,8 @@ func (e *Engine) rebuildLocked() error {
 		}
 	}
 
-	// MCP tools are offered to the primary agent.
-	rootAgent, err := e.newLLMAgent(rootSpec, rootInstruction, subAgents, e.toolReg.MCP().Toolsets())
+	// MCP servers choose their agents; by default only the primary agent.
+	rootAgent, err := e.newLLMAgent(rootSpec, rootInstruction, subAgents, e.toolReg.MCP().ToolsetsFor(rootSpec.Name, true))
 	if err != nil {
 		return fmt.Errorf("failed to build root agent: %w", err)
 	}
@@ -346,13 +378,19 @@ func (e *Engine) rebuildLocked() error {
 		MemoryService:     e.memories,
 		AutoCreateSession: true,
 	}
-	if c := e.cfg.Context; c.Compaction && c.TokenThreshold > 0 {
-		retain := c.RetainEvents
-		if retain <= 0 {
-			retain = 20
-		}
-		rc.Compaction = &compaction.Config{TokenThreshold: c.TokenThreshold, EventRetentionSize: retain}
+	// Compaction is always configured, because the runner only honours
+	// compaction events (including manual /compact summaries) when it is.
+	// With automatic compaction off, the threshold is unreachable.
+	c := e.cfg.Context
+	retain := c.RetainEvents
+	if retain <= 0 {
+		retain = 20
 	}
+	threshold := c.TokenThreshold
+	if !c.Compaction || threshold <= 0 {
+		threshold = math.MaxInt32
+	}
+	rc.Compaction = &compaction.Config{TokenThreshold: threshold, EventRetentionSize: retain}
 	r, err := runner.New(rc)
 	if err != nil {
 		return fmt.Errorf("failed to instantiate ADK runner: %w", err)
@@ -387,7 +425,7 @@ func (e *Engine) Execute(ctx context.Context, sessionID, prompt string, handler 
 	if e.streaming {
 		rc.StreamingMode = agent.StreamingModeSSE
 	}
-	return drain(r.Run(ctx, "user", sessionID, genai.NewContentFromText(prompt, genai.RoleUser), rc), handler)
+	return drain(r.Run(ctx, "user", sessionID, userContent(prompt, st.attachments), rc), handler)
 }
 
 func drain(events func(yield func(*session.Event, error) bool), handler EventHandler) error {
@@ -422,7 +460,7 @@ func (e *Engine) InvokeSubagent(ctx context.Context, agentName, prompt string) (
 	}
 
 	e.mu.RLock()
-	sub, err := e.newLLMAgent(spec, e.subInstruction(spec), nil, nil)
+	sub, err := e.newLLMAgent(spec, e.subInstruction(spec), nil, e.toolReg.MCP().ToolsetsFor(agentName, false))
 	e.mu.RUnlock()
 	if err != nil {
 		return "", fmt.Errorf("failed to build sub-agent %s: %w", agentName, err)

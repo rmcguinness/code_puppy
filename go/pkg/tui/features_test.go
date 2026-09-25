@@ -176,6 +176,7 @@ func newFullApp(t *testing.T) *App {
 	cfg := config.DefaultConfig()
 	cfg.Tools.WorkspaceDir = t.TempDir()
 	cfg.Tools.ApprovalsFile = filepath.Join(t.TempDir(), "approvals.json")
+	cfg.Images.Dir = t.TempDir()
 	cfg.CodePuppy.AutoApprove = true
 	agentReg, _ := agents.NewRegistry()
 	skillProv, _ := skills.NewProvider()
@@ -348,5 +349,46 @@ func TestCtrlCAtApprovalCancelsTurn(t *testing.T) {
 	}
 	if in.handler != nil {
 		t.Error("interrupt handler should be cleared after the turn")
+	}
+}
+
+func TestSessionListScopedToWorkspace(t *testing.T) {
+	app := newFullApp(t)
+	app.Storage.SetWorkspace("/proj/other")
+	app.Storage.CreateSession("", "elsewhere", "code-puppy")
+	app.Storage.SetWorkspace("/proj/here")
+	app.Storage.CreateSession("", "local", "code-puppy")
+
+	out := captureStdout(t, func() { HandleCommand(context.Background(), "/session list", app) })
+	if !strings.Contains(out, "local") || strings.Contains(out, "elsewhere") || !strings.Contains(out, "(1)") {
+		t.Errorf("/session list should show only this workspace:\n%s", out)
+	}
+	out = captureStdout(t, func() { HandleCommand(context.Background(), "/session list --all", app) })
+	if !strings.Contains(out, "elsewhere") || !strings.Contains(out, "/proj/other") {
+		t.Errorf("/session list --all should show every workspace:\n%s", out)
+	}
+}
+
+func TestCompactCommand(t *testing.T) {
+	app := newFullApp(t) // mock: create_file call, "created", then default replies
+	ctx := context.Background()
+	if out := captureStdout(t, func() { HandleCommand(ctx, "/compact", app) }); !strings.Contains(out, "No active session") {
+		t.Errorf("no session: %s", out)
+	}
+	app.Storage.CreateSession("", "t", "code-puppy")
+	sid := app.Storage.Active().ID
+	for _, p := range []string{"make a file", "second turn"} {
+		if err := app.Engine.Execute(ctx, sid, p, nil); err != nil {
+			t.Fatal(err)
+		}
+	}
+	out := captureStdout(t, func() { HandleCommand(ctx, "/compact keep file names", app) })
+	if !strings.Contains(out, "Replaced") {
+		t.Errorf("/compact output: %s", out)
+	}
+	fresh := newFullApp(t)
+	fresh.Storage.CreateSession("", "t", "code-puppy")
+	if out := captureStdout(t, func() { HandleCommand(ctx, "/compact", fresh) }); !strings.Contains(out, "nothing to compact") {
+		t.Errorf("empty session: %s", out)
 	}
 }

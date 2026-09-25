@@ -6,6 +6,7 @@ agency_level: "high"
 tools:
   - list_files
   - read_file
+  - view_image
   - grep
   - create_file
   - edit

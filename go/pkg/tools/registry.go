@@ -8,6 +8,7 @@ import (
 
 	"github.com/retail-cortex/code_puppy/pkg/agents"
 	"github.com/retail-cortex/code_puppy/pkg/config"
+	"github.com/retail-cortex/code_puppy/pkg/images"
 	"github.com/retail-cortex/code_puppy/pkg/skills"
 	"google.golang.org/adk/v2/tool"
 )
@@ -24,6 +25,8 @@ type Registry struct {
 	checkpoints *Checkpoints
 	mcp         *MCPManager
 	scripts     *ScriptHooks
+	images      *images.Store
+	imageOpts   images.Options
 }
 
 // NewRegistry initializes all standard Code Puppy tools. Call Close when done
@@ -95,6 +98,13 @@ func NewRegistry(cfg *config.Config, agentReg *agents.Registry, skillProv *skill
 	if cfg.Checkpoints.Enabled {
 		r.checkpoints = NewCheckpoints(ws, cfg.Checkpoints.MaxBytes)
 	}
+	if cfg.Images.Enabled {
+		r.imageOpts = images.Options{MaxDimension: cfg.Images.MaxDimension, MaxInput: int64(cfg.Images.MaxInputMB) << 20}
+		if r.images, err = images.OpenStore(config.ExpandHome(cfg.Images.Dir)); err != nil {
+			ws.Close()
+			return nil, fmt.Errorf("image store: %w", err)
+		}
+	}
 
 	type entry struct {
 		names []string
@@ -121,6 +131,12 @@ func NewRegistry(cfg *config.Config, agentReg *agents.Registry, skillProv *skill
 		}},
 		{[]string{"manage_background_process"}, func() (tool.Tool, error) { return NewManageBackgroundTool(r.processes) }},
 		{[]string{"ask_user_question"}, func() (tool.Tool, error) { return NewAskUserQuestionTool(r.hooks) }},
+		{[]string{"view_image"}, func() (tool.Tool, error) {
+			if r.images == nil {
+				return nil, nil
+			}
+			return NewViewImageTool(r)
+		}},
 		{[]string{"universal_constructor"}, func() (tool.Tool, error) {
 			return NewUniversalConstructorTool(cfg.Tools.UCToolsDir, r.hooks, env, policy)
 		}},
@@ -133,6 +149,19 @@ func NewRegistry(cfg *config.Config, agentReg *agents.Registry, skillProv *skill
 				AllowPrivate: cfg.Web.AllowPrivate,
 				AllowNetwork: sb.AllowNetwork,
 				MaxBytes:     cfg.Web.MaxBytes,
+				Timeout:      time.Duration(cfg.Web.TimeoutSeconds) * time.Second,
+			}, r.hooks)
+		}})
+	}
+	if cfg.Web.Enabled && cfg.Web.SearchProvider != "" {
+		entries = append(entries, entry{[]string{"web_search"}, func() (tool.Tool, error) {
+			return NewWebSearchTool(WebSearchConfig{
+				Provider:     cfg.Web.SearchProvider,
+				APIKey:       cfg.Web.SearchAPIKey,
+				BaseURL:      cfg.Web.SearchURL,
+				MaxResults:   cfg.Web.SearchMaxResults,
+				DenyDomains:  cfg.Web.DenyDomains,
+				AllowNetwork: sb.AllowNetwork,
 				Timeout:      time.Duration(cfg.Web.TimeoutSeconds) * time.Second,
 			}, r.hooks)
 		}})
@@ -155,6 +184,9 @@ func NewRegistry(cfg *config.Config, agentReg *agents.Registry, skillProv *skill
 		if err != nil {
 			r.Close()
 			return nil, fmt.Errorf("failed to create %s tool: %w", e.names[0], err)
+		}
+		if t == nil { // feature disabled
+			continue
 		}
 		for _, name := range e.names {
 			r.tools[name] = t
@@ -188,6 +220,12 @@ func (r *Registry) SetAudit(l *audit.Logger) {
 func (r *Registry) SetWarn(warn func(string)) {
 	r.mcp.Warn = warn
 	r.scripts.Warn = warn
+}
+
+// SetMCP replaces the MCP server manager (e.g. with in-process toolsets).
+func (r *Registry) SetMCP(m *MCPManager) {
+	r.mcp.Close()
+	r.mcp = m
 }
 
 // MCP returns the MCP server manager.

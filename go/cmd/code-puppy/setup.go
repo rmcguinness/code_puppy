@@ -3,13 +3,16 @@ package main
 import (
 	"context"
 	"fmt"
+	"github.com/retail-cortex/code_puppy/pkg/images"
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/retail-cortex/code_puppy/pkg/agents"
 	"github.com/retail-cortex/code_puppy/pkg/audit"
 	"github.com/retail-cortex/code_puppy/pkg/config"
+	"github.com/retail-cortex/code_puppy/pkg/i18n"
 	"github.com/retail-cortex/code_puppy/pkg/memory"
 	"github.com/retail-cortex/code_puppy/pkg/redact"
 	"github.com/retail-cortex/code_puppy/pkg/runtime"
@@ -72,6 +75,7 @@ type env struct {
 	storage  *session.Storage
 	audit    *audit.Logger
 	memory   []memory.Doc
+	locales  *i18n.Bundle
 	modelErr error // set when the configured model failed to initialise
 }
 
@@ -85,7 +89,7 @@ func buildEnv(ctx context.Context, cfg *config.Config, o envOptions) (*env, erro
 	if o.warn == nil {
 		o.warn = func(string) {}
 	}
-	e := &env{cfg: cfg}
+	e := &env{cfg: cfg, locales: setupLocale(cfg, o.warn)}
 	var err error
 
 	if e.agents, err = agents.NewRegistry(); err != nil {
@@ -107,9 +111,14 @@ func buildEnv(ctx context.Context, cfg *config.Config, o envOptions) (*env, erro
 		return nil, fmt.Errorf("failed to initialize tools: %w", err)
 	}
 	e.tools.SetWarn(o.warn)
+	if st := e.tools.Images(); st != nil && cfg.Images.RetainDays > 0 {
+		if _, err := st.Prune(time.Duration(cfg.Images.RetainDays) * 24 * time.Hour); err != nil {
+			o.warn("image cleanup: " + err.Error())
+		}
+	}
 
 	if cfg.Audit.Enabled {
-		secrets := []string{cfg.LLM.Gemini.APIKey, cfg.LLM.OpenAI.APIKey, cfg.LLM.Anthropic.APIKey}
+		secrets := []string{cfg.LLM.Gemini.APIKey, cfg.LLM.OpenAI.APIKey, cfg.LLM.Anthropic.APIKey, cfg.Web.SearchAPIKey}
 		for _, s := range cfg.MCP.Servers {
 			for _, v := range s.Env {
 				secrets = append(secrets, v)
@@ -125,6 +134,7 @@ func buildEnv(ctx context.Context, cfg *config.Config, o envOptions) (*env, erro
 		e.Close()
 		return nil, fmt.Errorf("failed to initialize session storage: %w", err)
 	}
+	e.storage.SetWorkspace(e.tools.Workspace().Dir())
 	events, err := session.NewPersistentService(config.ExpandHome(cfg.Session.StorageDir))
 	if err != nil {
 		e.Close()
@@ -142,7 +152,7 @@ func buildEnv(ctx context.Context, cfg *config.Config, o envOptions) (*env, erro
 	e.memory = memory.Load(e.tools.Workspace().Dir(), cfg.Memory)
 	e.engine, err = runtime.NewEngine(ctx, cfg, e.agents, e.skills, e.tools, llm,
 		runtime.WithSessionService(events),
-		runtime.WithInstructions(memory.Render(e.memory)),
+		runtime.WithInstructions(e.instructions()),
 		runtime.WithStreaming(o.streaming),
 	)
 	if err != nil {
@@ -155,7 +165,7 @@ func buildEnv(ctx context.Context, cfg *config.Config, o envOptions) (*env, erro
 // reloadMemory re-reads instruction files into the engine.
 func (e *env) reloadMemory(ctx context.Context) ([]string, error) {
 	e.memory = memory.Load(e.tools.Workspace().Dir(), e.cfg.Memory)
-	if err := e.engine.SetInstructions(ctx, memory.Render(e.memory)); err != nil {
+	if err := e.engine.SetInstructions(ctx, e.instructions()); err != nil {
 		return nil, err
 	}
 	paths := make([]string, len(e.memory))
@@ -163,6 +173,72 @@ func (e *env) reloadMemory(ctx context.Context) ([]string, error) {
 		paths[i] = d.Path
 	}
 	return paths, nil
+}
+
+// loadAttachments loads --image files (failures are errors) and @image
+// mentions in prompt (failures are warnings: the prompt may be piped text
+// that merely contains an @path) through the workspace sandbox.
+func loadAttachments(e *env, paths []string, prompt string, warn func(string)) ([]*images.Image, error) {
+	var out []*images.Image
+	seen := map[string]bool{}
+	add := func(img *images.Image) {
+		if !seen[img.SHA256] {
+			seen[img.SHA256] = true
+			out = append(out, img)
+		}
+	}
+	for _, p := range paths {
+		img, err := e.tools.LoadImage(strings.TrimPrefix(p, "@"))
+		if err != nil {
+			return nil, fmt.Errorf("--image %s: %w", p, err)
+		}
+		add(img)
+	}
+	for _, p := range images.Mentions(prompt) {
+		img, err := e.tools.LoadImage(p)
+		if err != nil {
+			warn(i18n.T("attach.failed", "path", p, "error", err.Error()))
+			continue
+		}
+		add(img)
+	}
+	return out, nil
+}
+
+// instructions are the extra system instructions: project memory plus, for
+// non-English locales, which language to reply in.
+func (e *env) instructions() string {
+	return memory.Render(e.memory) + i18n.ReplyInstruction(i18n.Current())
+}
+
+// setupLocale loads translation catalogs (built in, then ui.locales_dir) and
+// activates ui.locale.
+func setupLocale(cfg *config.Config, warn func(string)) *i18n.Bundle {
+	b, errs := i18n.NewBundle(config.ExpandHome(cfg.UI.LocalesDir))
+	for _, err := range errs {
+		warn(err.Error())
+	}
+	locale := cfg.UI.Locale
+	if locale == "" {
+		locale = i18n.DefaultLocale
+	}
+	tag, err := b.Resolve(locale)
+	if err != nil {
+		warn(fmt.Sprintf("ui.locale %q is not a language code; using %s", cfg.UI.Locale, i18n.DefaultLocale))
+		tag, _ = b.Resolve(i18n.DefaultLocale)
+	}
+	i18n.SetCurrent(b.Localizer(tag))
+	return b
+}
+
+// setLocale applies the active locale to the model's instructions and saves
+// it as ui.locale in the config file.
+func (e *env) setLocale(ctx context.Context, l *i18n.Localizer) (string, error) {
+	if err := e.engine.SetInstructions(ctx, e.instructions()); err != nil {
+		return "", err
+	}
+	e.cfg.UI.Locale = l.Tag().String()
+	return config.SaveUILocale(config.ConfigDir(""), e.cfg.UI.Locale)
 }
 
 func (e *env) newModel(ctx context.Context, cfg *config.Config, name string) (model.LLM, error) {
@@ -194,19 +270,20 @@ func modelErrorSummary(err error, cfg *config.Config) string {
 }
 
 // selectSession picks the session to use: an explicit --resume ID, the most
-// recent one for --continue/--resume without an ID, or a new session.
+// recent one in this workspace for --continue/--resume without an ID, or a
+// new session.
 func selectSession(st *session.Storage, resume string, cont bool, title, agent string) (*session.SessionRecord, bool, error) {
 	if resume == "" && !cont {
 		rec, err := st.CreateSession("", title, agent)
 		return rec, false, err
 	}
 	if resume == "" || resume == "latest" {
-		list, err := st.List()
+		list, err := st.ListWorkspace(st.Workspace())
 		if err != nil {
 			return nil, false, err
 		}
 		if len(list) == 0 {
-			return nil, false, withCode(exitUsage, fmt.Errorf("no saved sessions to resume"))
+			return nil, false, withCode(exitUsage, fmt.Errorf("no saved sessions for %s (use --resume <id> for a session from another directory)", st.Workspace()))
 		}
 		resume = list[0].ID
 	}

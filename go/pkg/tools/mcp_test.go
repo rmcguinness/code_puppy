@@ -2,11 +2,13 @@ package tools
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/retail-cortex/code_puppy/pkg/config"
+	"google.golang.org/adk/v2/model"
 	"google.golang.org/adk/v2/tool"
 	"google.golang.org/adk/v2/tool/mcptoolset"
 )
@@ -135,5 +137,76 @@ func TestNewMCPManagerValidation(t *testing.T) {
 	}
 	if !warned {
 		t.Error("expected a warning for unreachable servers")
+	}
+}
+
+func TestMCPPrefixedTools(t *testing.T) {
+	m := NewMCPManagerFromToolsets([]MCPToolset{{
+		Config:  config.MCPServerConfig{Name: "github", Prefix: "gh"},
+		Toolset: inMemoryMCP(t, "create_issue", "grep"), // "grep" would shadow a built-in without the prefix
+	}}, []string{"grep"})
+	tl, err := m.Toolsets()[0].Tools(createTestToolContext())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := strings.Join(toolNames(tl), ","); got != "gh__create_issue,gh__grep" {
+		t.Fatalf("prefixed names = %s", got)
+	}
+	pt := tl[0].(*prefixedTool)
+	if d := pt.Declaration(); d == nil || d.Name != "gh__create_issue" {
+		t.Errorf("declaration name %+v", d)
+	}
+	// The call reaches the server under the original name.
+	res, err := pt.Run(createTestToolContext(), map[string]any{"text": "hello from gh"})
+	if err != nil || !strings.Contains(fmt.Sprint(res), "hello from gh") {
+		t.Errorf("run through prefix: %v %v", res, err)
+	}
+	// Registered in the request under the prefixed name.
+	req := &model.LLMRequest{}
+	if err := pt.ProcessRequest(createTestToolContext(), req); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := req.Tools["gh__create_issue"]; !ok {
+		t.Errorf("request tools %v", req.Tools)
+	}
+	if srv, _, ok := m.Lookup("gh__grep"); !ok || srv != "github" {
+		t.Errorf("lookup prefixed: %s %v", srv, ok)
+	}
+	if _, _, ok := m.Lookup("create_issue"); ok {
+		t.Error("the unprefixed name must not be routed")
+	}
+}
+
+func TestMCPToolsetsForAgents(t *testing.T) {
+	m := NewMCPManagerFromToolsets([]MCPToolset{
+		{Config: config.MCPServerConfig{Name: "primary-only"}, Toolset: inMemoryMCP(t, "a")},
+		{Config: config.MCPServerConfig{Name: "kitten", Agents: []string{"qa-kitten"}}, Toolset: inMemoryMCP(t, "b")},
+		{Config: config.MCPServerConfig{Name: "everyone", Agents: []string{"*"}}, Toolset: inMemoryMCP(t, "c")},
+	}, nil)
+	names := func(ts []tool.Toolset) string {
+		var out []string
+		for _, x := range ts {
+			out = append(out, x.Name())
+		}
+		return strings.Join(out, ",")
+	}
+	cases := []struct {
+		agent   string
+		primary bool
+		want    string
+	}{
+		{"code-puppy", true, "mcp:primary-only,mcp:everyone"},
+		{"qa-kitten", false, "mcp:kitten,mcp:everyone"},
+		{"qa-kitten", true, "mcp:primary-only,mcp:kitten,mcp:everyone"},
+		{"helios", false, "mcp:everyone"},
+	}
+	for _, c := range cases {
+		if got := names(m.ToolsetsFor(c.agent, c.primary)); got != c.want {
+			t.Errorf("ToolsetsFor(%s, %v) = %s, want %s", c.agent, c.primary, got, c.want)
+		}
+	}
+	var nilManager *MCPManager
+	if nilManager.ToolsetsFor("x", true) != nil {
+		t.Error("nil manager should offer nothing")
 	}
 }

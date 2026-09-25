@@ -6,6 +6,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/retail-cortex/code_puppy/pkg/i18n"
 	"github.com/retail-cortex/code_puppy/pkg/textutil"
 	"github.com/retail-cortex/code_puppy/pkg/tools"
 )
@@ -33,7 +34,7 @@ func ConfirmExit(ctx context.Context, in Input, pm *tools.ProcessManager, interr
 		return true
 	}
 
-	fmt.Printf("\n%s⚠️  %d background process(es) still running:%s\n", Yellow+Bold, len(running), Reset)
+	fmt.Printf("\n%s⚠️  %s%s\n", Yellow+Bold, i18n.N("exit.running", len(running)), Reset)
 	for _, p := range running {
 		fmt.Printf("   [%d] %s %s(%ds)%s\n", p.ID, safe(textutil.Ellipsize(p.Command, 70)), Dim, p.RuntimeMs/1000, Reset)
 	}
@@ -42,15 +43,15 @@ func ConfirmExit(ctx context.Context, in Input, pm *tools.ProcessManager, interr
 		return true
 	}
 
-	choices := "[k]ill them and exit, [w]ait for them to finish"
+	choices := i18n.T("exit.choices")
 	if opts.AllowCancel {
-		choices += ", or [c]ancel"
+		choices += i18n.T("exit.choices_cancel")
 	}
 	askCtx, stopAsk := cancelOnSignal(ctx, interrupts)
-	answer, err := in.Ask(askCtx, fmt.Sprintf("   %s? %s(Ctrl+C again to force quit)%s ", choices, Dim, Reset))
+	answer, err := in.Ask(askCtx, fmt.Sprintf("   %s? %s(%s)%s ", choices, Dim, i18n.T("exit.force_hint"), Reset))
 	stopAsk()
 	if err != nil {
-		fmt.Printf("\n%s⛔ Force quit.%s\n", Red, Reset)
+		fmt.Printf("\n%s⛔ %s%s\n", Red, i18n.T("exit.force_quit"), Reset)
 		killAll(pm)
 		return true
 	}
@@ -60,18 +61,18 @@ func ConfirmExit(ctx context.Context, in Input, pm *tools.ProcessManager, interr
 		killAll(pm)
 		return true
 	case "w", "wait":
-		fmt.Printf("%s⏳ Waiting for background processes to finish… press Ctrl+C to kill them and quit.%s\n", Cyan, Reset)
+		fmt.Printf("%s⏳ %s%s\n", Cyan, i18n.T("exit.waiting"), Reset)
 		waitCtx, stopWait := cancelOnSignal(ctx, interrupts)
 		err := pm.WaitAll(waitCtx)
 		stopWait()
 		if err != nil {
-			fmt.Printf("\n%s⛔ Force quit.%s\n", Red, Reset)
+			fmt.Printf("\n%s⛔ %s%s\n", Red, i18n.T("exit.force_quit"), Reset)
 			killAll(pm)
 		}
 		return true
 	default:
 		if opts.AllowCancel {
-			fmt.Println("   Exit cancelled.")
+			fmt.Println("   " + i18n.T("exit.cancelled"))
 			return false
 		}
 		killAll(pm)
@@ -83,7 +84,7 @@ func killAll(pm *tools.ProcessManager) {
 	n := len(pm.Running())
 	pm.Shutdown()
 	if n > 0 {
-		fmt.Printf("%s🛑 Stopped %d background process(es).%s\n", Yellow, n, Reset)
+		fmt.Printf("%s🛑 %s%s\n", Yellow, i18n.N("exit.stopped", n), Reset)
 	}
 }
 

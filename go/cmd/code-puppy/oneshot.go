@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/retail-cortex/code_puppy/pkg/images"
 	"io"
 	"os"
 	"os/signal"
@@ -64,6 +65,7 @@ type oneShotOptions struct {
 	spinner    bool
 	width      int
 	usageLines bool
+	images     []*images.Image
 }
 
 // runOneShot executes a single prompt and exits. Background processes are
@@ -84,7 +86,7 @@ func runOneShot(ctx context.Context, e *env, o oneShotOptions) error {
 	if runErr == nil {
 		e.tools.Checkpoints().Begin(o.prompt)
 		e.audit.Log(audit.Entry{Kind: audit.KindPrompt, Session: sid, Detail: o.prompt})
-		_ = e.storage.AddMessage("user", o.prompt)
+		_ = e.storage.AddMessage("user", o.prompt+tui.AttachmentNote(o.images))
 
 		var handler runtime.EventHandler
 		var printer *tui.Printer
@@ -101,7 +103,11 @@ func runOneShot(ctx context.Context, e *env, o oneShotOptions) error {
 			handler = collectHandler(&transcript, &calls)
 		}
 
-		runErr = e.engine.Execute(ctx, sid, o.prompt, handler, runtime.WithMaxTurns(o.maxTurns))
+		execOpts := []runtime.ExecOption{runtime.WithMaxTurns(o.maxTurns)}
+		for _, img := range o.images {
+			execOpts = append(execOpts, runtime.WithAttachments(images.Part(img)))
+		}
+		runErr = e.engine.Execute(ctx, sid, o.prompt, handler, execOpts...)
 		if printer != nil {
 			printer.End()
 			fmt.Fprintln(out)

@@ -3,6 +3,7 @@ package tools
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -87,8 +88,8 @@ func TestUniversalConstructorApproval(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(ucDir, "t1.sh")); !os.IsNotExist(err) {
 		t.Error("denied tool was written to disk")
 	}
-	if len(*reqs) != 1 || !strings.Contains((*reqs)[0].Detail, "echo hi") {
-		t.Errorf("approval request should include code preview: %v", *reqs)
+	if len(*reqs) != 1 || !strings.Contains((*reqs)[0].Diff, "+echo hi") {
+		t.Errorf("approval request should show the code as a diff: %v", *reqs)
 	}
 
 	// Create approved, run denied: separate approvals for write and execution.
@@ -185,5 +186,82 @@ func TestAskUserQuestionTool(t *testing.T) {
 	}
 	if out := runTool(t, rt, map[string]any{"question": "fail?"}); errOf(out) == "" {
 		t.Error("expected prompter error to surface")
+	}
+}
+
+func TestUniversalConstructorPersistence(t *testing.T) {
+	ucDir := filepath.Join(t.TempDir(), "uc")
+	first := toolOf(t)(NewUniversalConstructorTool(ucDir, allowAll(), nil, nil))
+	runTool(t, first, map[string]any{"action": "create", "tool_name": "greet", "language": "python", "code": "import sys\nprint('hi', sys.argv[1])", "description": "says hi"})
+	if info, err := os.Stat(filepath.Join(ucDir, "greet.json")); err != nil || info.Mode().Perm() != 0o600 {
+		t.Fatalf("manifest missing or not owner-only: %v %v", info, err)
+	}
+
+	// A new process sees and can run the tool.
+	second := toolOf(t)(NewUniversalConstructorTool(ucDir, allowAll(), nil, nil))
+	list := runTool(t, second, map[string]any{"action": "list"})
+	if tools, _ := list["tools"].([]any); len(tools) != 1 || !strings.Contains(tools[0].(string), "greet (python): says hi") {
+		t.Fatalf("persisted tool not listed: %v", list)
+	}
+	if out := runTool(t, second, map[string]any{"action": "run", "tool_name": "greet", "args": "puppy"}); !strings.Contains(fmt.Sprint(out["result"]), "hi puppy") {
+		t.Errorf("persisted tool did not run: %v", out)
+	}
+
+	// Delete removes script and manifest; a fresh load no longer sees it.
+	if out := runTool(t, second, map[string]any{"action": "delete", "tool_name": "greet"}); out["success"] != true {
+		t.Fatalf("delete: %v", out)
+	}
+	for _, f := range []string{"greet.py", "greet.json"} {
+		if _, err := os.Stat(filepath.Join(ucDir, f)); !os.IsNotExist(err) {
+			t.Errorf("%s not removed", f)
+		}
+	}
+	third := toolOf(t)(NewUniversalConstructorTool(ucDir, allowAll(), nil, nil))
+	if tools, _ := runTool(t, third, map[string]any{"action": "list"})["tools"].([]any); len(tools) != 0 {
+		t.Errorf("deleted tool reloaded: %v", tools)
+	}
+	if out := runTool(t, third, map[string]any{"action": "delete", "tool_name": "greet"}); errOf(out) == "" {
+		t.Error("deleting a missing tool should fail")
+	}
+	denied, _ := approverHooks(false)
+	runTool(t, first, map[string]any{"action": "create", "tool_name": "keep", "code": "echo k"})
+	guarded := toolOf(t)(NewUniversalConstructorTool(ucDir, denied, nil, nil))
+	if out := runTool(t, guarded, map[string]any{"action": "delete", "tool_name": "keep"}); !strings.Contains(errOf(out), "not approved") {
+		t.Errorf("delete should need approval: %v", out)
+	}
+	if _, err := os.Stat(filepath.Join(ucDir, "keep.sh")); err != nil {
+		t.Error("denied delete removed the script")
+	}
+}
+
+func TestUniversalConstructorRejectsTamperedManifests(t *testing.T) {
+	ucDir := t.TempDir()
+	outside := filepath.Join(t.TempDir(), "evil.sh")
+	writeFile(t, outside, "echo pwned")
+	write := func(name, body string) { writeFile(t, filepath.Join(ucDir, name), body) }
+
+	write("traverse.json", `{"name":"../../evil","language":"bash"}`)
+	write("badlang.json", `{"name":"badlang","language":"ruby"}`)
+	write("badlang.rb", "puts 1")
+	write("alias.json", `{"name":"alias","language":"sh"}`) // non-canonical language
+	write("alias.sh", "echo a")
+	write("mismatch.json", `{"name":"other","language":"bash"}`) // name differs from file
+	write("other.sh", "echo o")
+	write("noscript.json", `{"name":"noscript","language":"bash"}`)
+	write("garbage.json", `{not json`)
+	write("link.json", `{"name":"link","language":"bash"}`)
+	if err := os.Symlink(outside, filepath.Join(ucDir, "link.sh")); err != nil {
+		t.Fatal(err)
+	}
+	write("good.json", `{"name":"good","language":"bash","description":"fine"}`)
+	write("good.sh", "echo good")
+
+	rt := toolOf(t)(NewUniversalConstructorTool(ucDir, allowAll(), nil, nil))
+	tools, _ := runTool(t, rt, map[string]any{"action": "list"})["tools"].([]any)
+	if len(tools) != 1 || !strings.HasPrefix(tools[0].(string), "good ") {
+		t.Errorf("only the valid manifest should load, got %v", tools)
+	}
+	if out := runTool(t, rt, map[string]any{"action": "run", "tool_name": "link"}); errOf(out) == "" {
+		t.Error("symlinked script must not be runnable")
 	}
 }

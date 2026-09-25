@@ -102,7 +102,7 @@ const configTemplate = `
 puppy_name    = "Code Puppy"
 owner_name    = "Developer"
 default_agent = "code-puppy"
-default_model = "gemini-2.5-flash"
+# default_model = "gemini-2.5-flash"  # overrides llm.<provider>.model for every provider
 agency_level  = "high"      # low | medium | high | extreme
 temperature   = 0.2
 max_tokens    = 8192
@@ -110,10 +110,17 @@ auto_approve  = false       # true skips ALL approval prompts (deny rules still 
 trust_workspace = false     # load ./agents and ./skills from the project
 
 [llm]
-provider = "gemini"         # gemini | openai | ollama
+provider = "gemini"         # gemini | anthropic | openai | ollama
 
 [llm.gemini]
 # api_key = "..."           # or export GEMINI_API_KEY
+model = "gemini-2.5-flash"
+
+[llm.anthropic]
+# api_key   = "..."         # or ANTHROPIC_API_KEY, ANTHROPIC_AUTH_TOKEN, or an "ant auth login" profile
+model     = "claude-opus-5"
+fallbacks = "default"       # server-side refusal fallback: "default", a model ID, or "off"
+# base_url = "https://..."  # gateway/proxy
 
 [llm.openai]
 # api_key  = "..."          # or export OPENAI_API_KEY
@@ -141,6 +148,13 @@ allow_network = true
 markdown  = true
 spinner   = true
 diff_lines = 120
+locale    = "en-US"   # interface language; change with /locale (e.g. /locale es)
+# locales_dir = "~/.code_puppy/locales"   # extra or corrected translations (*.json)
+
+[images]
+enabled       = true    # @shot.png, /attach, /paste, --image and the view_image tool
+max_dimension = 1568    # longest edge sent to the model (pixels)
+retain_days   = 30      # delete stored images unused for this long
 
 [memory]
 enabled = true
@@ -161,6 +175,9 @@ enabled = true
 enabled = true
 # allow_domains = ["*.go.dev", "docs.python.org"]   # fetched without approval
 # deny_domains  = ["*.internal.example.com"]
+# search_provider = "brave"               # brave | tavily | searxng; enables web_search
+# search_api_key  = "..."                 # or BRAVE_API_KEY / TAVILY_API_KEY
+# search_url      = "http://localhost:8888" # searxng instance
 
 # [pricing."gemini-2.5-flash"]
 # input_per_mtok = 0.30

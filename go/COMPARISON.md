@@ -1,87 +1,87 @@
-# 📊 Code Puppy: Python vs. Go Architectural & Performance Comparison
+# Code Puppy: Python vs. Go
 
-A comprehensive comparative analysis between the original **Python** implementation and the new **Go (Google ADK)** implementation across performance benchmarks, architectural complexity, distribution footprint, and maintainability.
+A comparison of the original **Python** implementation (`python/`) and the **Go / Google ADK** implementation (`go/`).
+
+Go measurements were taken on 2026-09-24 on Apple Silicon (arm64), macOS, warm cache. Python startup and memory figures come from the earlier benchmark and were not re-run. Source counts were measured today for both.
 
 ---
 
-## 1. ⚡ Empirical Performance Benchmarks
+## 1. Performance and footprint
 
-| Metric | Python Implementation | Go (Google ADK) Implementation | Delta / Improvement |
+| Metric | Python | Go | Notes |
 |---|---|---|---|
-| **Cold Startup Latency** *(first run / env init)* | **25.295 s** | **0.041 s** (41 ms) | **~617x faster** 🚀 |
-| **Warm CLI Latency** *(`--version` / `--help`)* | **0.960 s** (960 ms) | **0.040 s** (40 ms) | **24x faster** ⚡ |
-| **Peak Resident Memory (RSS)** | **136.3 MB** | **16.5 MB** | **8.2x less RAM** 📉 |
-| **Binary / Distribution Model** | Python 3.11+ venv / pipx + wheels | **Single Static Binary** (`CGO_ENABLED=0`) | **Zero runtime dependencies** |
-| **Startup I/O Bound Ops** | 150+ imports, dynamic module resolution | In-memory `embed.FS` parsing in `<1 ms` | Instantaneous |
+| Warm `--version` | 0.960 s | **0.020 s** | ~48× faster |
+| Interactive start → exit (config, sandbox probe, engine) | — | **0.030 s** | |
+| First run of a new binary | 25.3 s (env init) | 0.76 s | Go's first run is macOS scanning the new binary |
+| Peak memory (RSS), `--version` | 136.3 MB | **37 MB** | Go was 16.5 MB before MCP, Anthropic, Markdown and line-editor dependencies |
+| Distribution | Python 3.11+ venv / pipx + wheels | **Single static binary** (`CGO_ENABLED=0`) | No runtime dependencies |
+| Binary size | n/a | 56–61 MB per platform | Grew from ~18 MB; see §4 |
+
+## 2. Code size
+
+| | Python (`python/code_puppy`) | Go (`go/cmd`, `go/pkg`) |
+|---|---|---|
+| Source files (non-test) | 271 | 65 |
+| Non-blank source lines | 71,962 | 11,956 |
+| Test files | 380 | 38 |
+| Non-blank test lines | — | 6,840 |
+| Direct dependencies | 150+ (`uv.lock`) | 17 (`go.mod`) |
 
 ---
 
-## 2. 🏗️ Codebase Complexity & Size Metrics
+## 3. Capabilities
 
-| Characteristic | Python (`python/code_puppy`) | Go (`go/`) | Contrast & Impact |
+✅ supported · ➖ partial · ❌ not found
+
+| Area | Python | Go | Go notes |
 |---|---|---|---|
-| **Source Files** | **271 files** | **28 files** | **~90% fewer source files** |
-| **Lines of Code (SLOC)** | **86,722 lines** | **3,426 lines** | **~96% reduction in code surface** |
-| **Source Weight** | ~3.08 MB source code | ~92 KB source code | High signal-to-noise ratio |
-| **Lockfile & Dependencies** | `uv.lock` (528 KB, 150+ dependencies) | `go.mod` (clean dependency tree) | Hermetic, predictable builds |
-| **Configuration Architecture** | 117 KB monolithic `config.py` | Typed structs + `retail-cortex/modenv` | Cascading `.env.toml` & secret URIs |
+| **Providers** | ✅ many (Gemini, OpenAI/Codex, Anthropic, Z.ai, Gemini Code Assist, round-robin, model catalogue) | ➖ Gemini, Anthropic, OpenAI-compatible, Ollama | No model picker/catalogue; no round-robin |
+| **Agents** | ✅ Python classes + JSON | ✅ Markdown + YAML frontmatter, embedded | `./agents` only with `--trust-workspace`; built-ins can't be overridden |
+| **Sub-agent delegation** | ✅ | ✅ | Depth-limited `invoke_agent` |
+| **Skills** | ✅ | ✅ | |
+| **MCP servers** | ✅ | ✅ stdio + HTTP | Per-server approval, prefixes, per-agent scoping; stdio servers sandboxed |
+| **Hooks** | ✅ hook engine | ✅ pre/post tool, prompt submit | Exit-2 / JSON block protocol |
+| **Plugins** | ✅ plugin system | ❌ | MCP and hooks cover some of the same ground |
+| **Approvals** | ✅ confirmations | ✅ diff preview; once / session / always | Saved rules scoped per workspace; never override deny rules |
+| **Undo** | ✅ undo manager | ✅ per-turn checkpoints, `/undo`, `/diff` | Refuses to clobber later edits unless forced |
+| **Sessions** | ✅ autosave, browser | ✅ persistent, `--resume` / `--continue` | Scoped per workspace |
+| **Compaction** | ✅ | ✅ automatic + `/compact [focus]` | |
+| **Token / cost tracking** | ✅ | ✅ per turn and session | Cache reads/writes priced; `doctor` flags unpriced models |
+| **Project instructions** | ✅ | ✅ `AGENTS.md` / `PUPPY.md` | |
+| **Web** | ➖ browser tooling | ✅ `web_fetch`, `web_search` (Brave, Tavily, SearXNG) | SSRF protection on every hop; no browser automation |
+| **Images / attachments** | ✅ | ✅ `@image` mentions, `/attach`, `/paste`, `--image`, `view_image` tool | Gemini, Anthropic, OpenAI-compatible; images kept out of session files |
+| **i18n** | ✅ | ✅ English, Spanish, Canadian French | `/locale`; external JSON catalogs; model replies in the chosen language |
+| **Onboarding / menus** | ✅ wizard, interactive menus | ➖ `config init`, `doctor`, line editor with completion | |
+| **Scripting** | ➖ | ✅ `json` / `stream-json`, `--max-turns`, exit codes | |
+| **File sandbox** | ➖ access checks (`fs_access.py`) | ✅ `os.Root` roots, read-only roots, blocked globs incl. symlinks | |
+| **OS sandbox for shell** | ❌ not found in source | ✅ Seatbelt (macOS), bubblewrap (Linux) | Writes confined, secrets unreadable, network optional |
+| **Command policy** | ➖ | ✅ parsed allow / deny / auto-approve | Checks every sub-command, including wrappers and `bash -c` |
+| **Process lifetime** | ➖ backgrounding | ✅ nothing outlives the CLI | Guarded even against SIGKILL |
+| **Secret handling** | ✅ secret store backends | ✅ env scrubbing, redacted audit log, owner-only files | |
+| **Audit log** | ➖ | ✅ JSONL of prompts, tools, approvals, hooks, undo | |
+| **Release** | PyPI | ✅ GoReleaser: SBOMs, keyless cosign signatures, reproducible builds | |
 
 ---
 
-## 3. 🧩 Architectural Comparison
+## 4. Trade-offs in the Go version
+
+- **Binary size:** the MCP SDK, Anthropic SDK, Markdown renderer (glamour) and line editor took the binary from ~18 MB to ~58 MB. Startup is unaffected. If size matters, the Markdown renderer is the easiest to make optional with a build tag.
+- **Breadth:** Python still leads on providers, plugins and interactive menus. Go leads on sandboxing, auditability, scripting and distribution.
+- **OS sandbox coverage:** macOS and Linux only. Windows builds run without it and without the process guard.
+
+## 5. Architecture
 
 ```mermaid
 graph LR
-    subgraph PythonArch["Python Implementation"]
-        PyCLI["CLI (click/argparse)"] --> PyConfig["config.py (117KB / ~3K lines)"]
-        PyConfig --> PydanticAI["Pydantic-AI Agent Engine"]
-        PydanticAI --> PyTools["Dynamic Tool Wrappers"]
-        PydanticAI --> MonolithicAgents["Subclass-based Agents in Python"]
-        MonolithicAgents --> PyGIL["Python GIL / asyncio event loop"]
-    end
-
-    subgraph GoArch["Go Implementation (Google ADK)"]
-        GoCLI["Cobra CLI & TUI"] --> Modenv["modenv (TOML Cascading & Secrets)"]
-        Modenv --> ADKRunner["Google ADK runner.Runner"]
-        ADKRunner --> ADKAgents["llmagent.New() Tree"]
-        EmbedMD["Embedded Markdown (*.md) via //go:embed"] --> ADKAgents
-        ADKAgents --> FuncTools["ADK functiontool.New()"]
-        ADKRunner --> Goroutines["Native Goroutines & iter.Seq2 Streaming"]
+    subgraph Go["Go (Google ADK)"]
+        CLI["Cobra CLI + line editor"] --> Cfg["Trusted config (modenv)"]
+        Cfg --> Engine["runtime.Engine"]
+        Engine --> Runner["ADK runner + persistent sessions + compaction"]
+        Runner --> Agents["llmagent tree (embedded Markdown personas)"]
+        Agents --> Tools["tools.Registry"]
+        Tools --> WS["Workspace sandbox (os.Root)"]
+        Tools --> Exec["ExecEnv: OS sandbox, process guard, env scrub"]
+        Tools --> MCP["MCP manager"]
+        Engine --> Hooks["Approvals, hooks, audit"]
     end
 ```
-
-### Key Architectural Shifts:
-
-### 1. Agent Definitions
-- **Python**: Agent definitions were hardcoded Python classes (`BaseAgent` subclasses) mixed with string templates and dynamic class imports. Adding or customizing an agent required editing Python source files or dealing with loose JSON schemas.
-- **Go**: Personas are standardized as **Markdown files with YAML frontmatter** (`pkg/agents/builtin/*.md`). They are baked directly into the binary at compile time via Go's `//go:embed`, yet can also be dynamically dropped into `./agents/*.md` or `~/.code_puppy/agents/*.md` without recompilation.
-
-### 2. Configuration & Secrets
-- **Python**: Configuration relied on raw `os.environ` reads, extensive monkey patching, and complex credential stores (`secret_store.py`).
-- **Go**: Driven by **`retail-cortex/modenv`** (`pkg/config/config.go`), enabling hierarchical environment cascading (`.env.toml` -> `.env.<runtime>.toml` -> `.env.local.toml`) and native decryption of `cloud://`, `pks://`, and `simple://` secret URIs.
-
-### 3. Tool Execution & Schemas
-- **Python**: Used `pydantic-ai` with heavy runtime introspection and multiple monkey patches (`pydantic_patches.py` was 26 KB).
-- **Go**: Uses **Google ADK `functiontool.New()`**, which automatically and safely infers compliant JSON Schemas from strongly-typed Go structs at initialization via `github.com/google/jsonschema-go`.
-
-### 4. Concurrency & Streaming
-- **Python**: Constrained by the Global Interpreter Lock (GIL) and asyncio thread dispatching. Long shell commands or background subprocesses required intricate coordination to avoid blocking the event loop.
-- **Go**: Leverages native goroutines, channel synchronization, and Go 1.23+ `iter.Seq2[*session.Event, error]` streaming, giving fluid TUI rendering with near-zero overhead.
-
----
-
-## 4. 📦 Packaging & Universal Portability
-
-- **Python**:
-  - Requires a pre-installed Python 3.11+ interpreter.
-  - Relies on platform-specific C/Rust extensions (`cryptography`, `pydantic-core`, `pillow`), which frequently fail to compile on minimal containers, Termux/Android, or hardened CI runners.
-  - Installation involves downloading hundreds of megabytes of wheel archives.
-- **Go**:
-  - Compiles to a **single static binary** (`CGO_ENABLED=0`).
-  - Pre-built universal binaries ready for instant download and execution:
-    - `code-puppy-darwin-arm64` (Apple Silicon: 18 MB)
-    - `code-puppy-darwin-amd64` (Intel Mac: 19 MB)
-    - `code-puppy-linux-amd64` (Linux x86_64: 19 MB)
-    - `code-puppy-linux-arm64` (Linux ARM64: 18 MB)
-    - `code-puppy-windows-amd64.exe` (Windows x64: 19 MB)
-  - Zero dependencies: runs out of the box in `scratch` Docker containers, Alpine Linux, or bare metal.

@@ -23,6 +23,7 @@ const (
 	KindDenial     = "denial"
 	KindHook       = "hook"
 	KindUndo       = "undo"
+	KindAttachment = "attachment" // an image sent to the model: path and hash only
 )
 
 // Entry is one audit record.

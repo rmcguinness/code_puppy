@@ -79,15 +79,27 @@ func runDoctor(ctx context.Context, g *globalFlags, online bool) []check {
 		add("config parse", statusFail, "%v", err)
 		return checks
 	}
-	add("config parse", statusOK, "provider %s, model %s, agent %s", cfg.LLM.Provider, cfg.CodePuppy.DefaultModel, cfg.CodePuppy.DefaultAgent)
+	add("config parse", statusOK, "provider %s, model %s, agent %s", cfg.LLM.Provider, cfg.ModelName(), cfg.CodePuppy.DefaultAgent)
 
 	switch key := apiKeyFor(cfg); {
+	case cfg.LLM.Provider == "anthropic" && key == "":
+		if os.Getenv("ANTHROPIC_AUTH_TOKEN") != "" {
+			add("credentials", statusOK, "ANTHROPIC_AUTH_TOKEN is set")
+		} else {
+			add("credentials", statusWarn, "no api_key; relying on an `ant auth login` profile or workload identity (use --online to confirm)")
+		}
 	case cfg.LLM.Provider == "ollama":
 		add("credentials", statusOK, "ollama needs no API key (%s)", cfg.LLM.OpenAI.BaseURL)
 	case key == "":
 		add("credentials", statusFail, "no API key for provider %q", cfg.LLM.Provider)
 	default:
 		add("credentials", statusOK, "API key for %s: %s", cfg.LLM.Provider, maskSecret(key))
+	}
+
+	if !runtime.NewUsageTracker(cfg.Pricing).HasPrice(cfg.ModelName()) {
+		add("pricing", statusWarn, "no price for %q; /cost will show tokens only (add [pricing.%q])", cfg.ModelName(), cfg.ModelName())
+	} else {
+		add("pricing", statusOK, "estimates use [pricing] for %s", cfg.ModelName())
 	}
 
 	llm, err := runtime.NewModel(ctx, cfg, "")

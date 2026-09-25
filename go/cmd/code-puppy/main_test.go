@@ -36,7 +36,9 @@ func TestResolvePrompt(t *testing.T) {
 		{name: "args", args: []string{"fix", "it"}, tty: true, want: "fix it"},
 		{name: "dash reads stdin", flag: "-", tty: true, in: "from stdin\n", want: "from stdin", wantStdin: true},
 		{name: "piped stdin", in: "piped", want: "piped", wantStdin: true},
-		{name: "args frame piped", args: []string{"review", "this"}, in: "diff text", want: "diff text", wantStdin: false},
+		{name: "args frame piped", args: []string{"review", "this"}, in: "diff text\n", want: "review this\n\ndiff text", wantStdin: true},
+		{name: "args with empty pipe", args: []string{"hello"}, in: "", want: "hello", wantStdin: true},
+		{name: "empty pipe no args", in: "  \n", wantErr: true, wantStdin: true},
 		{name: "tty no prompt = REPL", tty: true, want: ""},
 		{name: "interactive ignores pipe", interactive: true, in: "x", want: ""},
 		{name: "empty dash", flag: "-", in: "  ", wantErr: true, wantStdin: true},
@@ -48,23 +50,16 @@ func TestResolvePrompt(t *testing.T) {
 			t.Errorf("%s: err = %v", c.name, err)
 			continue
 		}
-		if err == nil && (got != c.want && c.name != "args frame piped") {
+		if err == nil && got != c.want {
 			t.Errorf("%s: prompt = %q, want %q", c.name, got, c.want)
-		}
-		if c.name == "args frame piped" {
-			// Piped with args but a non-TTY stdin and no -p: args are the prompt.
-			if got != "review this" {
-				t.Errorf("%s: prompt = %q", c.name, got)
-			}
 		}
 		if err == nil && used != c.wantStdin {
 			t.Errorf("%s: stdinUsed = %v, want %v", c.name, used, c.wantStdin)
 		}
 	}
 	// "-" with args: args frame the piped content.
-	got, _, _ := resolvePrompt("-", nil, true, false, stdin("body"))
-	if got != "body" {
-		t.Errorf("dash prompt = %q", got)
+	if got, _, _ := resolvePrompt("-", []string{"summarize"}, true, false, stdin("body")); got != "summarize\n\nbody" {
+		t.Errorf("dash with args = %q", got)
 	}
 }
 
@@ -325,5 +320,47 @@ func TestOneShotFailsWithoutModel(t *testing.T) {
 	_, err := runCLI(t, "--output-format", "json", "hello")
 	if exitCodeFor(err) != exitFailure || !strings.Contains(err.Error(), "model initialization failed") {
 		t.Errorf("expected model failure, got %v", err)
+	}
+}
+
+func TestSelectSessionScopedToWorkspace(t *testing.T) {
+	st, _ := session.NewStorage(t.TempDir())
+	st.SetWorkspace("/proj/one")
+	one, _, _ := selectSession(st, "", false, "one", "a")
+	st.SetWorkspace("/proj/two")
+	two, _, _ := selectSession(st, "", false, "two", "a") // newest overall
+
+	st.SetWorkspace("/proj/one")
+	got, resumed, err := selectSession(st, "", true, "", "")
+	if err != nil || !resumed || got.ID != one.ID {
+		t.Errorf("--continue in /proj/one picked %v (%v), want %s", got, err, one.ID)
+	}
+	// Explicit IDs still work across workspaces.
+	got, _, err = selectSession(st, two.ID, false, "", "")
+	if err != nil || got.ID != two.ID || got.Workspace != "/proj/two" {
+		t.Errorf("explicit resume across workspaces: %+v %v", got, err)
+	}
+	st.SetWorkspace("/proj/three")
+	if _, _, err := selectSession(st, "latest", false, "", ""); exitCodeFor(err) != exitUsage || !strings.Contains(err.Error(), "/proj/three") {
+		t.Errorf("empty workspace should be a usage error naming it: %v", err)
+	}
+}
+
+func TestDoctorPricingCheck(t *testing.T) {
+	home := isolate(t)
+	os.MkdirAll(filepath.Join(home, ".code_puppy"), 0o700)
+	os.WriteFile(filepath.Join(home, ".code_puppy", ".env.toml"), []byte("[code_puppy]\ndefault_model = \"mystery-model-1\"\n"), 0o600)
+	checks := runDoctor(context.Background(), &globalFlags{}, false)
+	found := false
+	for _, c := range checks {
+		if c.name == "pricing" {
+			found = true
+			if c.status != statusWarn || !strings.Contains(c.detail, "mystery-model-1") {
+				t.Errorf("pricing check %+v", c)
+			}
+		}
+	}
+	if !found {
+		t.Error("doctor has no pricing check")
 	}
 }

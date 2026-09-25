@@ -9,6 +9,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/retail-cortex/code_puppy/pkg/i18n"
 	"github.com/retail-cortex/code_puppy/pkg/textutil"
 	"github.com/retail-cortex/code_puppy/pkg/tools"
 )
@@ -147,7 +148,7 @@ func NewApprover(in Input, diffLines int) tools.Approver {
 			return tools.DecisionDeny, ctx.Err()
 		}
 		var sb strings.Builder
-		fmt.Fprintf(&sb, "\n%s🔐 Approval required%s [%s via %s]\n", Yellow+Bold, Reset, req.Kind, safe(req.Tool))
+		fmt.Fprintf(&sb, "\n%s🔐 %s%s [%s]\n", Yellow+Bold, i18n.T("approve.title"), Reset, i18n.T("approve.via", "kind", req.Kind, "tool", safe(req.Tool)))
 		for _, line := range strings.Split(safe(req.Detail), "\n") {
 			fmt.Fprintf(&sb, "   %s%s%s\n", Dim, line, Reset)
 		}
@@ -158,21 +159,21 @@ func NewApprover(in Input, diffLines int) tools.Approver {
 			sb.WriteString(d)
 		}
 
-		options := "[y] yes"
+		options := i18n.T("approve.yes")
 		valid := "y/N"
 		if req.Key != "" {
 			label := req.KeyLabel
 			if label == "" {
-				label = "matching actions"
+				label = i18n.T("approve.matching")
 			}
-			options = fmt.Sprintf("[y] yes once  [s] allow %s this session  [a] always allow %s", label, label)
+			options = i18n.T("approve.options", "label", label)
 			valid = "y/s/a/N"
 		}
 		if truncated {
-			options += "  [d] show full diff"
+			options += "  " + i18n.T("approve.show_diff")
 			valid = strings.Replace(valid, "/N", "/d/N", 1)
 		}
-		fmt.Fprintf(&sb, "   %s%s  [n] no%s\n   Allow? [%s]: ", Dim, options, Reset, valid)
+		fmt.Fprintf(&sb, "   %s%s  %s%s\n   %s [%s]: ", Dim, options, i18n.T("approve.no"), Reset, i18n.T("approve.ask"), valid)
 
 		prompt := sb.String()
 		for {
@@ -194,7 +195,7 @@ func NewApprover(in Input, diffLines int) tools.Approver {
 			case "d", "diff":
 				if truncated {
 					full, _ := RenderDiff(req.Diff, 0)
-					prompt = full + fmt.Sprintf("   Allow? [%s]: ", valid)
+					prompt = full + fmt.Sprintf("   %s [%s]: ", i18n.T("approve.ask"), valid)
 					continue
 				}
 			}
@@ -227,7 +228,7 @@ func RenderDiff(diff string, maxLines int) (string, bool) {
 		}
 	}
 	if cut {
-		fmt.Fprintf(&sb, "   %s… diff truncated (%d lines shown)%s\n", Dim, maxLines, Reset)
+		fmt.Fprintf(&sb, "   %s… %s%s\n", Dim, i18n.T("diff.truncated", "lines", maxLines), Reset)
 	}
 	return sb.String(), cut
 }
@@ -240,7 +241,7 @@ func NewUserPrompter(in Input) tools.UserPromptFunc {
 			return "", ctx.Err()
 		}
 		var sb strings.Builder
-		fmt.Fprintf(&sb, "\n❓ [Puppy Question]: %s\n", textutil.SanitizeTerminal(question))
+		fmt.Fprintf(&sb, "\n❓ [%s]: %s\n", i18n.T("question.title"), textutil.SanitizeTerminal(question))
 		for i, opt := range options {
 			fmt.Fprintf(&sb, "   [%d] %s\n", i+1, textutil.SanitizeTerminal(opt))
 		}

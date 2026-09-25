@@ -11,8 +11,20 @@ type UIConfig struct {
 	Spinner     bool   `toml:"spinner"`      // show progress while waiting (TTY only)
 	HistoryFile string `toml:"history_file"` // REPL input history
 	HistorySize int    `toml:"history_size"`
-	DiffLines   int    `toml:"diff_lines"` // max diff lines shown in approval prompts
-	Theme       string `toml:"theme"`      // glamour style: auto, dark, light, notty
+	DiffLines   int    `toml:"diff_lines"`  // max diff lines shown in approval prompts
+	Theme       string `toml:"theme"`       // glamour style: auto, dark, light, notty
+	Locale      string `toml:"locale"`      // interface language, e.g. en-US, es, fr-CA
+	LocalesDir  string `toml:"locales_dir"` // extra translation catalogs (*.json)
+}
+
+// ImagesConfig controls pictures sent to the model: @file.png mentions,
+// /attach, /paste, --image and the view_image tool.
+type ImagesConfig struct {
+	Enabled      bool   `toml:"enabled"`
+	Dir          string `toml:"dir"`           // where prepared images are kept (owner-only)
+	MaxDimension int    `toml:"max_dimension"` // longest edge sent to the model, in pixels
+	MaxInputMB   int    `toml:"max_input_mb"`  // largest file accepted
+	RetainDays   int    `toml:"retain_days"`   // unused images are deleted after this (0 = keep)
 }
 
 // MemoryConfig controls project instruction files loaded into the prompt.
@@ -37,6 +49,9 @@ type ModelPrice struct {
 	InputPerMTok       float64 `toml:"input_per_mtok"`
 	OutputPerMTok      float64 `toml:"output_per_mtok"`
 	CachedInputPerMTok float64 `toml:"cached_input_per_mtok"`
+	// CacheWritePerMTok prices tokens written to the prompt cache (Anthropic
+	// bills these above the input rate); 0 means the input rate.
+	CacheWritePerMTok float64 `toml:"cache_write_per_mtok"`
 }
 
 // AuditConfig controls the append-only audit log.
@@ -79,6 +94,13 @@ type MCPServerConfig struct {
 	Tools       []string          `toml:"tools"`        // optional allow-list of tool names
 	AutoApprove bool              `toml:"auto_approve"` // skip approval for this server's tools
 	Sandbox     *bool             `toml:"sandbox"`      // run stdio servers in the OS sandbox (default true)
+	// Prefix namespaces the server's tools: prefix "gh" exposes create_issue
+	// as gh__create_issue, avoiding collisions with other servers and built-ins.
+	Prefix string `toml:"prefix"`
+	// Agents lists the agents offered this server's tools: empty means the
+	// active primary agent only, "*" means every agent (including ones run
+	// through invoke_agent).
+	Agents []string `toml:"agents"`
 }
 
 // MCPConfig lists MCP servers.
@@ -94,6 +116,12 @@ type WebConfig struct {
 	AllowPrivate   bool     `toml:"allow_private"` // permit localhost/private network targets
 	MaxBytes       int64    `toml:"max_bytes"`
 	TimeoutSeconds int      `toml:"timeout_seconds"`
+	// SearchProvider enables web_search: "brave", "tavily", or "searxng"
+	// (self-hosted, needs SearchURL). Empty disables it.
+	SearchProvider   string `toml:"search_provider"`
+	SearchAPIKey     string `toml:"search_api_key"` // or BRAVE_API_KEY / TAVILY_API_KEY
+	SearchURL        string `toml:"search_url"`
+	SearchMaxResults int    `toml:"search_max_results"`
 }
 
 // DefaultPricing holds estimated list prices for the default models. They
@@ -102,6 +130,11 @@ var DefaultPricing = map[string]ModelPrice{
 	"gemini-2.5-flash": {InputPerMTok: 0.30, OutputPerMTok: 2.50, CachedInputPerMTok: 0.075},
 	"gemini-2.5-pro":   {InputPerMTok: 1.25, OutputPerMTok: 10.00, CachedInputPerMTok: 0.31},
 	"gpt-4o":           {InputPerMTok: 2.50, OutputPerMTok: 10.00, CachedInputPerMTok: 1.25},
+	// Claude list prices; cache reads bill at 10% of input, 5-minute cache
+	// writes at 125%.
+	"claude-opus-5":    {InputPerMTok: 5.00, OutputPerMTok: 25.00, CachedInputPerMTok: 0.50, CacheWritePerMTok: 6.25},
+	"claude-sonnet-5":  {InputPerMTok: 2.00, OutputPerMTok: 10.00, CachedInputPerMTok: 0.20, CacheWritePerMTok: 2.50},
+	"claude-haiku-4-5": {InputPerMTok: 1.00, OutputPerMTok: 5.00, CachedInputPerMTok: 0.10, CacheWritePerMTok: 1.25},
 }
 
 // Dir returns the Code Puppy home directory (~/.code_puppy).
@@ -122,6 +155,8 @@ func applyFeatureDefaults(c *Config) {
 		HistorySize: 1000,
 		DiffLines:   120,
 		Theme:       "auto",
+		Locale:      "en-US",
+		LocalesDir:  filepath.Join(dir, "locales"),
 	}
 	c.Memory = MemoryConfig{
 		Enabled:  true,
@@ -133,6 +168,7 @@ func applyFeatureDefaults(c *Config) {
 	c.Tools.ApprovalsFile = filepath.Join(dir, "approvals.json")
 	c.Audit = AuditConfig{Enabled: true, Dir: filepath.Join(dir, "audit")}
 	c.Checkpoints = CheckpointConfig{Enabled: true, MaxBytes: 64 * 1024 * 1024}
+	c.Images = ImagesConfig{Enabled: true, Dir: filepath.Join(dir, "images"), MaxDimension: 1568, MaxInputMB: 20, RetainDays: 30}
 	c.Web = WebConfig{Enabled: true, MaxBytes: 2 * 1024 * 1024, TimeoutSeconds: 20}
 	c.Pricing = make(map[string]ModelPrice, len(DefaultPricing))
 	for k, v := range DefaultPricing {

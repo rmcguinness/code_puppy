@@ -298,6 +298,11 @@ func (w *Workspace) Open(p string) (*os.File, error) {
 
 // ReadFile reads a regular file, refusing files over the size limit.
 func (w *Workspace) ReadFile(p string) ([]byte, error) {
+	return w.ReadFileLimit(p, w.maxFileSize)
+}
+
+// ReadFileLimit reads a regular file of at most limit bytes.
+func (w *Workspace) ReadFileLimit(p string, limit int64) ([]byte, error) {
 	f, err := w.Open(p)
 	if err != nil {
 		return nil, err
@@ -311,16 +316,16 @@ func (w *Workspace) ReadFile(p string) ([]byte, error) {
 	if info.IsDir() {
 		return nil, fmt.Errorf("%s is a directory", p)
 	}
-	if info.Size() > w.maxFileSize {
-		return nil, fmt.Errorf("%s is %d bytes, exceeding the %d byte limit", p, info.Size(), w.maxFileSize)
+	if info.Size() > limit {
+		return nil, fmt.Errorf("%s is %d bytes, exceeding the %d byte limit", p, info.Size(), limit)
 	}
 	// Guard against files that grow between Stat and Read.
-	data, err := io.ReadAll(io.LimitReader(f, w.maxFileSize+1))
+	data, err := io.ReadAll(io.LimitReader(f, limit+1))
 	if err != nil {
 		return nil, err
 	}
-	if int64(len(data)) > w.maxFileSize {
-		return nil, fmt.Errorf("%s exceeds the %d byte limit", p, w.maxFileSize)
+	if int64(len(data)) > limit {
+		return nil, fmt.Errorf("%s exceeds the %d byte limit", p, limit)
 	}
 	return data, nil
 }

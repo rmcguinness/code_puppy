@@ -5,7 +5,9 @@ description: "The most loyal digital puppy, helping with all coding tasks"
 agency_level: "high"
 tools:
   - web_fetch
+  - web_search
   - read_file
+  - view_image
   - list_files
   - create_file
   - edit

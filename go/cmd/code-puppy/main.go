@@ -11,6 +11,7 @@ import (
 	"syscall"
 
 	"github.com/retail-cortex/code_puppy/pkg/config"
+	"github.com/retail-cortex/code_puppy/pkg/i18n"
 	"github.com/retail-cortex/code_puppy/pkg/tui"
 	"github.com/spf13/cobra"
 )
@@ -27,13 +28,14 @@ type rootOptions struct {
 	cont         bool
 	outputFormat string
 	maxTurns     int
+	images       []string
 }
 
 func main() {
 	root := newRootCommand()
 	err := root.Execute()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		fmt.Fprintln(os.Stderr, i18n.T("repl.error", "error", err))
 	}
 	os.Exit(exitCodeFor(err))
 }
@@ -80,6 +82,7 @@ Exit codes: 0 success, 1 error, 2 usage, 3 --max-turns reached,
 	f.BoolVarP(&o.cont, "continue", "C", false, "Continue the most recent session")
 	f.StringVar(&o.outputFormat, "output-format", formatText, "Output for one-shot runs: text, json, or stream-json")
 	f.IntVar(&o.maxTurns, "max-turns", 0, "Stop after this many model calls in a one-shot run (0 = unlimited)")
+	f.StringArrayVar(&o.images, "image", nil, "Attach an image to the first prompt (repeatable); @file.png in a prompt also works")
 
 	root.AddCommand(newDoctorCommand(&o.global), newConfigCommand(&o.global))
 	return root
@@ -138,13 +141,13 @@ func runRoot(cmd *cobra.Command, o *rootOptions, args []string) (err error) {
 		}
 	}()
 	if e.modelErr != nil {
-		msg := "model initialization failed: " + modelErrorSummary(e.modelErr, cfg)
+		msg := i18n.T("startup.model_failed", "error", modelErrorSummary(e.modelErr, cfg))
 		if oneShot {
 			// A placeholder model would "succeed" silently; scripts need a real failure.
 			return withCode(exitFailure, fmt.Errorf("%s (run 'code-puppy doctor')", msg))
 		}
 		warnFn(msg)
-		warnFn("run 'code-puppy doctor' to check your configuration; using a placeholder model")
+		warnFn(i18n.T("startup.placeholder_model"))
 	}
 
 	// One input source for everything read from the terminal.
@@ -159,7 +162,7 @@ func runRoot(cmd *cobra.Command, o *rootOptions, args []string) (err error) {
 			Completer:   newCompleter(e),
 		})
 		if terr != nil {
-			warnFn("line editor unavailable: " + terr.Error())
+			warnFn(i18n.T("startup.line_editor", "error", terr.Error()))
 			input = tui.NewLineReader(os.Stdin, os.Stdout)
 		} else {
 			defer ti.Close()
@@ -177,7 +180,16 @@ func runRoot(cmd *cobra.Command, o *rootOptions, args []string) (err error) {
 		e.tools.Hooks().SetUserPrompter(tui.NewUserPrompter(input))
 	}
 
-	title := "Interactive Session"
+	attachPrompt := ""
+	if oneShot {
+		attachPrompt = prompt
+	}
+	attached, err := loadAttachments(e, o.images, attachPrompt, warnFn)
+	if err != nil {
+		return withCode(exitUsage, err)
+	}
+
+	title := i18n.T("session.interactive_title")
 	if oneShot {
 		title = firstLine(prompt, 60)
 	}
@@ -192,12 +204,15 @@ func runRoot(cmd *cobra.Command, o *rootOptions, args []string) (err error) {
 			prompt: prompt, sessionID: sess.ID, format: o.outputFormat, maxTurns: o.maxTurns,
 			input: input, stdinTTY: stdinTTY && !stdinUsed, stdout: os.Stdout,
 			markdown: pretty && cfg.UI.Markdown, spinner: pretty && cfg.UI.Spinner, width: terminalWidth(),
-			usageLines: pretty,
+			usageLines: pretty, images: attached,
 		})
 	}
 
+	if resumed && sess.Workspace != "" && sess.Workspace != e.storage.Workspace() {
+		warnFn(i18n.T("resume.other_workspace_id", "id", sess.ID, "workspace", sess.Workspace))
+	}
 	if resumed {
-		fmt.Printf("%s▶️  Resuming session %s (%d messages)%s\n", tui.Green, sess.ID, sess.MessageCount, tui.Reset)
+		fmt.Printf("%s▶️  %s%s\n", tui.Green, i18n.T("resume.starting", "id", sess.ID, "messages", i18n.N("session.messages", sess.MessageCount)), tui.Reset)
 		tui.PrintRecap(sess.Messages, 3)
 		fmt.Println()
 	}
@@ -214,6 +229,9 @@ func runRoot(cmd *cobra.Command, o *rootOptions, args []string) (err error) {
 		SandboxSummary: e.tools.SandboxSummary(),
 		NewModel:       e.newModel,
 		ReloadMemory:   e.reloadMemory,
+		Attachments:    attached,
+		Locales:        e.locales,
+		SetLocale:      e.setLocale,
 		Printer: tui.PrinterOptions{
 			Out: os.Stdout, Markdown: pretty && cfg.UI.Markdown, Theme: cfg.UI.Theme,
 			Width: terminalWidth(), Spinner: pretty && cfg.UI.Spinner,
@@ -225,18 +243,24 @@ func runRoot(cmd *cobra.Command, o *rootOptions, args []string) (err error) {
 // read when -p is "-" or when it is piped and no prompt was given.
 func resolvePrompt(flag string, args []string, stdinTTY, interactive bool, stdin io.Reader) (prompt string, stdinUsed bool, err error) {
 	switch {
-	case flag == "-" || (flag == "" && len(args) == 0 && !stdinTTY && !interactive):
+	case flag == "-" || (flag == "" && !stdinTTY && !interactive):
 		data, err := io.ReadAll(io.LimitReader(stdin, 10<<20))
 		if err != nil {
 			return "", false, fmt.Errorf("read prompt from stdin: %w", err)
 		}
-		prompt = strings.TrimSpace(string(data))
-		if prompt == "" && flag == "-" {
-			return "", true, withCode(exitUsage, errors.New("empty prompt on stdin"))
+		piped := strings.TrimSpace(string(data))
+		// Arguments frame the piped content: `git diff | code-puppy review this`.
+		switch {
+		case len(args) > 0 && piped != "":
+			prompt = strings.Join(args, " ") + "\n\n" + piped
+		case len(args) > 0:
+			prompt = strings.Join(args, " ")
+		default:
+			prompt = piped
 		}
-		// Arguments, if any, frame the piped content: `git diff | code-puppy review this`.
-		if len(args) > 0 && prompt != "" {
-			prompt = strings.Join(args, " ") + "\n\n" + prompt
+		if prompt == "" {
+			// stdin is consumed, so there is nothing left to drive a REPL.
+			return "", true, withCode(exitUsage, errors.New("no prompt: stdin was empty (use -i for an interactive session)"))
 		}
 		return prompt, true, nil
 	case flag != "":
@@ -264,7 +288,7 @@ func firstLine(s string, n int) string {
 func newCompleter(e *env) *tui.Completer {
 	c := tui.NewCompleter(e.tools.Workspace().Dir())
 	for _, cmd := range []string{"help", "agents", "model", "skills", "session", "set", "clear", "sandbox", "exit", "quit",
-		"undo", "checkpoints", "diff", "cost", "context", "memory", "approvals", "mcp", "resume"} {
+		"undo", "checkpoints", "diff", "cost", "context", "compact", "memory", "approvals", "mcp", "resume", "locale", "attach", "paste"} {
 		c.Command(cmd)
 	}
 	c.Command("skills", "list", "search")
@@ -272,7 +296,9 @@ func newCompleter(e *env) *tui.Completer {
 	c.Command("memory", "show", "reload", "add")
 	c.Command("approvals", "revoke", "clear")
 	c.Command("diff", "git")
+	c.Command("attach", "clear")
 	c.Command("undo", "--force")
+	c.Command("compact")
 	c.Command("set", "agency=", "puppy_name=", "owner_name=")
 	c.Dynamic("agent", func() []string {
 		var names []string
@@ -281,9 +307,16 @@ func newCompleter(e *env) *tui.Completer {
 		}
 		return names
 	})
+	c.Dynamic("locale", func() []string {
+		var tags []string
+		for _, m := range e.locales.Available() {
+			tags = append(tags, m.Locale)
+		}
+		return tags
+	})
 	c.Dynamic("resume", func() []string {
 		var ids []string
-		if list, err := e.storage.List(); err == nil {
+		if list, err := e.storage.ListWorkspace(e.storage.Workspace()); err == nil {
 			for i, s := range list {
 				if i == 20 {
 					break

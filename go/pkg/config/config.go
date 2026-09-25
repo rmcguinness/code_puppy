@@ -33,6 +33,7 @@ type Config struct {
 	Context     ContextConfig         `toml:"context"`
 	Audit       AuditConfig           `toml:"audit"`
 	Checkpoints CheckpointConfig      `toml:"checkpoints"`
+	Images      ImagesConfig          `toml:"images"`
 	Hooks       HooksConfig           `toml:"hooks"`
 	MCP         MCPConfig             `toml:"mcp"`
 	Web         WebConfig             `toml:"web"`
@@ -81,8 +82,31 @@ type OpenAIConfig struct {
 
 // AnthropicConfig holds settings for Anthropic Claude.
 type AnthropicConfig struct {
-	APIKey string `toml:"api_key"`
-	Model  string `toml:"model"`
+	// APIKey is optional: without it the SDK also accepts ANTHROPIC_AUTH_TOKEN
+	// and `ant auth login` profiles.
+	APIKey  string `toml:"api_key"`
+	Model   string `toml:"model"`
+	BaseURL string `toml:"base_url"` // for gateways/proxies; empty uses the API default
+	// Fallbacks controls server-side refusal fallback on models that support
+	// it (claude-opus-5, claude-fable-5*): "default" routes by refusal
+	// category, a model ID pins one fallback model, "off" disables it.
+	Fallbacks string `toml:"fallbacks"`
+}
+
+// ModelName returns the model to use: code_puppy.default_model when set,
+// otherwise the active provider's model.
+func (c *Config) ModelName() string {
+	if c.CodePuppy.DefaultModel != "" {
+		return c.CodePuppy.DefaultModel
+	}
+	switch strings.ToLower(c.LLM.Provider) {
+	case "openai", "ollama":
+		return c.LLM.OpenAI.Model
+	case "anthropic":
+		return c.LLM.Anthropic.Model
+	default:
+		return c.LLM.Gemini.Model
+	}
 }
 
 // SkillsConfig controls Agent Skills discovery and paths.
@@ -170,7 +194,7 @@ func DefaultConfig() *Config {
 			PuppyName:    "Code Puppy",
 			OwnerName:    "Developer",
 			DefaultAgent: "code-puppy",
-			DefaultModel: "gemini-2.5-flash",
+			DefaultModel: "", // empty: use llm.<provider>.model
 			AgencyLevel:  string(AgencyHigh),
 			Temperature:  0.2,
 			MaxTokens:    8192,
@@ -188,8 +212,9 @@ func DefaultConfig() *Config {
 				Model:   "gpt-4o",
 			},
 			Anthropic: AnthropicConfig{
-				APIKey: os.Getenv("ANTHROPIC_API_KEY"),
-				Model:  "claude-3-7-sonnet-20250219",
+				APIKey:    os.Getenv("ANTHROPIC_API_KEY"),
+				Model:     "claude-opus-5",
+				Fallbacks: "default",
 			},
 		},
 		Skills: SkillsConfig{

@@ -22,12 +22,12 @@ func TestUsageEstimate(t *testing.T) {
 	tr := NewUsageTracker(map[string]config.ModelPrice{"gemini-2.5-flash": {InputPerMTok: 1, OutputPerMTok: 10, CachedInputPerMTok: 0.1}})
 	m := &genai.GenerateContentResponseUsageMetadata{PromptTokenCount: 1_000_000, CachedContentTokenCount: 500_000, CandidatesTokenCount: 100_000, ThoughtsTokenCount: 100_000}
 
-	u := tr.Estimate("gemini-2.5-flash-001", m) // prefix match
+	u := tr.Estimate("gemini-2.5-flash-001", m, 0) // prefix match
 	want := 0.5*1 + 0.5*0.1 + 0.2*10
 	if !u.Priced || abs(u.CostUSD-want) > 1e-9 || u.Output != 200_000 || u.LastPrompt != 1_000_000 {
 		t.Errorf("estimate %+v, want cost %v", u, want)
 	}
-	if u := tr.Estimate("unknown-model", m); u.Priced || u.CostUSD != 0 {
+	if u := tr.Estimate("unknown-model", m, 0); u.Priced || u.CostUSD != 0 {
 		t.Errorf("unknown model should be unpriced: %+v", u)
 	}
 
@@ -63,6 +63,7 @@ func newEngineWith(t *testing.T, fo fixtureOpts, responses ...*genai.Content) en
 	cfg := config.DefaultConfig()
 	cfg.Tools.WorkspaceDir = t.TempDir()
 	cfg.Tools.UCToolsDir = t.TempDir()
+	cfg.Images.Dir = t.TempDir()
 	cfg.Tools.ApprovalsFile = filepath.Join(t.TempDir(), "approvals.json")
 	cfg.CodePuppy.AutoApprove = true
 	if fo.cfg != nil {
@@ -223,5 +224,51 @@ func TestEnginePreToolHookBlocks(t *testing.T) {
 	// Non-matching tools run normally (read_file fails on its own, not via the hook).
 	if msg, _ := resps["read_file"]["error"].(string); strings.Contains(msg, "hook") {
 		t.Errorf("hook applied to non-matching tool: %v", msg)
+	}
+}
+
+func TestUsageCacheWrites(t *testing.T) {
+	tr := NewUsageTracker(map[string]config.ModelPrice{
+		"claude-opus-5": {InputPerMTok: 5, OutputPerMTok: 25, CachedInputPerMTok: 0.5, CacheWritePerMTok: 6.25},
+		"no-write-rate": {InputPerMTok: 1, OutputPerMTok: 2},
+	})
+	// 1M prompt tokens: 400k cache reads, 100k cache writes, 500k plain; 10k output.
+	m := &genai.GenerateContentResponseUsageMetadata{PromptTokenCount: 1_000_000, CachedContentTokenCount: 400_000, CandidatesTokenCount: 10_000}
+	u := tr.Estimate("claude-opus-5", m, 100_000)
+	want := 0.5*5 + 0.4*0.5 + 0.1*6.25 + 0.01*25
+	if abs(u.CostUSD-want) > 1e-9 || u.CacheWrite != 100_000 {
+		t.Errorf("cost %v want %v (%+v)", u.CostUSD, want, u)
+	}
+	// Without a write rate, writes bill at the input rate.
+	if u := tr.Estimate("no-write-rate", m, 100_000); abs(u.CostUSD-(0.6*1+0.01*2)) > 1e-9 {
+		t.Errorf("fallback write rate: %v", u.CostUSD)
+	}
+	// Nonsense write counts are clamped to the uncached prompt.
+	if u := tr.Estimate("claude-opus-5", m, 5_000_000); u.CacheWrite != 600_000 {
+		t.Errorf("clamp: %d", u.CacheWrite)
+	}
+	if !tr.HasPrice("claude-opus-5-preview") || tr.HasPrice("gpt-9") {
+		t.Error("HasPrice prefix logic")
+	}
+}
+
+func TestEnginePricesServedModelAndCacheWrites(t *testing.T) {
+	f := newEngineWith(t, fixtureOpts{}, textContent("hi"))
+	f.llm.Usage = &genai.GenerateContentResponseUsageMetadata{PromptTokenCount: 1_000_000}
+	// Configured model is gemini-2.5-flash, but a fallback model served it.
+	f.llm.ServedBy = "claude-opus-5"
+	f.llm.Metadata = map[string]any{CacheWriteTokensKey: int64(1_000_000)}
+	collect(t, f.eng, "s", "go")
+	u := f.eng.Usage("s")
+	if abs(u.CostUSD-6.25) > 1e-9 || u.CacheWrite != 1_000_000 {
+		t.Errorf("expected opus cache-write pricing ($6.25), got $%v %+v", u.CostUSD, u)
+	}
+	// An unknown served model falls back to the configured model's price.
+	g := newEngineWith(t, fixtureOpts{}, textContent("hi"))
+	g.llm.Usage = &genai.GenerateContentResponseUsageMetadata{PromptTokenCount: 1_000_000}
+	g.llm.ServedBy = "gemini-2.5-flash-exp-0927"
+	collect(t, g.eng, "s", "go")
+	if u := g.eng.Usage("s"); !u.Priced || abs(u.CostUSD-0.30) > 1e-9 {
+		t.Errorf("prefix-priced served model: %+v", u)
 	}
 }

@@ -5,8 +5,10 @@ description: "Breaks down complex coding tasks into actionable steps, architectu
 agency_level: "medium"
 tools:
   - web_fetch
+  - web_search
   - list_files
   - read_file
+  - view_image
   - grep
   - ask_user_question
   - list_agents

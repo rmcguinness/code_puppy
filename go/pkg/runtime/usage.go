@@ -13,6 +13,7 @@ type Usage struct {
 	Calls      int
 	Input      int64 // prompt tokens, including cached
 	Cached     int64
+	CacheWrite int64 // prompt tokens written to the cache (part of Input)
 	Output     int64 // candidates + thinking tokens
 	LastPrompt int64 // prompt size of the latest call: the current context size
 	CostUSD    float64
@@ -23,6 +24,7 @@ func (u *Usage) add(o Usage) {
 	u.Calls += o.Calls
 	u.Input += o.Input
 	u.Cached += o.Cached
+	u.CacheWrite += o.CacheWrite
 	u.Output += o.Output
 	u.CostUSD += o.CostUSD
 	u.Priced = u.Priced && o.Priced
@@ -58,14 +60,26 @@ func (t *UsageTracker) price(model string) (config.ModelPrice, bool) {
 	return t.pricing[best], found
 }
 
-// Estimate converts token counts to USD for model.
-func (t *UsageTracker) Estimate(model string, m *genai.GenerateContentResponseUsageMetadata) Usage {
+// CacheWriteTokensKey is the LLMResponse.CustomMetadata key a model uses to
+// report prompt tokens written to the cache (genai usage has no such field).
+const CacheWriteTokensKey = "cache_creation_input_tokens"
+
+// HasPrice reports whether a price is configured for model.
+func (t *UsageTracker) HasPrice(model string) bool {
+	_, ok := t.price(model)
+	return ok
+}
+
+// Estimate converts token counts to USD for model. cacheWrites are prompt
+// tokens (already counted in the prompt total) written to the cache.
+func (t *UsageTracker) Estimate(model string, m *genai.GenerateContentResponseUsageMetadata, cacheWrites int64) Usage {
 	u := Usage{Calls: 1, Priced: true}
 	if m == nil {
 		return u
 	}
 	u.Input = int64(m.PromptTokenCount) + int64(m.ToolUsePromptTokenCount)
 	u.Cached = int64(m.CachedContentTokenCount)
+	u.CacheWrite = min(max(cacheWrites, 0), max(u.Input-u.Cached, 0))
 	u.Output = int64(m.CandidatesTokenCount) + int64(m.ThoughtsTokenCount)
 	u.LastPrompt = u.Input
 	p, ok := t.price(model)
@@ -73,14 +87,24 @@ func (t *UsageTracker) Estimate(model string, m *genai.GenerateContentResponseUs
 		u.Priced = false
 		return u
 	}
-	uncached := max(u.Input-u.Cached, 0)
-	u.CostUSD = (float64(uncached)*p.InputPerMTok + float64(u.Cached)*p.CachedInputPerMTok + float64(u.Output)*p.OutputPerMTok) / 1e6
+	writeRate := p.CacheWritePerMTok
+	if writeRate == 0 {
+		writeRate = p.InputPerMTok
+	}
+	uncached := max(u.Input-u.Cached-u.CacheWrite, 0)
+	u.CostUSD = (float64(uncached)*p.InputPerMTok + float64(u.Cached)*p.CachedInputPerMTok +
+		float64(u.CacheWrite)*writeRate + float64(u.Output)*p.OutputPerMTok) / 1e6
 	return u
 }
 
 // Record adds one model call's usage to session.
 func (t *UsageTracker) Record(session, model string, m *genai.GenerateContentResponseUsageMetadata) Usage {
-	u := t.Estimate(model, m)
+	return t.RecordWrites(session, model, m, 0)
+}
+
+// RecordWrites is Record with a count of cache-write tokens.
+func (t *UsageTracker) RecordWrites(session, model string, m *genai.GenerateContentResponseUsageMetadata, cacheWrites int64) Usage {
+	u := t.Estimate(model, m, cacheWrites)
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	s := t.sessions[session]

@@ -41,6 +41,9 @@ type SessionRecord struct {
 	CreatedAt    time.Time `json:"created_at"`
 	UpdatedAt    time.Time `json:"updated_at"`
 	MessageCount int       `json:"message_count"`
+	// Workspace is the canonical workspace directory the session belongs to;
+	// empty for sessions created before sessions were workspace-scoped.
+	Workspace string `json:"workspace,omitempty"`
 	// Messages is populated by Load and for the active session; List leaves it
 	// empty and reports MessageCount instead.
 	Messages []Message `json:"messages,omitempty"`
@@ -57,9 +60,39 @@ type Message struct {
 // <id>.meta.json (small, rewritten atomically) and messages are appended to
 // <id>.jsonl, so adding a message costs O(message) rather than O(session).
 type Storage struct {
-	mu     sync.RWMutex
-	dir    string
-	active *SessionRecord
+	mu        sync.RWMutex
+	dir       string
+	active    *SessionRecord
+	workspace string
+}
+
+// SetWorkspace records the workspace new sessions belong to.
+func (s *Storage) SetWorkspace(dir string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.workspace = dir
+}
+
+// Workspace returns the workspace new sessions belong to.
+func (s *Storage) Workspace() string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.workspace
+}
+
+// ListWorkspace returns sessions belonging to workspace, newest first.
+func (s *Storage) ListWorkspace(workspace string) ([]*SessionRecord, error) {
+	all, err := s.List()
+	if err != nil {
+		return nil, err
+	}
+	var out []*SessionRecord
+	for _, r := range all {
+		if r.Workspace == workspace {
+			out = append(out, r)
+		}
+	}
+	return out, nil
 }
 
 // NewStorage creates session storage in the specified directory.
@@ -123,6 +156,7 @@ func (s *Storage) CreateSession(id, title, agent string) (*SessionRecord, error)
 		Agent:     agent,
 		CreatedAt: now,
 		UpdatedAt: now,
+		Workspace: s.workspace,
 		Messages:  []Message{},
 	}
 	if err := s.writeMeta(rec); err != nil {
@@ -199,6 +233,14 @@ func (s *Storage) Load(id string) (*SessionRecord, error) {
 		return nil, err
 	}
 
+	// Sessions saved before sessions were workspace-scoped are adopted by
+	// the workspace that resumes them, so --continue finds them afterwards.
+	if rec.Workspace == "" && s.workspace != "" {
+		rec.Workspace = s.workspace
+		if err := s.writeMeta(rec); err != nil {
+			return nil, err
+		}
+	}
 	s.active = rec
 	return rec, nil
 }

@@ -9,7 +9,9 @@ import (
 	"strings"
 
 	"github.com/retail-cortex/code_puppy/pkg/audit"
+	"github.com/retail-cortex/code_puppy/pkg/i18n"
 	"github.com/retail-cortex/code_puppy/pkg/memory"
+	"github.com/retail-cortex/code_puppy/pkg/runtime"
 	"github.com/retail-cortex/code_puppy/pkg/session"
 	"github.com/retail-cortex/code_puppy/pkg/textutil"
 	"github.com/retail-cortex/code_puppy/pkg/tools"
@@ -29,6 +31,8 @@ func handleExtraCommand(ctx context.Context, cmd string, args []string, app *App
 		cmdCost(app)
 	case "context":
 		cmdContext(app)
+	case "compact":
+		cmdCompact(ctx, args, app)
 	case "memory":
 		cmdMemory(ctx, args, app)
 	case "approvals":
@@ -37,6 +41,12 @@ func handleExtraCommand(ctx context.Context, cmd string, args []string, app *App
 		cmdMCP(app)
 	case "resume":
 		cmdSessionLoad(args, app)
+	case "attach":
+		cmdAttach(args, app)
+	case "paste":
+		cmdPaste(ctx, app)
+	case "locale", "lang", "language":
+		cmdLocale(ctx, args, app)
 	default:
 		return false
 	}
@@ -45,7 +55,7 @@ func handleExtraCommand(ctx context.Context, cmd string, args []string, app *App
 
 func needTools(app *App) bool {
 	if app.Tools == nil {
-		fmt.Println("Not available in this session.")
+		fmt.Println(i18n.T("common.not_available"))
 		return false
 	}
 	return true
@@ -62,7 +72,7 @@ func cmdUndo(args []string, app *App) {
 		return
 	}
 	if len(res.Restored) > 0 {
-		fmt.Printf("%s↩️  Undid %q: restored %s%s\n", Green, safe(res.Turn.Label), safe(strings.Join(res.Restored, ", ")), Reset)
+		fmt.Printf("%s↩️  %s%s\n", Green, i18n.T("undo.done", "label", strconv.Quote(safe(res.Turn.Label)), "files", safe(strings.Join(res.Restored, ", "))), Reset)
 		app.Tools.Hooks().Audit().Log(audit.Entry{Kind: audit.KindUndo, Detail: strings.Join(res.Restored, ", ")})
 	}
 	if err != nil {
@@ -76,10 +86,10 @@ func cmdCheckpoints(app *App) {
 	}
 	list := app.Tools.Checkpoints().List()
 	if len(list) == 0 {
-		fmt.Println("No file changes recorded in this session.")
+		fmt.Println(i18n.T("checkpoints.none"))
 		return
 	}
-	fmt.Printf("\n%s📌 Checkpoints (newest first; /undo reverts the top one):%s\n", Bold, Reset)
+	fmt.Printf("\n%s📌 %s%s\n", Bold, i18n.T("checkpoints.title"), Reset)
 	for _, c := range list {
 		fmt.Printf("  %s#%d%s %s %s%s%s\n      %s\n", Bold, c.ID, Reset, c.Time.Format("15:04:05"), Dim, safe(c.Label), Reset, safe(strings.Join(c.Files, ", ")))
 	}
@@ -95,18 +105,18 @@ func cmdDiff(ctx context.Context, args []string, app *App) {
 		cmd.Dir = app.Tools.Workspace().Dir()
 		out, err := cmd.CombinedOutput()
 		if err != nil {
-			fmt.Printf("%s❌ git diff failed: %v%s\n%s", Red, err, Reset, safe(string(out)))
+			fmt.Printf("%s❌ %s%s\n%s", Red, i18n.T("diff.git_failed", "error", err), Reset, safe(string(out)))
 			return
 		}
 		if len(out) == 0 {
-			fmt.Println("No uncommitted changes.")
+			fmt.Println(i18n.T("diff.git_clean"))
 		}
 		fmt.Print(string(out))
 		return
 	}
 	d := app.Tools.Checkpoints().SessionDiff()
 	if strings.TrimSpace(d) == "" {
-		fmt.Println("No changes made by tools in this session. (Use /diff git for the full working tree.)")
+		fmt.Println(i18n.T("diff.none"))
 		return
 	}
 	out, _ := RenderDiff(d, 0)
@@ -116,18 +126,18 @@ func cmdDiff(ctx context.Context, args []string, app *App) {
 func cmdCost(app *App) {
 	active := app.Storage.Active()
 	if active == nil {
-		fmt.Println("No active session.")
+		fmt.Println(i18n.T("session.none_active"))
 		return
 	}
 	u := app.Engine.Usage(active.ID)
-	fmt.Printf("\n%s💰 Session usage (%s):%s\n", Bold, safe(active.ID), Reset)
-	fmt.Printf("  Model calls:   %d\n", u.Calls)
-	fmt.Printf("  Input tokens:  %s (%s cached)\n", humanTokens(u.Input), humanTokens(u.Cached))
-	fmt.Printf("  Output tokens: %s\n", humanTokens(u.Output))
+	fmt.Printf("\n%s💰 %s%s\n", Bold, i18n.T("cost.title", "id", safe(active.ID)), Reset)
+	fmt.Printf("  %s\n", i18n.T("cost.calls", "count", u.Calls))
+	fmt.Printf("  %s\n", i18n.T("cost.input", "input", humanTokens(u.Input), "cached", humanTokens(u.Cached), "written", humanTokens(u.CacheWrite)))
+	fmt.Printf("  %s\n", i18n.T("cost.output", "output", humanTokens(u.Output)))
 	if u.Priced {
-		fmt.Printf("  Estimated cost: $%.4f\n", u.CostUSD)
+		fmt.Printf("  %s\n", i18n.T("cost.estimate", "cost", fmt.Sprintf("$%.4f", u.CostUSD)))
 	} else {
-		fmt.Printf("  Estimated cost: unknown (add [pricing.%q] to your config)\n", app.Engine.ModelName())
+		fmt.Printf("  %s\n", i18n.T("cost.unknown", "model", strconv.Quote(app.Engine.ModelName())))
 	}
 	fmt.Println()
 }
@@ -135,18 +145,41 @@ func cmdCost(app *App) {
 func cmdContext(app *App) {
 	active := app.Storage.Active()
 	if active == nil {
-		fmt.Println("No active session.")
+		fmt.Println(i18n.T("session.none_active"))
 		return
 	}
 	u := app.Engine.Usage(active.ID)
 	c := app.Cfg.Context
-	fmt.Printf("\n%s🧠 Context:%s %s tokens in the last prompt\n", Bold, Reset, humanTokens(u.LastPrompt))
+	fmt.Printf("\n%s🧠 %s%s %s\n", Bold, i18n.T("context.title"), Reset, i18n.T("context.size", "tokens", humanTokens(u.LastPrompt)))
 	if c.Compaction && c.TokenThreshold > 0 {
 		pct := float64(u.LastPrompt) / float64(c.TokenThreshold) * 100
-		fmt.Printf("  Compaction at %s tokens (%.0f%% used); the %d newest events are kept verbatim.\n\n", humanTokens(int64(c.TokenThreshold)), pct, c.RetainEvents)
+		fmt.Printf("  %s\n\n", i18n.T("context.threshold", "threshold", humanTokens(int64(c.TokenThreshold)), "percent", fmt.Sprintf("%.0f", pct), "keep", c.RetainEvents))
 	} else {
-		fmt.Println("  Compaction is disabled ([context] compaction = false).")
+		fmt.Println("  " + i18n.T("context.auto_off"))
 		fmt.Println()
+	}
+}
+
+func cmdCompact(ctx context.Context, args []string, app *App) {
+	active := app.Storage.Active()
+	if active == nil {
+		fmt.Println(i18n.T("session.none_active"))
+		return
+	}
+	before := app.Engine.Usage(active.ID)
+	fmt.Printf("%s🗜️  %s%s\n", Dim, i18n.T("compact.running"), Reset)
+	res, err := app.Engine.Compact(ctx, active.ID, strings.Join(args, " "), 1)
+	if err != nil {
+		if errors.Is(err, runtime.ErrNothingToCompact) {
+			fmt.Printf("%s%v%s\n", Yellow, err, Reset)
+			return
+		}
+		fmt.Printf("%s❌ %s%s\n", Red, i18n.T("compact.failed", "error", safe(err.Error())), Reset)
+		return
+	}
+	fmt.Printf("%s✅ %s%s\n", Green, i18n.T("compact.done", "events", res.EventsCompacted, "chars", res.SummaryChars), Reset)
+	if line := UsageLine(before, app.Engine.Usage(active.ID)); line != "" {
+		fmt.Printf("%s%s%s\n", Dim, line, Reset)
 	}
 }
 
@@ -158,7 +191,7 @@ func cmdMemory(ctx context.Context, args []string, app *App) {
 	switch sub {
 	case "show", "reload":
 		if app.ReloadMemory == nil {
-			fmt.Println("Project memory is not available.")
+			fmt.Println(i18n.T("memory.unavailable"))
 			return
 		}
 		paths, err := app.ReloadMemory(ctx)
@@ -167,10 +200,10 @@ func cmdMemory(ctx context.Context, args []string, app *App) {
 			return
 		}
 		if len(paths) == 0 {
-			fmt.Printf("No instruction files found (looked for %s). Use /memory add <note>.\n", strings.Join(app.Cfg.Memory.Files, ", "))
+			fmt.Println(i18n.T("memory.none", "files", strings.Join(app.Cfg.Memory.Files, ", ")))
 			return
 		}
-		fmt.Printf("\n%s📝 Loaded instructions:%s\n", Bold, Reset)
+		fmt.Printf("\n%s📝 %s%s\n", Bold, i18n.T("memory.loaded"), Reset)
 		for _, p := range paths {
 			fmt.Printf("  • %s\n", safe(p))
 		}
@@ -191,9 +224,9 @@ func cmdMemory(ctx context.Context, args []string, app *App) {
 		if app.ReloadMemory != nil {
 			app.ReloadMemory(ctx)
 		}
-		fmt.Printf("%s✅ Remembered in %s%s\n", Green, safe(path), Reset)
+		fmt.Printf("%s✅ %s%s\n", Green, i18n.T("memory.added", "path", safe(path)), Reset)
 	default:
-		fmt.Println("Usage: /memory [show|reload|add <note>]")
+		fmt.Println(i18n.T("memory.usage"))
 	}
 }
 
@@ -217,7 +250,7 @@ func cmdApprovals(args []string, app *App) {
 			n, err := strconv.Atoi(strings.TrimPrefix(strings.Join(args[1:], ""), "#"))
 			all := append(append([]string{}, session...), keysOf(saved)...)
 			if err != nil || n < 1 || n > len(all) {
-				fmt.Println("Usage: /approvals revoke <number>  (see /approvals)")
+				fmt.Println(i18n.T("approvals.revoke_usage"))
 				return
 			}
 			targets = []string{all[n-1]}
@@ -228,25 +261,25 @@ func cmdApprovals(args []string, app *App) {
 				store.Remove(k)
 			}
 		}
-		fmt.Printf("%s✅ Revoked %d rule(s).%s\n", Green, len(targets), Reset)
+		fmt.Printf("%s✅ %s%s\n", Green, i18n.N("approvals.revoked", len(targets)), Reset)
 		return
 	}
 
 	if len(session)+len(saved) == 0 {
-		fmt.Println("No remembered approvals. Answer [s] or [a] at an approval prompt to add one.")
+		fmt.Println(i18n.T("approvals.none"))
 		return
 	}
-	fmt.Printf("\n%s🔑 Remembered approvals:%s\n", Bold, Reset)
+	fmt.Printf("\n%s🔑 %s%s\n", Bold, i18n.T("approvals.title"), Reset)
 	n := 0
 	for _, k := range session {
 		n++
-		fmt.Printf("  %d. %s %s(this session)%s\n", n, safe(describeKey(k)), Dim, Reset)
+		fmt.Printf("  %d. %s %s(%s)%s\n", n, safe(describeKey(k)), Dim, i18n.T("approvals.scope_session"), Reset)
 	}
 	for _, r := range saved {
 		n++
-		fmt.Printf("  %d. %s %s(always, since %s)%s\n", n, safe(describeKey(r.Key)), Dim, r.Added.Format("2006-01-02"), Reset)
+		fmt.Printf("  %d. %s %s(%s)%s\n", n, safe(describeKey(r.Key)), Dim, i18n.T("approvals.scope_always", "date", r.Added.Format("2006-01-02")), Reset)
 	}
-	fmt.Printf("  %sRevoke with /approvals revoke <number> or /approvals clear%s\n\n", Dim, Reset)
+	fmt.Printf("  %s%s%s\n\n", Dim, i18n.T("approvals.revoke_hint"), Reset)
 }
 
 func keysOf(rules []tools.ApprovalRule) []string {
@@ -263,19 +296,19 @@ func describeKey(k string) string {
 	switch kind {
 	case "cmd":
 		if dir, cmd, ok := strings.Cut(rest, "\x00"); ok {
-			return "command in " + dir + ": " + cmd
+			return i18n.T("approval_key.command_in", "dir", dir, "command", cmd)
 		}
-		return "command: " + rest
+		return i18n.T("approval_key.command", "command", rest)
 	case "write":
-		return "file edits in " + rest
+		return i18n.T("approval_key.write", "path", rest)
 	case "delete":
-		return "file deletions in " + rest
+		return i18n.T("approval_key.delete", "path", rest)
 	case "web":
-		return "web requests to " + rest
+		return i18n.T("approval_key.web", "host", rest)
 	case "mcp":
-		return "MCP tool " + rest
+		return i18n.T("approval_key.mcp", "tool", rest)
 	case "uc-run":
-		return "forged tool " + strings.ReplaceAll(rest, "\x00", " ")
+		return i18n.T("approval_key.uc", "tool", strings.ReplaceAll(rest, "\x00", " "))
 	default:
 		return k
 	}
@@ -287,18 +320,18 @@ func cmdMCP(app *App) {
 	}
 	servers := app.Tools.MCP().Servers()
 	if len(servers) == 0 {
-		fmt.Println("No MCP servers configured. Add [[mcp.servers]] entries to your config.")
+		fmt.Println(i18n.T("mcp.none"))
 		return
 	}
-	fmt.Printf("\n%s🔌 MCP servers:%s\n", Bold, Reset)
+	fmt.Printf("\n%s🔌 %s%s\n", Bold, i18n.T("mcp.title"), Reset)
 	for _, s := range app.Cfg.MCP.Servers {
 		target := s.URL
 		if target == "" {
 			target = strings.Join(append([]string{s.Command}, s.Args...), " ")
 		}
-		approval := "approval required"
+		approval := i18n.T("mcp.approval_required")
 		if s.AutoApprove {
-			approval = "auto-approved"
+			approval = i18n.T("mcp.auto_approved")
 		}
 		fmt.Printf("  • %s%s%s: %s %s(%s)%s\n", Bold, safe(s.Name), Reset, safe(target), Dim, approval, Reset)
 	}
@@ -307,7 +340,7 @@ func cmdMCP(app *App) {
 
 func cmdSessionLoad(args []string, app *App) {
 	if len(args) == 0 {
-		fmt.Println("Usage: /resume <session-id>   (see /session list)")
+		fmt.Println(i18n.T("resume.usage"))
 		return
 	}
 	rec, err := app.Storage.Load(args[0])
@@ -315,7 +348,10 @@ func cmdSessionLoad(args []string, app *App) {
 		fmt.Printf("%s❌ %v%s\n", Red, err, Reset)
 		return
 	}
-	fmt.Printf("%s▶️  Resumed session %s (%s, %d messages)%s\n", Green, safe(rec.ID), safe(rec.Title), rec.MessageCount, Reset)
+	fmt.Printf("%s▶️  %s%s\n", Green, i18n.T("resume.done", "id", safe(rec.ID), "title", safe(rec.Title), "messages", i18n.N("session.messages", rec.MessageCount)), Reset)
+	if rec.Workspace != "" && rec.Workspace != app.Storage.Workspace() {
+		fmt.Printf("%s⚠️  %s%s\n", Yellow, i18n.T("resume.other_workspace", "workspace", safe(rec.Workspace)), Reset)
+	}
 	PrintRecap(rec.Messages, 3)
 }
 
@@ -325,10 +361,53 @@ func PrintRecap(msgs []session.Message, n int) {
 		msgs = msgs[len(msgs)-n:]
 	}
 	for _, m := range msgs {
-		who := "you"
+		who := i18n.T("recap.you")
 		if m.Role != "user" {
-			who = "puppy"
+			who = i18n.T("recap.puppy")
 		}
 		fmt.Printf("  %s%s:%s %s\n", Dim, who, Reset, safe(textutil.Ellipsize(strings.Join(strings.Fields(m.Content), " "), 160)))
+	}
+}
+
+func cmdLocale(ctx context.Context, args []string, app *App) {
+	b := app.Locales
+	if b == nil {
+		b = i18n.Default()
+	}
+	if len(args) == 0 {
+		cur := i18n.Current()
+		fmt.Printf("\n%s🌐 %s%s\n", Bold, i18n.T("locale.current", "name", cur.NativeName(), "tag", cur.Tag()), Reset)
+		var names []string
+		for _, m := range b.Available() {
+			names = append(names, m.Locale+" ("+m.Name+")")
+		}
+		fmt.Println("  " + i18n.T("locale.available", "list", strings.Join(names, ", ")))
+		if app.Cfg != nil && app.Cfg.UI.LocalesDir != "" {
+			fmt.Printf("  %s%s%s\n", Dim, i18n.T("locale.custom_hint", "dir", app.Cfg.UI.LocalesDir), Reset)
+		}
+		fmt.Println()
+		return
+	}
+	if app.SetLocale == nil {
+		fmt.Println(i18n.T("locale.unavailable"))
+		return
+	}
+	input := strings.Join(args, " ")
+	tag, err := b.Resolve(input)
+	if err != nil {
+		fmt.Printf("%s❌ %s%s\n", Red, i18n.T("locale.unknown", "input", strconv.Quote(safe(input))), Reset)
+		return
+	}
+	l := b.Localizer(tag)
+	i18n.SetCurrent(l)
+	path, err := app.SetLocale(ctx, l)
+	fmt.Printf("%s✅ %s%s\n", Green, i18n.T("locale.changed", "name", l.NativeName(), "tag", tag), Reset)
+	if !l.HasCatalog() {
+		fmt.Printf("%s%s%s\n", Yellow, i18n.T("locale.no_catalog", "name", l.LanguageName()), Reset)
+	}
+	if err != nil {
+		fmt.Printf("%s⚠️  %s%s\n", Yellow, i18n.T("locale.save_failed", "error", safe(err.Error())), Reset)
+	} else if path != "" {
+		fmt.Printf("%s%s%s\n", Dim, i18n.T("locale.saved", "path", safe(path)), Reset)
 	}
 }

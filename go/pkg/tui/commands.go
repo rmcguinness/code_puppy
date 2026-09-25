@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/retail-cortex/code_puppy/pkg/i18n"
 	"github.com/retail-cortex/code_puppy/pkg/session"
 	"github.com/retail-cortex/code_puppy/pkg/skills"
 )
@@ -34,7 +35,7 @@ func HandleCommand(ctx context.Context, input string, app *App) (bool, error) {
 		printHelp()
 
 	case "agents":
-		fmt.Printf("\n%s🤖 Available Agents:%s\n", Bold, Reset)
+		fmt.Printf("\n%s🤖 %s:%s\n", Bold, i18n.T("agents.title"), Reset)
 		active := eng.ActiveAgent()
 		for _, a := range app.Agents.List() {
 			marker := "  "
@@ -48,24 +49,24 @@ func HandleCommand(ctx context.Context, input string, app *App) (bool, error) {
 	case "agent":
 		if len(args) == 0 {
 			if spec, ok := app.Agents.Get(eng.ActiveAgent()); ok {
-				fmt.Printf("Current agent: %s%s%s (%s)\n", Bold, safe(spec.DisplayName), Reset, safe(spec.Name))
+				fmt.Println(i18n.T("agent.current", "name", Bold+safe(spec.DisplayName)+Reset, "id", safe(spec.Name)))
 			}
 			return true, nil
 		}
 		target := args[0]
 		if err := eng.SetActiveAgent(ctx, target); err != nil {
-			fmt.Printf("%s❌ Error switching agent: %v%s\n", Red, safe(err.Error()), Reset)
+			fmt.Printf("%s❌ %s%s\n", Red, i18n.T("agent.switch_failed", "error", safe(err.Error())), Reset)
 		} else if spec, ok := app.Agents.Get(target); ok {
-			fmt.Printf("%s Switched active agent to: %s%s%s\n", Green, Bold, safe(spec.DisplayName), Reset)
+			fmt.Printf("%s %s%s\n", Green, i18n.T("agent.switched", "name", Bold+safe(spec.DisplayName)), Reset)
 		}
 
 	case "model":
 		if len(args) == 0 {
-			fmt.Printf("Current model: %s%s%s (Provider: %s)\n", Cyan, safe(eng.ModelName()), Reset, cfg.LLM.Provider)
+			fmt.Println(i18n.T("model.current", "model", Cyan+safe(eng.ModelName())+Reset, "provider", cfg.LLM.Provider))
 			return true, nil
 		}
 		if app.NewModel == nil {
-			fmt.Printf("%sModel switching is not available%s\n", Yellow, Reset)
+			fmt.Printf("%s%s%s\n", Yellow, i18n.T("model.switch_unavailable"), Reset)
 			return true, nil
 		}
 		llm, err := app.NewModel(ctx, cfg, args[0])
@@ -73,11 +74,11 @@ func HandleCommand(ctx context.Context, input string, app *App) (bool, error) {
 			err = eng.SetModel(ctx, llm)
 		}
 		if err != nil {
-			fmt.Printf("%s❌ Could not switch model: %v%s\n", Red, safe(err.Error()), Reset)
+			fmt.Printf("%s❌ %s%s\n", Red, i18n.T("model.switch_failed", "error", safe(err.Error())), Reset)
 			return true, nil
 		}
 		cfg.CodePuppy.DefaultModel = args[0]
-		fmt.Printf("%s Model set to: %s%s%s\n", Green, Cyan, safe(args[0]), Reset)
+		fmt.Printf("%s %s%s\n", Green, i18n.T("model.set", "model", Cyan+safe(args[0])), Reset)
 
 	case "skills":
 		handleSkillsCommand(args, app.Skills)
@@ -87,17 +88,18 @@ func HandleCommand(ctx context.Context, input string, app *App) (bool, error) {
 
 	case "set":
 		if len(args) == 0 {
-			fmt.Printf("\n%s⚙️ Current Settings:%s\n", Bold, Reset)
-			fmt.Printf("  Puppy Name:   %s\n", cfg.CodePuppy.PuppyName)
-			fmt.Printf("  Owner Name:   %s\n", cfg.CodePuppy.OwnerName)
-			fmt.Printf("  Agency Level: %s\n", cfg.CodePuppy.AgencyLevel)
-			fmt.Printf("  Default Model: %s\n", cfg.CodePuppy.DefaultModel)
-			fmt.Printf("  Active Agent: %s\n\n", eng.ActiveAgent())
+			fmt.Printf("\n%s⚙️ %s:%s\n", Bold, i18n.T("settings.title"), Reset)
+			fmt.Printf("  %-14s %s\n", i18n.T("settings.puppy_name")+":", cfg.CodePuppy.PuppyName)
+			fmt.Printf("  %-14s %s\n", i18n.T("settings.owner_name")+":", cfg.CodePuppy.OwnerName)
+			fmt.Printf("  %-14s %s\n", i18n.T("settings.agency")+":", cfg.CodePuppy.AgencyLevel)
+			fmt.Printf("  %-14s %s\n", i18n.T("settings.model")+":", i18n.T("settings.model_value", "model", eng.ModelName(), "provider", cfg.LLM.Provider))
+			fmt.Printf("  %-14s %s\n", i18n.T("settings.agent")+":", eng.ActiveAgent())
+			fmt.Printf("  %-14s %s\n\n", i18n.T("settings.locale")+":", i18n.Current().Tag())
 			return true, nil
 		}
 		kv := strings.SplitN(strings.Join(args, " "), "=", 2)
 		if len(kv) != 2 {
-			fmt.Printf("%sUsage: /set key=value%s\n", Yellow, Reset)
+			fmt.Printf("%s%s%s\n", Yellow, i18n.T("set.usage"), Reset)
 			return true, nil
 		}
 		k, v := strings.ToLower(strings.TrimSpace(kv[0])), strings.TrimSpace(kv[1])
@@ -106,7 +108,7 @@ func HandleCommand(ctx context.Context, input string, app *App) (bool, error) {
 			switch strings.ToLower(v) {
 			case "low", "medium", "high", "extreme":
 			default:
-				fmt.Printf("%sAgency must be one of: low, medium, high, extreme%s\n", Yellow, Reset)
+				fmt.Printf("%s%s%s\n", Yellow, i18n.T("set.agency_invalid"), Reset)
 				return true, nil
 			}
 			cfg.CodePuppy.AgencyLevel = strings.ToLower(v)
@@ -115,21 +117,21 @@ func HandleCommand(ctx context.Context, input string, app *App) (bool, error) {
 		case "owner_name":
 			cfg.CodePuppy.OwnerName = v
 		default:
-			fmt.Printf("%sUnknown configuration setting '%s'%s\n", Yellow, safe(k), Reset)
+			fmt.Printf("%s%s%s\n", Yellow, i18n.T("set.unknown", "key", safe(k)), Reset)
 			return true, nil
 		}
 		// Instructions embed these values, so rebuild the agent tree.
 		if err := eng.Rebuild(ctx); err != nil {
-			fmt.Printf("%s❌ Failed to apply setting: %v%s\n", Red, err, Reset)
+			fmt.Printf("%s❌ %s%s\n", Red, i18n.T("set.failed", "error", err), Reset)
 			return true, nil
 		}
-		fmt.Printf("%s %s updated to: %s%s\n", Green, k, safe(v), Reset)
+		fmt.Printf("%s %s%s\n", Green, i18n.T("set.updated", "key", k, "value", safe(v)), Reset)
 
 	case "clear":
 		fmt.Print("\033[H\033[2J")
 
 	case "sandbox":
-		fmt.Printf("\n%s🛡️  Sandbox Policy:%s\n", Bold, Reset)
+		fmt.Printf("\n%s🛡️  %s:%s\n", Bold, i18n.T("sandbox.title"), Reset)
 		for _, line := range app.SandboxSummary {
 			fmt.Printf("  %s\n", safe(line))
 		}
@@ -142,7 +144,7 @@ func HandleCommand(ctx context.Context, input string, app *App) (bool, error) {
 		if handleExtraCommand(ctx, cmd, args, app) {
 			return true, nil
 		}
-		fmt.Printf("%sUnknown command '/%s'. Type /help for a list of commands.%s\n", Yellow, safe(cmd), Reset)
+		fmt.Printf("%s%s%s\n", Yellow, i18n.T("command.unknown", "command", safe(cmd)), Reset)
 	}
 
 	return true, nil
@@ -150,34 +152,38 @@ func HandleCommand(ctx context.Context, input string, app *App) (bool, error) {
 
 func printHelp() {
 	rows := [][2]string{
-		{"/agents", "List all available agent personas"},
-		{"/agent [name]", "Switch or show the active agent"},
-		{"/model [name]", "Switch or show the active LLM model"},
-		{"/skills list|search <q>", "List or search Agent Skills"},
-		{"/session list|new|load <id>", "Manage saved sessions (/resume <id> also works)"},
-		{"/undo [--force]", "Revert the file changes from the last turn"},
-		{"/checkpoints", "List turns with file changes"},
-		{"/diff [git]", "Show this session's file changes (or git diff)"},
-		{"/cost", "Token usage and estimated cost"},
-		{"/context", "Context size and compaction threshold"},
-		{"/memory [reload|add <note>]", "Show, reload, or add project instructions"},
-		{"/approvals [revoke <n>|clear]", "Remembered approval rules"},
-		{"/mcp", "Configured MCP servers"},
-		{"/sandbox", "File, command, and OS sandbox policy"},
-		{"/set [key=value]", "View or update settings (agency, puppy_name, owner_name)"},
-		{"/clear", "Clear the terminal screen"},
-		{"/exit, /quit", "Exit Code Puppy"},
+		{"/agents", "help.agents"},
+		{"/agent [name]", "help.agent"},
+		{"/model [name]", "help.model"},
+		{"/skills list|search <q>", "help.skills"},
+		{"/session list [--all]|new|load <id>", "help.session"},
+		{"/undo [--force]", "help.undo"},
+		{"/checkpoints", "help.checkpoints"},
+		{"/diff [git]", "help.diff"},
+		{"/cost", "help.cost"},
+		{"/context", "help.context"},
+		{"/compact [focus]", "help.compact"},
+		{"/memory [reload|add <note>]", "help.memory"},
+		{"/approvals [revoke <n>|clear]", "help.approvals"},
+		{"/mcp", "help.mcp"},
+		{"/sandbox", "help.sandbox"},
+		{"/attach [path|clear]", "help.attach"},
+		{"/paste", "help.paste"},
+		{"/locale [code]", "help.locale"},
+		{"/set [key=value]", "help.set"},
+		{"/clear", "help.clear"},
+		{"/exit, /quit", "help.exit"},
 	}
-	fmt.Printf("\n%s🐾 Code Puppy Commands:%s\n", Bold, Reset)
+	fmt.Printf("\n%s🐾 %s:%s\n", Bold, i18n.T("help.title"), Reset)
 	for _, r := range rows {
-		fmt.Printf("  %s%-30s%s %s\n", Bold, r[0], Reset, r[1])
+		fmt.Printf("  %s%-36s%s %s\n", Bold, r[0], Reset, i18n.T(r[1]))
 	}
-	fmt.Printf("\n  %sInput: end a line with \\ to continue it, wrap blocks in \"\"\", Tab completes commands and @paths.%s\n\n", Dim, Reset)
+	fmt.Printf("\n  %s%s%s\n\n", Dim, i18n.T("help.input"), Reset)
 }
 
 func handleSkillsCommand(args []string, prov *skills.Provider) {
 	if prov == nil {
-		fmt.Println("Skills integration is not enabled.")
+		fmt.Println(i18n.T("skills.disabled"))
 		return
 	}
 
@@ -189,7 +195,7 @@ func handleSkillsCommand(args []string, prov *skills.Provider) {
 	switch sub {
 	case "list":
 		all := prov.List()
-		fmt.Printf("\n%s📦 Discovered Skills (%d):%s\n", Bold, len(all), Reset)
+		fmt.Printf("\n%s📦 %s:%s\n", Bold, i18n.T("skills.discovered", "count", len(all)), Reset)
 		for _, s := range all {
 			tags := ""
 			if len(s.Tags) > 0 {
@@ -205,7 +211,7 @@ func handleSkillsCommand(args []string, prov *skills.Provider) {
 			query = strings.Join(args[1:], " ")
 		}
 		matched := prov.Search(query)
-		fmt.Printf("\n%s🔍 Search Results for '%s' (%d):%s\n", Bold, safe(query), len(matched), Reset)
+		fmt.Printf("\n%s🔍 %s:%s\n", Bold, i18n.T("skills.search_results", "query", safe(query), "count", len(matched)), Reset)
 		for _, s := range matched {
 			fmt.Printf("  • %s%s%s: %s\n", Bold, safe(s.Name), Reset, safe(s.Description))
 		}
@@ -216,7 +222,7 @@ func handleSkillsCommand(args []string, prov *skills.Provider) {
 func handleSessionCommand(args []string, app *App) {
 	storage := app.Storage
 	if storage == nil {
-		fmt.Println("Session storage is disabled.")
+		fmt.Println(i18n.T("session.disabled"))
 		return
 	}
 
@@ -227,14 +233,35 @@ func handleSessionCommand(args []string, app *App) {
 
 	switch sub {
 	case "list":
-		list, err := storage.List()
+		all := len(args) > 1 && (args[1] == "--all" || args[1] == "-a")
+		var list []*session.SessionRecord
+		var err error
+		if all {
+			list, err = storage.List()
+		} else {
+			list, err = storage.ListWorkspace(storage.Workspace())
+		}
 		if err != nil {
-			fmt.Printf("Error listing sessions: %v\n", err)
+			fmt.Println(i18n.T("session.list_failed", "error", err))
 			return
 		}
-		fmt.Printf("\n%s📁 Saved Sessions (%d):%s\n", Bold, len(list), Reset)
+		title := i18n.T("session.list_title_workspace", "count", len(list))
+		if all {
+			title = i18n.T("session.list_title_all", "count", len(list))
+		}
+		fmt.Printf("\n%s📁 %s:%s\n", Bold, title, Reset)
 		for _, s := range list {
-			fmt.Printf("  • %s%s%s (%s): %s [%d messages]\n", Bold, safe(s.ID), Reset, safe(s.Agent), safe(s.Title), s.MessageCount)
+			fmt.Printf("  • %s%s%s (%s): %s [%s]\n", Bold, safe(s.ID), Reset, safe(s.Agent), safe(s.Title), i18n.N("session.messages", s.MessageCount))
+			if all {
+				ws := s.Workspace
+				if ws == "" {
+					ws = i18n.T("session.workspace_unknown")
+				}
+				fmt.Printf("      %s%s%s\n", Dim, safe(ws), Reset)
+			}
+		}
+		if !all {
+			fmt.Printf("  %s%s%s\n", Dim, i18n.T("session.list_all_hint"), Reset)
 		}
 		fmt.Println()
 
@@ -242,11 +269,11 @@ func handleSessionCommand(args []string, app *App) {
 		cmdSessionLoad(args[1:], app)
 
 	case "new":
-		rec, err := storage.CreateSession(session.NewSessionID(), "New Chat", app.Engine.ActiveAgent())
+		rec, err := storage.CreateSession(session.NewSessionID(), i18n.T("session.new_title"), app.Engine.ActiveAgent())
 		if err != nil {
-			fmt.Printf("%s❌ Failed to create session: %v%s\n", Red, err, Reset)
+			fmt.Printf("%s❌ %s%s\n", Red, i18n.T("session.create_failed", "error", err), Reset)
 			return
 		}
-		fmt.Printf("%s Started new session: %s%s\n", Green, rec.ID, Reset)
+		fmt.Printf("%s %s%s\n", Green, i18n.T("session.started", "id", rec.ID), Reset)
 	}
 }

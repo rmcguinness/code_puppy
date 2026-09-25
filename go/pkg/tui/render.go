@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/retail-cortex/code_puppy/pkg/i18n"
 	"github.com/retail-cortex/code_puppy/pkg/textutil"
 )
 
@@ -33,9 +34,9 @@ o'')}____//      __ _ _ _  _ _ __ _  _
                             |_|   |__/
 `
 	fmt.Printf("%s%s%s", Cyan, banner, Reset)
-	fmt.Printf("🐶 %sCode Puppy Go%s (Google ADK Edition) %sv%s%s\n", Bold, Reset, Yellow, version, Reset)
-	fmt.Printf("🐕 Active Agent: %s%s%s | Model: %s%s%s\n", Green, agent, Reset, Blue, model, Reset)
-	fmt.Printf("💡 Type %s/help%s for commands or ask anything. Press %sCtrl+C%s to exit.\n\n", Bold, Reset, Dim, Reset)
+	fmt.Printf("🐶 %sCode Puppy Go%s (%s) %sv%s%s\n", Bold, Reset, i18n.T("banner.edition"), Yellow, version, Reset)
+	fmt.Printf("🐕 %s: %s%s%s | %s: %s%s%s\n", i18n.T("banner.agent"), Green, agent, Reset, i18n.T("banner.model"), Blue, model, Reset)
+	fmt.Printf("💡 %s\n\n", i18n.T("banner.hint", "help", Bold+"/help"+Reset, "key", Dim+"Ctrl+C"+Reset))
 }
 
 // FormatDiff highlights diff additions in green and deletions in red.
@@ -68,13 +69,13 @@ func PrintModelText(text string) { fmt.Print(safe(text)) }
 // FormatToolCall renders an invocation badge for a tool.
 func FormatToolCall(toolName string, args map[string]any) string {
 	var sb strings.Builder
-	fmt.Fprintf(&sb, "\n%s⚙️  Tool Call:%s %s%s%s", Yellow, Reset, Bold, safe(toolName), Reset)
+	fmt.Fprintf(&sb, "\n%s⚙️  %s:%s %s%s%s", Yellow, i18n.T("tool.call"), Reset, Bold, safe(toolName), Reset)
 	if path, ok := args["path"].(string); ok && path != "" {
 		fmt.Fprintf(&sb, " (%s%s%s)", Cyan, safe(textutil.Ellipsize(path, 120)), Reset)
 	} else if cmd, ok := args["command"].(string); ok && cmd != "" {
 		fmt.Fprintf(&sb, " (%s%s%s)", Dim, safe(textutil.Ellipsize(cmd, 60)), Reset)
 	} else if q, ok := args["query"].(string); ok && q != "" {
-		fmt.Fprintf(&sb, " (query: %s%s%s)", Cyan, safe(textutil.Ellipsize(q, 80)), Reset)
+		fmt.Fprintf(&sb, " (%s: %s%s%s)", i18n.T("tool.query"), Cyan, safe(textutil.Ellipsize(q, 80)), Reset)
 	}
 	sb.WriteByte('\n')
 	return sb.String()
@@ -99,7 +100,7 @@ func FormatToolResult(toolName string, success bool, summary string) string {
 		summary = strings.Join(strings.Fields(safe(summary)), " ")
 		return fmt.Sprintf("%s%s [%s]:%s %s\n", color, icon, toolName, Reset, textutil.Ellipsize(summary, 80))
 	}
-	return fmt.Sprintf("%s%s [%s] done%s\n", color, icon, toolName, Reset)
+	return fmt.Sprintf("%s%s [%s] %s%s\n", color, icon, toolName, i18n.T("tool.done"), Reset)
 }
 
 // PrintToolResult prints FormatToolResult.

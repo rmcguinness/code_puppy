@@ -8,6 +8,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/openai/openai-go/v3/option"
 	"github.com/retail-cortex/code_puppy/pkg/config"
 	"google.golang.org/adk/v2/model"
 	"google.golang.org/adk/v2/model/gemini"
@@ -18,7 +19,7 @@ import (
 // NewModel builds an ADK model.LLM based on configuration.
 func NewModel(ctx context.Context, cfg *config.Config, overrideModel string) (model.LLM, error) {
 	provider := strings.ToLower(cfg.LLM.Provider)
-	modelName := cfg.CodePuppy.DefaultModel
+	modelName := cfg.ModelName()
 	if overrideModel != "" {
 		modelName = overrideModel
 	}
@@ -50,38 +51,31 @@ func NewModel(ctx context.Context, cfg *config.Config, overrideModel string) (mo
 		if baseURL == "" && provider == "ollama" {
 			baseURL = "http://localhost:11434/v1"
 		}
-		clientCfg := &openaimodel.ClientConfig{
-			APIKey:  apiKey,
-			BaseURL: baseURL,
-		}
-		m, err := openaimodel.NewModel(ctx, modelName, clientCfg)
-		if err != nil {
-			return nil, err
-		}
-		return &toolCallParsingModel{inner: m}, nil
+		return newOpenAIModel(ctx, modelName, apiKey, baseURL)
+
+	case "anthropic":
+		return newAnthropicModel(cfg.LLM.Anthropic, modelName), nil
 
 	case "":
 		// If Gemini key is set and provider is empty, try gemini, else fallback to openai/ollama
 		if cfg.LLM.Gemini.APIKey != "" {
 			return gemini.NewModel(ctx, modelName, &genai.ClientConfig{APIKey: cfg.LLM.Gemini.APIKey, Backend: genai.BackendGeminiAPI})
 		}
+		if cfg.LLM.Anthropic.APIKey != "" {
+			if cfg.CodePuppy.DefaultModel == "" {
+				modelName = cfg.LLM.Anthropic.Model
+			}
+			return newAnthropicModel(cfg.LLM.Anthropic, modelName), nil
+		}
 		if cfg.LLM.OpenAI.APIKey != "" || cfg.LLM.OpenAI.BaseURL != "" {
 			apiKey := cfg.LLM.OpenAI.APIKey
 			if apiKey == "" {
 				apiKey = "ollama"
 			}
-			m, err := openaimodel.NewModel(ctx, modelName, &openaimodel.ClientConfig{APIKey: apiKey, BaseURL: cfg.LLM.OpenAI.BaseURL})
-			if err != nil {
-				return nil, err
-			}
-			return &toolCallParsingModel{inner: m}, nil
+			return newOpenAIModel(ctx, modelName, apiKey, cfg.LLM.OpenAI.BaseURL)
 		}
 		// Default to local Ollama if available
-		m, err := openaimodel.NewModel(ctx, modelName, &openaimodel.ClientConfig{APIKey: "ollama", BaseURL: "http://localhost:11434/v1"})
-		if err != nil {
-			return nil, err
-		}
-		return &toolCallParsingModel{inner: m}, nil
+		return newOpenAIModel(ctx, modelName, "ollama", "http://localhost:11434/v1")
 
 	default:
 		// Fallback to Gemini if configured
@@ -103,6 +97,10 @@ type MockLLM struct {
 	Requests []*model.LLMRequest
 	// Usage, if set, is attached to every response.
 	Usage *genai.GenerateContentResponseUsageMetadata
+	// ServedBy and Metadata, if set, become each response's ModelVersion and
+	// CustomMetadata.
+	ServedBy string
+	Metadata map[string]any
 }
 
 // Calls returns the number of GenerateContent calls so far.
@@ -142,8 +140,10 @@ func (m *MockLLM) GenerateContent(ctx context.Context, req *model.LLMRequest, st
 		}
 
 		resp := &model.LLMResponse{
-			Content:       content,
-			UsageMetadata: m.Usage,
+			Content:        content,
+			UsageMetadata:  m.Usage,
+			ModelVersion:   m.ServedBy,
+			CustomMetadata: m.Metadata,
 		}
 		yield(resp, nil)
 	}
@@ -151,6 +151,20 @@ func (m *MockLLM) GenerateContent(ctx context.Context, req *model.LLMRequest, st
 
 // toolCallParsingModel wraps any model.LLM to detect and convert JSON-encoded tool calls in text
 // (such as those emitted by Ollama models) into native Google ADK FunctionCalls.
+// newOpenAIModel builds an OpenAI-compatible (Responses API) model with
+// image support and text-encoded tool call parsing.
+func newOpenAIModel(ctx context.Context, name, apiKey, baseURL string, opts ...option.RequestOption) (model.LLM, error) {
+	m, err := openaimodel.NewModel(ctx, name, &openaimodel.ClientConfig{
+		APIKey:  apiKey,
+		BaseURL: baseURL,
+		Options: append([]option.RequestOption{option.WithMiddleware(openAIImageMiddleware)}, opts...),
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &toolCallParsingModel{inner: m}, nil
+}
+
 type toolCallParsingModel struct {
 	inner model.LLM
 }
@@ -163,6 +177,7 @@ func (m *toolCallParsingModel) GenerateContent(ctx context.Context, req *model.L
 	return func(yield func(*model.LLMResponse, error) bool) {
 		// Text-encoded tool calls can only be recognised in complete responses,
 		// so this wrapper never streams.
+		ctx, req := replaceImagesWithMarkers(ctx, req)
 		for resp, err := range m.inner.GenerateContent(ctx, req, false) {
 			if err != nil {
 				if !yield(nil, err) {

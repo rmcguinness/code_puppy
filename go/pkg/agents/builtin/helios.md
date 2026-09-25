@@ -7,6 +7,7 @@ tools:
   - universal_constructor
   - list_files
   - read_file
+  - view_image
   - grep
   - create_file
   - replace_in_file

@@ -11,8 +11,11 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/retail-cortex/code_puppy/pkg/config"
 	"google.golang.org/adk/v2/agent"
+	"google.golang.org/adk/v2/model"
 	"google.golang.org/adk/v2/tool"
 	"google.golang.org/adk/v2/tool/mcptoolset"
+	"google.golang.org/adk/v2/tool/toolutils"
+	"google.golang.org/genai"
 )
 
 // MCPManager owns the configured MCP servers and knows which tool names each
@@ -95,33 +98,75 @@ func NewMCPManager(cfgs []config.MCPServerConfig, env *ExecEnv, reserved []strin
 	return m, nil
 }
 
-// newMCPManagerWithToolsets is used by tests to supply in-memory servers.
-func newMCPManagerWithToolsets(servers map[string]tool.Toolset, autoApprove map[string]bool, reserved []string) *MCPManager {
+// MCPToolset pairs a server configuration with an already-connected toolset,
+// for embedding applications (and tests) that manage transports themselves.
+// Command and URL in Config are ignored.
+type MCPToolset struct {
+	Config  config.MCPServerConfig
+	Toolset tool.Toolset
+}
+
+// NewMCPManagerFromToolsets builds a manager over existing toolsets.
+func NewMCPManagerFromToolsets(servers []MCPToolset, reserved []string) *MCPManager {
 	m := &MCPManager{owner: map[string]*mcpServer{}, reserved: map[string]bool{}, Warn: func(string) {}}
 	for _, r := range reserved {
 		m.reserved[r] = true
 	}
+	for _, s := range servers {
+		srv := &mcpServer{cfg: s.Config, toolset: s.Toolset}
+		if len(s.Config.Tools) > 0 {
+			srv.allowed = map[string]bool{}
+			for _, t := range s.Config.Tools {
+				srv.allowed[t] = true
+			}
+		}
+		m.servers = append(m.servers, srv)
+	}
+	return m
+}
+
+// newMCPManagerWithToolsets is a test shorthand keyed by server name.
+func newMCPManagerWithToolsets(servers map[string]tool.Toolset, autoApprove map[string]bool, reserved []string) *MCPManager {
 	names := make([]string, 0, len(servers))
 	for n := range servers {
 		names = append(names, n)
 	}
 	sort.Strings(names)
+	var specs []MCPToolset
 	for _, n := range names {
-		m.servers = append(m.servers, &mcpServer{cfg: config.MCPServerConfig{Name: n, AutoApprove: autoApprove[n]}, toolset: servers[n]})
+		specs = append(specs, MCPToolset{Config: config.MCPServerConfig{Name: n, AutoApprove: autoApprove[n]}, Toolset: servers[n]})
 	}
-	return m
+	return NewMCPManagerFromToolsets(specs, reserved)
 }
 
-// Toolsets returns one toolset per server, filtered and recorded.
-func (m *MCPManager) Toolsets() []tool.Toolset {
+// Toolsets returns one toolset per server for the primary agent.
+func (m *MCPManager) Toolsets() []tool.Toolset { return m.ToolsetsFor("", true) }
+
+// ToolsetsFor returns the toolsets offered to agent. Servers without an
+// agents list go to the primary agent only; "*" matches every agent.
+func (m *MCPManager) ToolsetsFor(agent string, primary bool) []tool.Toolset {
 	if m == nil {
 		return nil
 	}
-	out := make([]tool.Toolset, 0, len(m.servers))
+	var out []tool.Toolset
 	for _, s := range m.servers {
-		out = append(out, &recordingToolset{m: m, srv: s})
+		if s.offeredTo(agent, primary) {
+			out = append(out, &recordingToolset{m: m, srv: s})
+		}
 	}
 	return out
+}
+
+func (s *mcpServer) offeredTo(agent string, primary bool) bool {
+	if len(s.cfg.Agents) == 0 {
+		return primary
+	}
+	for _, a := range s.cfg.Agents {
+		if a == "*" || a == agent {
+			return true
+		}
+	}
+	return false
 }
 
 // Servers returns configured server names.
@@ -182,10 +227,18 @@ func (r *recordingToolset) Tools(ctx agent.ReadonlyContext) ([]tool.Tool, error)
 	r.m.mu.Lock()
 	defer r.m.mu.Unlock()
 	for _, t := range tools {
-		name := t.Name()
-		if r.srv.allowed != nil && !r.srv.allowed[name] {
+		if r.srv.allowed != nil && !r.srv.allowed[t.Name()] {
 			continue
 		}
+		if p := r.srv.cfg.Prefix; p != "" {
+			ft, ok := t.(functionTool)
+			if !ok {
+				r.m.Warn(fmt.Sprintf("mcp server %q: tool %q can't be renamed and was skipped", r.srv.cfg.Name, t.Name()))
+				continue
+			}
+			t = &prefixedTool{inner: ft, name: p + "__" + t.Name()}
+		}
+		name := t.Name()
 		if r.m.reserved[name] {
 			r.m.Warn(fmt.Sprintf("mcp server %q: tool %q shadows a built-in tool and was skipped", r.srv.cfg.Name, name))
 			continue
@@ -198,6 +251,44 @@ func (r *recordingToolset) Tools(ctx agent.ReadonlyContext) ([]tool.Tool, error)
 		out = append(out, t)
 	}
 	return out, nil
+}
+
+// functionTool is the shape ADK's tool executor calls (Declaration + Run).
+type functionTool interface {
+	tool.Tool
+	Declaration() *genai.FunctionDeclaration
+	Run(ctx agent.Context, args any) (map[string]any, error)
+}
+
+// prefixedTool exposes an MCP tool under a namespaced name. Calls still go
+// to the server under the tool's original name.
+type prefixedTool struct {
+	inner functionTool
+	name  string
+}
+
+func (p *prefixedTool) Name() string        { return p.name }
+func (p *prefixedTool) Description() string { return p.inner.Description() }
+func (p *prefixedTool) IsLongRunning() bool { return p.inner.IsLongRunning() }
+
+// Declaration is the inner declaration under the prefixed name.
+func (p *prefixedTool) Declaration() *genai.FunctionDeclaration {
+	d := p.inner.Declaration()
+	if d == nil {
+		return nil
+	}
+	c := *d
+	c.Name = p.name
+	return &c
+}
+
+func (p *prefixedTool) Run(ctx agent.Context, args any) (map[string]any, error) {
+	return p.inner.Run(ctx, args)
+}
+
+// ProcessRequest registers the tool in the request under its prefixed name.
+func (p *prefixedTool) ProcessRequest(ctx agent.Context, req *model.LLMRequest) error {
+	return toolutils.PackTool(req, p)
 }
 
 // mcpApproval builds the approval request for an MCP tool call.

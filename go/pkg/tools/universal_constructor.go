@@ -2,6 +2,7 @@ package tools
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -12,7 +13,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/retail-cortex/code_puppy/pkg/textutil"
 	"google.golang.org/adk/v2/agent"
 	"google.golang.org/adk/v2/tool"
 	"google.golang.org/adk/v2/tool/functiontool"
@@ -21,7 +21,6 @@ import (
 const (
 	ucRunTimeout  = 60 * time.Second
 	ucOutputLimit = 100 * 1024
-	ucCodePreview = 2000
 )
 
 // ucToolNamePattern restricts forged tool names so they cannot contain path
@@ -47,7 +46,7 @@ type UCToolMetadata struct {
 
 // UniversalConstructorInput defines arguments for the universal constructor.
 type UniversalConstructorInput struct {
-	Action      string `json:"action" jsonschema:"Action to perform: create, run, or list"`
+	Action      string `json:"action" jsonschema:"Action to perform: create, run, list, or delete"`
 	ToolName    string `json:"tool_name,omitempty" jsonschema:"Name of tool to create or run (letters, digits, '-' and '_')"`
 	Language    string `json:"language,omitempty" jsonschema:"Programming language (go, python, bash)"`
 	Code        string `json:"code,omitempty" jsonschema:"Source code of tool to create"`
@@ -84,6 +83,7 @@ func NewUniversalConstructorTool(toolsDir string, hooks *Hooks, env *ExecEnv, po
 		toolsDir = filepath.Join(home, ".code_puppy", "uc_tools")
 	}
 	reg := &ucRegistry{dir: toolsDir, tools: make(map[string]*UCToolMetadata), exec: env, policy: policy}
+	reg.load()
 
 	return functiontool.New(
 		functiontool.Config{
@@ -98,8 +98,10 @@ func NewUniversalConstructorTool(toolsDir string, hooks *Hooks, env *ExecEnv, po
 				return reg.create(ctx, hooks, input), nil
 			case "run":
 				return reg.run(ctx, hooks, input), nil
+			case "delete":
+				return reg.delete(ctx, hooks, input), nil
 			default:
-				return UniversalConstructorOutput{Error: "unknown action; use 'create', 'run', or 'list'"}, nil
+				return UniversalConstructorOutput{Error: "unknown action; use 'create', 'run', 'list', or 'delete'"}, nil
 			}
 		},
 	)
@@ -137,11 +139,10 @@ func (r *ucRegistry) create(ctx context.Context, hooks *Hooks, input UniversalCo
 	}
 
 	if err := hooks.Approve(ctx, ApprovalRequest{
-		Tool: "universal_constructor",
-		Kind: ActionWrite,
-		Diff: unifiedDiff(input.ToolName+lang.ext, "", input.Code),
-		Detail: fmt.Sprintf("Forge %s tool %q in %s:\n%s", lang.canonical, input.ToolName, r.dir,
-			textutil.Ellipsize(input.Code, ucCodePreview)),
+		Tool:   "universal_constructor",
+		Kind:   ActionWrite,
+		Diff:   unifiedDiff(input.ToolName+lang.ext, "", input.Code),
+		Detail: fmt.Sprintf("Forge %s tool %q in %s (%d bytes)", lang.canonical, input.ToolName, r.dir, len(input.Code)),
 	}); err != nil {
 		return UniversalConstructorOutput{Error: err.Error()}
 	}
@@ -154,13 +155,17 @@ func (r *ucRegistry) create(ctx context.Context, hooks *Hooks, input UniversalCo
 		return UniversalConstructorOutput{Error: fmt.Sprintf("failed to save tool: %v", err)}
 	}
 
-	r.mu.Lock()
-	r.tools[input.ToolName] = &UCToolMetadata{
+	meta := &UCToolMetadata{
 		Name:        input.ToolName,
 		Language:    lang.canonical,
 		Description: input.Description,
 		Path:        filePath,
 	}
+	if err := r.saveManifest(meta); err != nil {
+		return UniversalConstructorOutput{Error: fmt.Sprintf("saved the script but not its manifest: %v", err)}
+	}
+	r.mu.Lock()
+	r.tools[input.ToolName] = meta
 	r.mu.Unlock()
 
 	return UniversalConstructorOutput{
@@ -233,4 +238,82 @@ func shellJoin(words []string) string {
 		quoted[i] = "'" + strings.ReplaceAll(w, "'", `'\''`) + "'"
 	}
 	return strings.Join(quoted, " ")
+}
+
+// ucManifest is the persisted description of a forged tool. The script path
+// is never stored: it is recomputed from the validated name and language.
+type ucManifest struct {
+	Name        string    `json:"name"`
+	Language    string    `json:"language"`
+	Description string    `json:"description,omitempty"`
+	Created     time.Time `json:"created"`
+}
+
+func (r *ucRegistry) manifestPath(name string) string {
+	return filepath.Join(r.dir, name+".json")
+}
+
+func (r *ucRegistry) saveManifest(meta *UCToolMetadata) error {
+	data, err := json.MarshalIndent(ucManifest{Name: meta.Name, Language: meta.Language, Description: meta.Description, Created: time.Now().UTC()}, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(r.manifestPath(meta.Name), data, 0o600)
+}
+
+// load restores forged tools from manifests. Manifests are untrusted input:
+// the name and language are re-validated, and the script must be a regular
+// file (not a symlink) at the path derived from them.
+func (r *ucRegistry) load() {
+	entries, err := os.ReadDir(r.dir)
+	if err != nil {
+		return
+	}
+	for _, e := range entries {
+		if e.IsDir() || !strings.HasSuffix(e.Name(), ".json") {
+			continue
+		}
+		data, err := os.ReadFile(filepath.Join(r.dir, e.Name()))
+		if err != nil {
+			continue
+		}
+		var m ucManifest
+		if json.Unmarshal(data, &m) != nil || !ucToolNamePattern.MatchString(m.Name) || m.Name+".json" != e.Name() {
+			continue
+		}
+		lang, ok := ucLanguages[m.Language]
+		if !ok || lang.canonical != m.Language {
+			continue
+		}
+		script := filepath.Join(r.dir, m.Name+lang.ext)
+		info, err := os.Lstat(script)
+		if err != nil || !info.Mode().IsRegular() {
+			continue
+		}
+		r.tools[m.Name] = &UCToolMetadata{Name: m.Name, Language: lang.canonical, Description: m.Description, Path: script}
+	}
+}
+
+func (r *ucRegistry) delete(ctx context.Context, hooks *Hooks, input UniversalConstructorInput) UniversalConstructorOutput {
+	r.mu.RLock()
+	meta, ok := r.tools[input.ToolName]
+	r.mu.RUnlock()
+	if !ok {
+		return UniversalConstructorOutput{Error: fmt.Sprintf("tool '%s' not found", input.ToolName)}
+	}
+	if err := hooks.Approve(ctx, ApprovalRequest{
+		Tool: "universal_constructor", Kind: ActionDelete,
+		Detail: fmt.Sprintf("Delete forged tool %q (%s)", meta.Name, meta.Path),
+	}); err != nil {
+		return UniversalConstructorOutput{Error: err.Error()}
+	}
+	for _, p := range []string{meta.Path, r.manifestPath(meta.Name)} {
+		if err := os.Remove(p); err != nil && !os.IsNotExist(err) {
+			return UniversalConstructorOutput{Error: fmt.Sprintf("failed to delete %s: %v", p, err)}
+		}
+	}
+	r.mu.Lock()
+	delete(r.tools, meta.Name)
+	r.mu.Unlock()
+	return UniversalConstructorOutput{Success: true, Result: fmt.Sprintf("Deleted tool '%s'", meta.Name)}
 }

@@ -13,6 +13,8 @@ import (
 	"github.com/retail-cortex/code_puppy/pkg/agents"
 	"github.com/retail-cortex/code_puppy/pkg/audit"
 	"github.com/retail-cortex/code_puppy/pkg/config"
+	"github.com/retail-cortex/code_puppy/pkg/i18n"
+	"github.com/retail-cortex/code_puppy/pkg/images"
 	"github.com/retail-cortex/code_puppy/pkg/runtime"
 	"github.com/retail-cortex/code_puppy/pkg/session"
 	"github.com/retail-cortex/code_puppy/pkg/skills"
@@ -45,6 +47,14 @@ type App struct {
 	Printer PrinterOptions
 	// ReloadMemory re-reads project instruction files and returns their paths.
 	ReloadMemory func(ctx context.Context) ([]string, error)
+	// Attachments are images to send with the next prompt (/attach, /paste,
+	// --image).
+	Attachments []*images.Image
+	// Locales are the loaded translation catalogs (nil: the built-in ones).
+	Locales *i18n.Bundle
+	// SetLocale applies a new interface language to the model's reply
+	// instructions and saves it to the config; it returns the file written.
+	SetLocale func(ctx context.Context, l *i18n.Localizer) (string, error)
 	// Interrupts delivers Ctrl+C. If nil, RunREPL subscribes to os.Interrupt
 	// itself. At the prompt an interrupt starts exit (confirming if background
 	// processes run); during a turn it cancels only that turn.
@@ -92,7 +102,7 @@ func NewEventPrinter(transcript *strings.Builder) runtime.EventHandler {
 }
 
 // Begin marks the start of a turn.
-func (p *Printer) Begin() { p.spin.Start("thinking") }
+func (p *Printer) Begin() { p.spin.Start(i18n.T("spinner.thinking")) }
 
 // End flushes buffered output at the end of a turn.
 func (p *Printer) End() {
@@ -147,7 +157,7 @@ func (p *Printer) Handle(ev *sessionsdk.Event) error {
 			p.spin.Stop()
 			summary, ok := SummarizeToolResponse(part.FunctionResponse.Response)
 			fmt.Fprint(p.out, FormatToolResult(part.FunctionResponse.Name, ok, summary))
-			p.spin.Start("working")
+			p.spin.Start(i18n.T("spinner.working"))
 		}
 	}
 	if !ev.Partial {
@@ -158,14 +168,14 @@ func (p *Printer) Handle(ev *sessionsdk.Event) error {
 
 // RunREPL runs the interactive REPL prompt loop until /exit, EOF, or ctx is cancelled.
 func RunREPL(ctx context.Context, app *App) error {
-	PrintBanner(app.Version, app.Engine.ActiveAgent(), app.Cfg.CodePuppy.DefaultModel)
+	PrintBanner(app.Version, app.Engine.ActiveAgent(), app.Engine.ModelName())
 	if len(app.SandboxSummary) > 0 {
 		fmt.Printf("🛡️  %s%s%s\n", Dim, safe(app.SandboxSummary[0]), Reset)
-		fmt.Printf("   %sType /help for commands, /sandbox for the policy. End a line with \\ or use \"\"\" for multi-line input.%s\n\n", Dim, Reset)
+		fmt.Printf("   %s%s%s\n\n", Dim, i18n.T("repl.hint"), Reset)
 	}
 
 	if app.Storage.Active() == nil {
-		if _, err := app.Storage.CreateSession("", "Interactive Session", app.Engine.ActiveAgent()); err != nil {
+		if _, err := app.Storage.CreateSession("", i18n.T("session.interactive_title"), app.Engine.ActiveAgent()); err != nil {
 			return fmt.Errorf("failed to create session: %w", err)
 		}
 	}
@@ -179,7 +189,7 @@ func RunREPL(ctx context.Context, app *App) error {
 	}
 
 	goodbye := func() error {
-		fmt.Printf("\n🐾 %sPuppy is going to take a nap. Goodbye!%s\n", Cyan, Reset)
+		fmt.Printf("\n🐾 %s%s%s\n", Cyan, i18n.T("repl.goodbye"), Reset)
 		return nil
 	}
 	exitPrompt := ExitPrompt{CanPrompt: true, AllowCancel: true}
@@ -224,7 +234,7 @@ func RunREPL(ctx context.Context, app *App) error {
 		// Re-read each turn: /session new and /session load switch sessions.
 		active := app.Storage.Active()
 		if active == nil {
-			fmt.Printf("%s❌ No active session%s\n", Red, Reset)
+			fmt.Printf("%s❌ %s%s\n", Red, i18n.T("session.none_active"), Reset)
 			continue
 		}
 		runTurn(ctx, app, active.ID, line, interrupts)
@@ -235,13 +245,19 @@ func RunREPL(ctx context.Context, app *App) error {
 func runTurn(ctx context.Context, app *App, sessionID, line string, interrupts <-chan os.Signal) {
 	if app.Tools != nil {
 		if reason := app.Tools.ScriptHooks().PromptSubmit(ctx, sessionID, line); reason != "" {
-			fmt.Printf("%s⛔ Prompt blocked by hook: %s%s\n", Red, safe(reason), Reset)
+			fmt.Printf("%s⛔ %s%s\n", Red, i18n.T("repl.prompt_blocked", "reason", safe(reason)), Reset)
 			return
 		}
+	}
+	attached, ok := takeAttachments(app, line)
+	if !ok {
+		return
+	}
+	if app.Tools != nil {
 		app.Tools.Checkpoints().Begin(textutil.Ellipsize(strings.Join(strings.Fields(line), " "), 60))
 		app.Tools.Hooks().Audit().Log(audit.Entry{Kind: audit.KindPrompt, Session: sessionID, Detail: line})
 	}
-	warnOnErr(app.Storage.AddMessage("user", line))
+	warnOnErr(app.Storage.AddMessage("user", line+AttachmentNote(attached)))
 
 	fmt.Println()
 	var modelOutput strings.Builder
@@ -256,15 +272,19 @@ func runTurn(ctx context.Context, app *App, sessionID, line string, interrupts <
 		defer ih.SetInterruptHandler(nil)
 	}
 	printer.Begin()
-	streamErr := app.Engine.Execute(turnCtx, sessionID, line, printer.Handle)
+	var execOpts []runtime.ExecOption
+	for _, img := range attached {
+		execOpts = append(execOpts, runtime.WithAttachments(images.Part(img)))
+	}
+	streamErr := app.Engine.Execute(turnCtx, sessionID, line, printer.Handle, execOpts...)
 	printer.End()
 	turnInterrupted := turnCtx.Err() != nil
 	stopTurn()
 	switch {
 	case streamErr != nil && turnInterrupted:
-		fmt.Printf("\n%s⏹  Interrupted%s\n", Yellow, Reset)
+		fmt.Printf("\n%s⏹  %s%s\n", Yellow, i18n.T("repl.interrupted"), Reset)
 	case streamErr != nil:
-		fmt.Printf("\n%s❌ Error: %v%s\n", Red, safe(streamErr.Error()), Reset)
+		fmt.Printf("\n%s❌ %s%s\n", Red, i18n.T("repl.error", "error", safe(streamErr.Error())), Reset)
 	default:
 		fmt.Println()
 	}
@@ -283,9 +303,9 @@ func UsageLine(before, after runtime.Usage) string {
 	if after.Calls == before.Calls {
 		return ""
 	}
-	s := fmt.Sprintf("↳ %s in · %s out · context %s", humanTokens(after.Input-before.Input), humanTokens(after.Output-before.Output), humanTokens(after.LastPrompt))
+	s := "↳ " + i18n.T("usage.line", "input", humanTokens(after.Input-before.Input), "output", humanTokens(after.Output-before.Output), "context", humanTokens(after.LastPrompt))
 	if after.Priced {
-		s += fmt.Sprintf(" · $%.4f (session $%.4f)", after.CostUSD-before.CostUSD, after.CostUSD)
+		s += " · " + i18n.T("usage.cost", "cost", fmt.Sprintf("$%.4f", after.CostUSD-before.CostUSD), "total", fmt.Sprintf("$%.4f", after.CostUSD))
 	}
 	return s
 }
@@ -325,6 +345,6 @@ func cancelOnSignal(parent context.Context, sigs <-chan os.Signal) (context.Cont
 
 func warnOnErr(err error) {
 	if err != nil {
-		fmt.Printf("%s⚠️  Failed to save session: %v%s\n", Yellow, err, Reset)
+		fmt.Printf("%s⚠️  %s%s\n", Yellow, i18n.T("session.save_failed", "error", err), Reset)
 	}
 }

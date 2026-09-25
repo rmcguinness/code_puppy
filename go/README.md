@@ -9,10 +9,12 @@
 ```bash
 make build                      # -> ./bin/code-puppy
 ./bin/code-puppy config init    # writes a commented ~/.code_puppy/.env.toml (mode 600)
-export GEMINI_API_KEY=...       # or set it in the config file
+export GEMINI_API_KEY=...       # or ANTHROPIC_API_KEY / OPENAI_API_KEY; or set it in the config file
 ./bin/code-puppy doctor         # checks config, credentials, sandbox, MCP, hooks
 ./bin/code-puppy                # interactive session
 ```
+
+**Providers.** Set `llm.provider` to `gemini` (default), `anthropic`, `openai`, or `ollama`; the model comes from `llm.<provider>.model` unless `code_puppy.default_model` or `--model` overrides it. Anthropic defaults to `claude-opus-5` with streaming, prompt caching of the system prompt, thinking preserved across tool calls, and server-side refusal fallback (`llm.anthropic.fallbacks = "default"`, or `"off"`). Without `api_key` it uses `ANTHROPIC_API_KEY`, `ANTHROPIC_AUTH_TOKEN`, or an `ant auth login` profile.
 
 Configuration is read only from `~/.code_puppy/.env.toml`, `$MODENV_PREFIX`, or `--config DIR`. A `.env.toml` inside a project is **ignored** unless you pass `--config .` — a cloned repository must not be able to redirect your API key or turn off approvals.
 
@@ -26,11 +28,12 @@ code-puppy -d ~/src/app                      # ...in another workspace
 code-puppy "fix the failing test"            # run once and exit
 git diff | code-puppy review this change     # piped input becomes part of the prompt
 code-puppy -p - < task.md                    # prompt from stdin
-code-puppy --continue "now add docs"         # continue the most recent session
-code-puppy --resume session-2026…            # resume a specific session (or -r for latest)
+code-puppy --continue "now add docs"         # continue this directory's most recent session
+code-puppy --resume session-2026…            # resume a specific session (or -r for this directory's latest)
 code-puppy --output-format json "…"          # one JSON result object on stdout
 code-puppy --output-format stream-json "…"   # one JSON object per event, then the result
 code-puppy --max-turns 20 "…"                # cap model calls in a one-shot run
+code-puppy --image ui.png "why is this misaligned?"   # attach images (repeatable; @ui.png in the prompt works too)
 ```
 
 | Exit code | Meaning |
@@ -58,13 +61,29 @@ Subcommands: `doctor [--online]`, `config init|show|path`, `completion bash|zsh|
 | `/undo [--force]` | Revert the file changes made in the last turn |
 | `/checkpoints` | Turns that changed files |
 | `/diff [git]` | Everything tools changed this session (or `git diff`) |
-| `/cost`, `/context` | Token usage, estimated cost, context size vs. compaction threshold |
+| `/cost`, `/context` | Token usage (including cache reads and writes), estimated cost, context size vs. compaction threshold |
+| `/compact [focus]` | Summarize everything before the latest turn now; the focus says what to keep |
 | `/memory [reload\|add <note>]` | Project instructions (`AGENTS.md`, `PUPPY.md`) |
 | `/approvals [revoke <n>\|clear]` | Remembered approval rules |
-| `/session list\|new\|load <id>`, `/resume <id>` | Saved sessions |
+| `/session list [--all]\|new\|load <id>`, `/resume <id>` | Saved sessions — scoped to the current workspace; `--all` shows every directory |
 | `/agents`, `/agent <name>`, `/model <name>` | Personas and models |
 | `/sandbox`, `/mcp` | Active policy; MCP servers |
+| `/attach [path\|clear]`, `/paste` | Queue an image (or the clipboard's) for your next message |
+| `/locale [code]` | Interface language (see below) |
 | `/skills`, `/set`, `/clear`, `/exit` | |
+
+### Images
+
+Mention an image in a prompt (`what's wrong with @screenshots/login.png?`, or `@"with spaces.png"`), queue one with `/attach <path>`, or paste a screenshot with `/paste`; the model also has a `view_image` tool for images it finds in the workspace. PNG, JPEG, GIF and WebP work with Gemini, Anthropic and OpenAI-compatible models (for Ollama, pick a vision model).
+
+- Files are read through the workspace sandbox: blocked paths and anything outside the workspace are refused.
+- Pictures larger than `[images] max_dimension` (1568 px) or 3.75 MB are scaled down and re-encoded; headers are checked before decoding, so oversized "decompression bomb" files are rejected.
+- Session files store a short reference, not the image; the picture lives once in `~/.code_puppy/images` (owner-only, named by SHA-256) and is deleted after `retain_days` (30) unused. The audit log records the path and hash.
+- `/paste` uses `osascript` on macOS, `wl-paste` or `xclip` on Linux, and PowerShell on Windows.
+
+### Language
+
+The interface speaks English (`en-US`, the default), Spanish (`es`) and Canadian French (`fr-CA`). `/locale` shows the current language; `/locale es` switches and saves `[ui] locale = "es"` to `~/.code_puppy/.env.toml`. Codes are forgiving: `es-ES`, `es_MX`, `ES-sp`, `spanish` and `español` all work. Any other language (`/locale ja`) changes the language the model replies in, while menus stay in English until someone adds a catalog. Code, paths, commands and tool output are never translated, and `doctor`, `--help` and CLI errors stay in English so they can be shared in bug reports. To add or correct a language, drop a JSON catalog in `~/.code_puppy/locales/` — see [docs/TRANSLATING.md](docs/TRANSLATING.md).
 
 ---
 
@@ -105,8 +124,10 @@ env     = { GITHUB_PERSONAL_ACCESS_TOKEN = "..." }
 # tools = ["create_issue"]          # optional allow-list
 # auto_approve = false
 # sandbox = true                    # stdio servers run in the OS sandbox
+# prefix = "gh"                     # expose tools as gh__create_issue
+# agents = ["code-puppy", "qa-kitten"]  # who gets these tools; default: primary agent; "*" = all
 ```
-MCP tools need approval per server/tool unless `auto_approve = true`, and can't shadow built-in tools.
+MCP tools need approval per server/tool unless `auto_approve = true`, and can't shadow built-in tools (use `prefix` to avoid clashes).
 
 **Hooks** receive a JSON event on stdin (`event`, `tool`, `args`, `result`, `prompt`, `session_id`, `workspace`). Exit `2` blocks (stderr is the reason) or print `{"decision":"block","reason":"…"}`; other failures warn unless `fail_closed = true`. Hooks are your own code from trusted config, so they run outside the OS sandbox with your full environment (they are still killed with Code Puppy).
 ```toml
@@ -119,7 +140,11 @@ command = "jq -c . >> ~/tool-log.jsonl"
 command = "grep -qv 'password' || { echo 'no secrets' >&2; exit 2; }"
 ```
 
-**Context & cost** — history is compacted once a prompt reaches `context.token_threshold` tokens. Estimated prices for the default models are built in; override or add them under `[pricing."model-name"]`.
+**Web search** — set `web.search_provider` to `brave`, `tavily` (key in `web.search_api_key` or `BRAVE_API_KEY` / `TAVILY_API_KEY`) or `searxng` (`web.search_url`). Each search needs approval (rememberable per provider) because the query leaves your machine; results from `web.deny_domains` are dropped.
+
+**Forged tools** — tools built by `universal_constructor` are saved with a manifest in `~/.code_puppy/uc_tools` and reloaded on start; `action: "delete"` removes one.
+
+**Context & cost** — history is compacted automatically once a prompt reaches `context.token_threshold` tokens, or on demand with `/compact`. Estimated list prices for the default models are built in; override or add them under `[pricing."model-name"]` (`input_per_mtok`, `output_per_mtok`, `cached_input_per_mtok`, `cache_write_per_mtok`). Costs use the model that actually answered, so refusal fallbacks are priced correctly; `doctor` warns when the active model has no price.
 
 ---
 
@@ -135,7 +160,7 @@ command = "grep -qv 'password' || { echo 'no secrets' >&2; exit 2; }"
 | `agent-creator` | Creates custom agent specs and skills |
 | `model-judge` | Model comparisons |
 
-Tools: `read_file`, `list_files`, `grep`, `create_file`, `replace_in_file`/`edit`, `delete_snippet`, `apply_patch` (unified diff or `*** Begin Patch`, atomic, multi-file), `delete_file`, `run_shell_command`, `manage_background_process`, `web_fetch`, `ask_user_question`, skills, `list_agents`/`invoke_agent`, `universal_constructor`, and MCP tools.
+Tools: `read_file`, `list_files`, `grep`, `create_file`, `replace_in_file`/`edit`, `delete_snippet`, `apply_patch` (unified diff or `*** Begin Patch`, atomic, multi-file), `delete_file`, `run_shell_command`, `manage_background_process`, `web_fetch`, `web_search` (when configured), `ask_user_question`, skills, `list_agents`/`invoke_agent`, `universal_constructor`, and MCP tools.
 
 ---
 
