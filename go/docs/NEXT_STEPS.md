@@ -1,0 +1,62 @@
+# Code Puppy Go — Where to Pick Up
+
+Written 2026-09-24, at commit `7e211697` on `main`. Read this first when resuming. [ROADMAP.md](ROADMAP.md) has the detail behind each finished item, and [MANUAL_VERIFICATION.md](MANUAL_VERIFICATION.md) has the checks that need a person.
+
+## State
+
+Roadmap items 1–16 are done and committed; each has its own commit:
+
+| Commit | Change |
+|---|---|
+| `383ab847` | Per-file locks for parallel edits; refuse to write a file that changed during approval |
+| `ae509e39` | Earlier work: Anthropic provider, workspace-scoped sessions, `/compact`, MCP prefixes/agents, saved forged tools, web search, pricing, i18n, images |
+| `bd0a0bb5` | `slog` diagnostic log + opt-in OpenTelemetry (content stripped), chained turn traces |
+| `04bd68dc` | `post_tool` hooks on an ordered background worker |
+| `b13ba38d` | Retries for every provider, stall timeouts, MCP stdio restart + circuit breaker, parallel tool cap |
+| `72acd1c4` | Steering a running turn (type or Ctrl+T) |
+| `4d1f31c5` | `!cmd`, enforced `/plan` and `--plan`, `/tools`, `/show` |
+| `042263dd` | Ordered model fallback across providers; Ollama base-URL fix |
+| `7a06b7a6` | Default Gemini model → `gemini-3.8-flash` |
+| `7e211697` | Per-agent models (`[agent_models]`, `/pin_model`, `/unpin`) |
+
+`go vet ./...` and `go test -race ./...` pass. The one uncommitted file is `docs/.MANUAL_VERIFICATION.md.swp`, an editor swap file; don't commit it.
+
+## Dated reminders
+
+- **2027-01-01: update the `gemini-3.8-flash` price** in `pkg/config/features.go` (`DefaultPricing`) from the introductory $0.75 / $3.75 / $0.075 to $1.50 / $7.50 / $0.15 per 1M tokens. Until then, `/cost` shows about half the real cost for this model. Check https://ai.google.dev/gemini-api/docs/pricing first.
+
+## Open work, in suggested order
+
+1. **Manual verification (needs a person).** Nothing in `MANUAL_VERIFICATION.md` has been run yet. It covers real providers (💲 = paid calls), terminal behavior, the macOS and Linux sandboxes, MCP, steering, fallback and pinning. Record results in the file; any failure becomes the next task.
+2. **Per-model settings** (Python's `/model_settings`). Generation settings are global today (`code_puppy.temperature`, `max_tokens`, built in `Engine.generateConfig`). Suggested shape: a `[model_settings."<model>"]` table (temperature, max_tokens, top_p, seed), applied in `newLLMAgent` using the agent's model name (`modelForLocked(spec.Name).Name()`), plus a `/model_settings [<model> key=value]` command saved with `config.editConfigFile`. Note: current Anthropic models reject `temperature`, and the adapter already drops unsupported sampling parameters.
+3. **Named session snapshots** (Python's `/dump_context` and `/load_context`). Suggested: `/session save <name>` copies the event log (`<id>.events.jsonl`) and metadata under a new ID labelled with the name; `/session load <name>` resolves names as well as IDs.
+4. **Anthropic server-side web search** (ROADMAP item 6, option a). It needs server-tool result blocks carried through the adapter in `pkg/runtime/anthropic.go`. The Brave/Tavily/SearXNG search already works with every provider.
+5. **Release tasks** from MANUAL_VERIFICATION section 18: pin the GitHub Actions in `.github/workflows/go-*.yml` to commit SHAs, cut `v0.1.0`, and verify the cosign signature and SBOMs.
+6. **Optional:** the `python/` tree still names `gemini-2.5-flash` in four files. They were left alone because only the Go implementation was in scope.
+
+## Decisions already made (don't redo without a reason)
+
+- **No shared event bus.** Considered for steering and dropped: audit, hooks and traces are fed from engine callbacks, and steering didn't need a bus.
+- **Steering rides on tool results** (`message_from_user`), because ADK model callbacks can't add session events (`Session()` returns nil there).
+- **Each turn is its own trace root.** Turns are linked to the previous turn and tagged `gen_ai.conversation.id`; the previous turn's traceparent is kept in session metadata as `last_turn`. A session is never one long trace.
+- **Content is never exported by default.** The ADK puts tool arguments and results on every `execute_tool` span, so `pkg/observability` filters them before export. OTel providers are built here, not with `adk/telemetry.New`, which adds its own unfiltered exporter.
+- **Not ported from Python:** `/cd` (the workspace is the sandbox root; use `-d`), `/truncate` (use `/compact`) and `/tutorial`. Reasons are in ROADMAP item 14.
+- **`fallback_models` switches only before any output** and never on cancellation. Breakers are asked just before each attempt (regression tests guard this).
+- **Telemetry and OTel need one provider per process:** the ADK binds its tracer to the first global provider.
+
+## Conventions used in this work
+
+- One commit per feature, with a message explaining why. The earlier uncommitted work was split off by rebuilding it in a scratch copy and staging with `git --work-tree`.
+- New user-facing strings go into all three catalogs in `pkg/i18n/locales/` (`en-US`, `es`, `fr-CA`); `i18n_lint_test.go` enforces this.
+- A bug fix comes with a test that was confirmed to fail without the fix (temporarily revert, run, restore).
+- Each feature updates README, COMPARISON, a ROADMAP item, and a MANUAL_VERIFICATION section.
+- Real-terminal behavior was checked with `script` against a local fake provider. Answer the line editor's cursor-position query (`ESC[6n`) with `ESC[1;1R` in the scripted input, or it waits forever.
+
+## Useful commands
+
+```bash
+make build                      # ./bin/code-puppy
+go vet ./... && go test -race ./...
+./bin/code-puppy doctor --online
+CODE_PUPPY_TELEMETRY=1 CODE_PUPPY_LOG_LEVEL=debug ./bin/code-puppy   # traces to http://localhost:4318; logs in ~/.code_puppy/logs
+```

@@ -2,6 +2,8 @@
 
 Status key: ✅ done · 🔜 next · 📋 planned · 🔍 needs investigation first
 
+Items 10–16 were added after the first plan and appear before item 9, which stays last because it needs a person. Open work and resume notes: [NEXT_STEPS.md](NEXT_STEPS.md).
+
 Each item lists the problem, the approach, where the change lands, how it is tested, and a rough size (S ≤ half a day, M ≈ 1–2 days, L ≈ 3+ days).
 
 ---
@@ -15,7 +17,7 @@ Each item lists the problem, the approach, where the change lands, how it is tes
 - Streaming (partial text events, then one aggregated final event, matching the Gemini path) and non-streaming.
 - Usage mapped to genai usage metadata (cache reads counted as cached input) so `/cost` works.
 - Sampling parameters only sent to models that accept them (current models reject `temperature` with a 400).
-- Refusals surfaced as a safety finish reason; server-side refusal fallback enabled by default on `claude-opus-5` / `claude-fable-5-1` (`llm.anthropic.fallback_model`, empty to disable).
+- Refusals surfaced as a safety finish reason; server-side refusal fallback enabled by default on `claude-opus-5` / `claude-fable-5-1` (`llm.anthropic.fallbacks`: `default`, a model ID, or `off`).
 - Credentials: `api_key`, else the SDK's own resolution (`ANTHROPIC_API_KEY`, `ANTHROPIC_AUTH_TOKEN`, `ant auth login` profile). Optional `base_url` for gateways.
 
 Also fixed: the model name now resolves per provider (`code_puppy.default_model` if set, else `llm.<provider>.model`), which also affected OpenAI/Ollama.

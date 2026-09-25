@@ -21,11 +21,11 @@ Go measurements were taken on 2026-09-24 on Apple Silicon (arm64), macOS, warm c
 
 | | Python (`python/code_puppy`) | Go (`go/cmd`, `go/pkg`) |
 |---|---|---|
-| Source files (non-test) | 271 | 65 |
-| Non-blank source lines | 71,962 | 11,956 |
-| Test files | 380 | 38 |
-| Non-blank test lines | — | 6,840 |
-| Direct dependencies | 150+ (`uv.lock`) | 17 (`go.mod`) |
+| Source files (non-test) | 271 | 91 |
+| Non-blank source lines | 71,962 | 16,443 |
+| Test files | 380 | 64 |
+| Non-blank test lines | — | 10,696 |
+| Direct dependencies | 150+ (`uv.lock`) | 27 (`go.mod`; OpenTelemetry added 8) |
 
 ---
 

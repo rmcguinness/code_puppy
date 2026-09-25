@@ -215,3 +215,5 @@ sha256sum --ignore-missing -c checksums.txt
 ```
 
 CI (`go-ci.yml`) runs vet and race tests on macOS and Linux; the Linux job installs bubblewrap and fails if the sandbox enforcement test is skipped.
+
+**Project docs:** [docs/ROADMAP.md](docs/ROADMAP.md) (what was built and why), [docs/MANUAL_VERIFICATION.md](docs/MANUAL_VERIFICATION.md) (checks that need a person), [docs/NEXT_STEPS.md](docs/NEXT_STEPS.md) (where to pick up), [docs/TRANSLATING.md](docs/TRANSLATING.md).

@@ -1,6 +1,6 @@
 # Manual Verification Checklist
 
-Everything here needs a person, a real terminal, real credentials, or GitHub. The automated suite (280 tests on macOS and Linux) covers the logic behind each item; this list checks the parts it can't. Each item has an **expected** result — if you see something else, note it next to the item.
+Everything here needs a person, a real terminal, real credentials, or GitHub. The automated suite (350 tests on macOS and Linux) covers the logic behind each item; this list checks the parts it can't. Each item has an **expected** result — if you see something else, note it next to the item.
 
 Setup for most items: `make build`, then use `./bin/code-puppy` (or put `bin/` on your `PATH`). Use a scratch Git repository as the workspace so edits are safe.
 
