@@ -43,6 +43,11 @@ func NewReplaceInFileTool(ws *Workspace, hooks *Hooks) (tool.Tool, error) {
 			if err != nil {
 				return fail(err.Error())
 			}
+			unlock, err := ws.lockPaths(ctx, rel)
+			if err != nil {
+				return fail(err.Error())
+			}
+			defer unlock()
 			data, err := ws.ReadFile(rel)
 			if err != nil {
 				return fail(fmt.Sprintf("failed to read file: %v", err))
@@ -64,6 +69,9 @@ func NewReplaceInFileTool(ws *Workspace, hooks *Hooks) (tool.Tool, error) {
 			newContent := strings.Replace(content, input.TargetContent, input.ReplacementContent, count)
 			if err := hooks.Approve(ctx, writeApproval(ws, "replace_in_file",
 				fmt.Sprintf("Edit %s (%d replacement(s))", rel, count), unifiedDiff(rel, content, newContent))); err != nil {
+				return fail(err.Error())
+			}
+			if err := ws.unchanged(rel, true, data); err != nil {
 				return fail(err.Error())
 			}
 
@@ -107,6 +115,11 @@ func NewDeleteSnippetTool(ws *Workspace, hooks *Hooks) (tool.Tool, error) {
 			if err != nil {
 				return fail(err.Error())
 			}
+			unlock, err := ws.lockPaths(ctx, rel)
+			if err != nil {
+				return fail(err.Error())
+			}
+			defer unlock()
 			data, err := ws.ReadFile(rel)
 			if err != nil {
 				return fail(fmt.Sprintf("failed to read file: %v", err))
@@ -119,6 +132,9 @@ func NewDeleteSnippetTool(ws *Workspace, hooks *Hooks) (tool.Tool, error) {
 			newContent := strings.Replace(content, input.Snippet, "", 1)
 			if err := hooks.Approve(ctx, writeApproval(ws, "delete_snippet",
 				fmt.Sprintf("Remove a %d byte snippet from %s", len(input.Snippet), rel), unifiedDiff(rel, content, newContent))); err != nil {
+				return fail(err.Error())
+			}
+			if err := ws.unchanged(rel, true, data); err != nil {
 				return fail(err.Error())
 			}
 			if err := ws.WriteFileAtomic(rel, []byte(newContent)); err != nil {

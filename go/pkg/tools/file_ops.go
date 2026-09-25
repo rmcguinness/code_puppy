@@ -258,8 +258,16 @@ func NewCreateFileTool(ws *Workspace, hooks *Hooks) (tool.Tool, error) {
 				return fail("path must name a file")
 			}
 
+			unlock, err := ws.lockPaths(ctx, rel)
+			if err != nil {
+				return fail(err.Error())
+			}
+			defer unlock()
+
 			verb, before := "Create", ""
-			if existing, err := ws.ReadFile(rel); err == nil {
+			existing, readErr := ws.ReadFile(rel)
+			existed := readErr == nil
+			if existed {
 				if !input.Overwrite {
 					return fail(fmt.Sprintf("file '%s' already exists; set overwrite=true to overwrite", input.Path))
 				}
@@ -268,6 +276,11 @@ func NewCreateFileTool(ws *Workspace, hooks *Hooks) (tool.Tool, error) {
 			if err := hooks.Approve(ctx, writeApproval(ws, "create_file", fmt.Sprintf("%s %s (%d bytes)", verb, rel, len(input.Content)),
 				unifiedDiff(rel, before, input.Content))); err != nil {
 				return fail(err.Error())
+			}
+			if input.Overwrite {
+				if err := ws.unchanged(rel, existed, existing); err != nil {
+					return fail(err.Error())
+				}
 			}
 
 			data := []byte(input.Content)
@@ -312,8 +325,14 @@ func NewDeleteFileTool(ws *Workspace, hooks *Hooks) (tool.Tool, error) {
 			if err != nil {
 				return DeleteFileOutput{Path: input.Path, Error: err.Error()}, nil
 			}
+			unlock, err := ws.lockPaths(ctx, rel)
+			if err != nil {
+				return DeleteFileOutput{Path: input.Path, Error: err.Error()}, nil
+			}
+			defer unlock()
 			var diff string
-			if data, err := ws.ReadFile(rel); err == nil {
+			data, readErr := ws.ReadFile(rel)
+			if readErr == nil {
 				diff = unifiedDiff(rel, string(data), "")
 			}
 			if err := hooks.Approve(ctx, ApprovalRequest{
@@ -325,6 +344,11 @@ func NewDeleteFileTool(ws *Workspace, hooks *Hooks) (tool.Tool, error) {
 				KeyLabel: "file deletions in " + ws.Dir(),
 			}); err != nil {
 				return DeleteFileOutput{Path: input.Path, Error: err.Error()}, nil
+			}
+			if readErr == nil {
+				if err := ws.unchanged(rel, true, data); err != nil {
+					return DeleteFileOutput{Path: input.Path, Error: err.Error()}, nil
+				}
 			}
 			if err := ws.RemoveFile(rel); err != nil {
 				return DeleteFileOutput{Path: input.Path, Error: fmt.Sprintf("failed to delete: %v", err)}, nil

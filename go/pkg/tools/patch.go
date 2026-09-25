@@ -451,6 +451,20 @@ func NewApplyPatchTool(ws *Workspace, hooks *Hooks) (tool.Tool, error) {
 			if err != nil {
 				return fail(fmt.Errorf("invalid patch: %w", err))
 			}
+			var paths []string
+			for _, p := range patches {
+				for _, name := range []string{p.path, p.moveTo} {
+					if rel, err := ws.WritablePath(name); name != "" && err == nil {
+						paths = append(paths, rel)
+					}
+				}
+			}
+			unlock, err := ws.lockPaths(ctx, paths...)
+			if err != nil {
+				return fail(err)
+			}
+			defer unlock()
+
 			plan, err := planPatch(ws, patches)
 			if err != nil {
 				return fail(err)
@@ -469,6 +483,11 @@ func NewApplyPatchTool(ws *Workspace, hooks *Hooks) (tool.Tool, error) {
 			if err := hooks.Approve(ctx, writeApproval(ws, "apply_patch",
 				fmt.Sprintf("Apply patch to %d file(s): %s", len(plan), strings.Join(names, ", ")), diff.String())); err != nil {
 				return fail(err)
+			}
+			for _, c := range plan {
+				if err := ws.unchanged(c.path, c.existed, []byte(c.before)); err != nil {
+					return fail(err)
+				}
 			}
 
 			if err := executePlan(ws, plan); err != nil {

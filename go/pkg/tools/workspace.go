@@ -43,6 +43,7 @@ type Workspace struct {
 	blocked     *PathMatcher
 	maxFileSize int64
 	checkpoints *Checkpoints // nil when disabled
+	locks       pathLocks
 }
 
 type fsRoot struct {
