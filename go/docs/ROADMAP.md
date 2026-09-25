@@ -192,6 +192,20 @@ Also fixed: the model name now resolves per provider (`code_puppy.default_model`
 
 ---
 
+## 16. Per-agent models — ✅ done (S/M)
+
+**Approach.**
+- **Precedence:** a pin in `[agent_models]` (agent → `"provider/model"`) wins over the agent's own `default_model` (frontmatter, which was parsed but never used before), and both win over the configured model. Each model is built by `NewModel`, so pinned agents keep the fallback chain. A pin naming an unknown agent, or a model that can't be set up, is warned about and ignored.
+- **Engine:** `WithAgentModel` / `PinModel` / `Unpin` keep a model per agent, and `newLLMAgent` uses it for the root agent, sub-agents and `invoke_agent`. `ModelName` reports the active agent's model. Usage without a reported model version is priced by the calling agent's model (`ctx.AgentName()`), not the active agent's, so a pinned sub-agent's tokens are billed right.
+- **Provider-aware references everywhere:** `NewModel` parses `"provider/model"` for `/model`, `default_model` and pins, so `/model anthropic/claude-sonnet-5` switches provider.
+- **REPL:** `/pin_model [<agent> <model>]` (no arguments lists pins), `/unpin <agent>` (returns to the agent's `default_model` if it has one), a 📌 marker in `/agents`, a note from `/model` when the active agent is pinned, and completion for both commands. Pins are saved with `config.SaveAgentModel`, which shares the new comment-preserving `editConfigFile` with `SaveUILocale` and can remove keys. `doctor` checks each pin.
+
+**Not done.** Python's `/model_settings` (temperature, seed and so on per model); generation settings stay global (`code_puppy.temperature`, `max_tokens`).
+
+**Tests.** Pin, replace, unpin and quoted names in the config file, with comments and mode kept. Engine: a pinned sub-agent runs on its model, the main model isn't called for it, and its cost uses its own price (the old pricing path would have used Gemini's). Pin and unpin the active agent. Provider-qualified `/model` and `default_model`. REPL: pin, list, `/agents` marker, unpin saved, unknown agent, usage, the `/model` note, unpin back to `default_model`. Startup precedence and unknown-agent warning.
+
+---
+
 ## 9. Real-environment verification — 🔜 needs a person; see [MANUAL_VERIFICATION.md](MANUAL_VERIFICATION.md)
 
 Not automatable here; run once and record results in this file:

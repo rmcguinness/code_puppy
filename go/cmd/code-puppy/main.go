@@ -250,6 +250,7 @@ func runRoot(cmd *cobra.Command, o *rootOptions, args []string) (err error) {
 		Attachments:    attached,
 		Locales:        e.locales,
 		SetLocale:      e.setLocale,
+		SaveAgentModel: e.saveAgentModel,
 		Printer: tui.PrinterOptions{
 			Out: os.Stdout, Markdown: pretty && cfg.UI.Markdown, Theme: cfg.UI.Theme,
 			Width: terminalWidth(), Spinner: pretty && cfg.UI.Spinner,
@@ -307,7 +308,7 @@ func newCompleter(e *env) *tui.Completer {
 	c := tui.NewCompleter(e.tools.Workspace().Dir())
 	for _, cmd := range []string{"help", "agents", "model", "skills", "session", "set", "clear", "sandbox", "exit", "quit",
 		"undo", "checkpoints", "diff", "cost", "context", "compact", "memory", "approvals", "mcp", "resume", "locale", "attach", "paste",
-		"tools", "plan", "show"} {
+		"tools", "plan", "show", "pin_model", "unpin"} {
 		c.Command(cmd)
 	}
 	c.Command("skills", "list", "search")
@@ -323,6 +324,23 @@ func newCompleter(e *env) *tui.Completer {
 		var names []string
 		for _, a := range e.agents.List() {
 			names = append(names, a.Name)
+		}
+		return names
+	})
+	agentNames := func() []string {
+		var names []string
+		for _, a := range e.agents.List() {
+			names = append(names, a.Name)
+		}
+		return names
+	}
+	c.Dynamic("pin_model", agentNames)
+	c.Dynamic("unpin", func() []string {
+		var names []string
+		for _, n := range agentNames() {
+			if _, pinned := e.engine.AgentModel(n); pinned {
+				names = append(names, n)
+			}
 		}
 		return names
 	})

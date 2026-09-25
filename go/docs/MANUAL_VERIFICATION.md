@@ -249,3 +249,12 @@ Set `fallback_models = ["anthropic/claude-sonnet-5"]` with a working Anthropic k
 - [ ] `fallback_models = ["anthropic/no-such-model"]` with a broken primary. **Expected:** a clear "every model failed" error listing both reasons.
 - [ ] `provider = "ollama"` with no `base_url` and Ollama running locally. **Expected:** it works (it used to call api.openai.com).
 
+## 27. Per-agent models 💲
+
+- [ ] `/pin_model qa-kitten anthropic/claude-haiku-4-5`. **Expected:** "qa-kitten now runs on claude-haiku-4-5", "Saved in …/.env.toml"; the file has `[agent_models]` with that line and your comments intact.
+- [ ] `/agents`. **Expected:** 📌 claude-haiku-4-5 next to qa-kitten.
+- [ ] Ask the main agent to have qa-kitten review a file. **Expected:** it works; `/cost` includes Haiku-priced tokens. With telemetry on, qa-kitten's `generate_content` span names claude-haiku-4-5.
+- [ ] Restart. **Expected:** the pin is still there (`/pin_model` lists it). `code-puppy doctor` shows `pin qa-kitten`.
+- [ ] `/model anthropic/claude-sonnet-5`. **Expected:** the main agent switches provider.
+- [ ] `/unpin qa-kitten`. **Expected:** it runs on the configured model again; the line is gone from the config file.
+

@@ -16,6 +16,7 @@ import (
 	"github.com/retail-cortex/code_puppy/pkg/session"
 	"github.com/retail-cortex/code_puppy/pkg/textutil"
 	"github.com/retail-cortex/code_puppy/pkg/tools"
+	"google.golang.org/adk/v2/model"
 )
 
 // handleExtraCommand processes commands added for checkpoints, cost,
@@ -50,6 +51,10 @@ func handleExtraCommand(ctx context.Context, cmd string, args []string, app *App
 		cmdLocale(ctx, args, app)
 	case "tools":
 		cmdTools(app)
+	case "pin_model", "pin":
+		cmdPinModel(ctx, args, app)
+	case "unpin":
+		cmdUnpin(ctx, args, app)
 	default:
 		return false
 	}
@@ -339,6 +344,91 @@ func cmdMCP(app *App) {
 		fmt.Printf("  • %s%s%s: %s %s(%s)%s\n", Bold, safe(s.Name), Reset, safe(target), Dim, approval, Reset)
 	}
 	fmt.Println()
+}
+
+// cmdPinModel pins an agent to a model ("provider/model") for this session
+// and in the config file; without arguments it lists the pins.
+func cmdPinModel(ctx context.Context, args []string, app *App) {
+	if len(args) == 0 {
+		listed := false
+		for _, a := range app.Agents.List() {
+			if m, pinned := app.Engine.AgentModel(a.Name); pinned {
+				if !listed {
+					fmt.Printf("\n%s📌 %s%s\n", Bold, i18n.T("pin.title"), Reset)
+					listed = true
+				}
+				fmt.Printf("  %s%-18s%s %s\n", Bold, safe(a.Name), Reset, safe(m))
+			}
+		}
+		if !listed {
+			fmt.Println(i18n.T("pin.none"))
+		}
+		fmt.Println()
+		return
+	}
+	if len(args) != 2 {
+		fmt.Printf("%s%s%s\n", Yellow, i18n.T("pin.usage"), Reset)
+		return
+	}
+	agent, ref := args[0], args[1]
+	if _, ok := app.Agents.Get(agent); !ok {
+		fmt.Printf("%s❌ %s%s\n", Red, i18n.T("pin.unknown_agent", "agent", safe(agent)), Reset)
+		return
+	}
+	if app.NewModel == nil {
+		fmt.Printf("%s%s%s\n", Yellow, i18n.T("model.switch_unavailable"), Reset)
+		return
+	}
+	llm, err := app.NewModel(ctx, app.Cfg, ref)
+	if err == nil {
+		err = app.Engine.PinModel(ctx, agent, llm)
+	}
+	if err != nil {
+		fmt.Printf("%s❌ %s%s\n", Red, i18n.T("pin.failed", "error", safe(err.Error())), Reset)
+		return
+	}
+	fmt.Printf("%s📌 %s%s\n", Green, i18n.T("pin.done", "agent", safe(agent), "model", safe(llm.Name())), Reset)
+	saveAgentModel(app, agent, ref)
+}
+
+// cmdUnpin returns an agent to the configured model, or to its own
+// default_model if it declares one.
+func cmdUnpin(ctx context.Context, args []string, app *App) {
+	if len(args) != 1 {
+		fmt.Printf("%s%s%s\n", Yellow, i18n.T("pin.unpin_usage"), Reset)
+		return
+	}
+	agent := args[0]
+	spec, ok := app.Agents.Get(agent)
+	if !ok {
+		fmt.Printf("%s❌ %s%s\n", Red, i18n.T("pin.unknown_agent", "agent", safe(agent)), Reset)
+		return
+	}
+	err := app.Engine.Unpin(ctx, agent)
+	if err == nil && spec.DefaultModel != "" && app.NewModel != nil {
+		var llm model.LLM
+		if llm, err = app.NewModel(ctx, app.Cfg, spec.DefaultModel); err == nil {
+			err = app.Engine.PinModel(ctx, agent, llm)
+		}
+	}
+	if err != nil {
+		fmt.Printf("%s❌ %s%s\n", Red, i18n.T("pin.failed", "error", safe(err.Error())), Reset)
+		return
+	}
+	m, _ := app.Engine.AgentModel(agent)
+	fmt.Printf("%s✅ %s%s\n", Green, i18n.T("pin.unpinned", "agent", safe(agent), "model", safe(m)), Reset)
+	saveAgentModel(app, agent, "")
+}
+
+func saveAgentModel(app *App, agent, ref string) {
+	if app.SaveAgentModel == nil {
+		return
+	}
+	if path, err := app.SaveAgentModel(agent, ref); err != nil {
+		fmt.Printf("%s⚠️  %s%s\n", Yellow, i18n.T("pin.save_failed", "error", safe(err.Error())), Reset)
+	} else {
+		fmt.Printf("%s%s%s\n", Dim, i18n.T("pin.saved", "path", safe(path)), Reset)
+	}
 }
 
 // cmdTools lists what the active agent can use: its built-in tools and the

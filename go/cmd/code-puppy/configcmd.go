@@ -191,6 +191,9 @@ enabled = true
 # search_api_key  = "..."                 # or BRAVE_API_KEY / TAVILY_API_KEY
 # search_url      = "http://localhost:8888" # searxng instance
 
+# [agent_models]                                   # run agents on their own model (/pin_model, /unpin)
+# qa-kitten = "anthropic/claude-haiku-4-5"
+
 # [pricing."gemini-3.8-flash"]
 # input_per_mtok = 0.75
 # output_per_mtok = 3.75

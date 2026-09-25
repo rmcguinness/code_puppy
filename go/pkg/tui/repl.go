@@ -54,6 +54,9 @@ type App struct {
 	Attachments []*images.Image
 	// Locales are the loaded translation catalogs (nil: the built-in ones).
 	Locales *i18n.Bundle
+	// SaveAgentModel records a model pin (ref "" removes it) in the config
+	// file and returns the file written; nil means pins aren't saved.
+	SaveAgentModel func(agent, ref string) (string, error)
 	// SetLocale applies a new interface language to the model's reply
 	// instructions and saves it to the config; it returns the file written.
 	SetLocale func(ctx context.Context, l *i18n.Localizer) (string, error)

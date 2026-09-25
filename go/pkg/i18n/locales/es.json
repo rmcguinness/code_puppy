@@ -199,6 +199,20 @@
     "tools.mcp_prefix": "(con el nombre {prefix}…)",
     "tools.legend": "● también disponible en /plan. Las herramientas que cambian archivos o ejecutan comandos piden aprobación salvo que estén autoaprobadas.",
     "model.fallback": "{primary} no está disponible; por ahora responde el modelo de respaldo {model}.",
-    "model.fallback_recovered": "{model} vuelve a responder."
+    "model.fallback_recovered": "{model} vuelve a responder.",
+    "help.pin": "Ejecutar un agente con su propio modelo (\"proveedor/modelo\"); sin argumentos, lista las asignaciones",
+    "help.unpin": "Devolver un agente al modelo configurado",
+    "pin.title": "Modelos asignados",
+    "pin.none": "Ningún agente tiene un modelo asignado. Usa /pin_model <agente> <proveedor/modelo>.",
+    "pin.usage": "Uso: /pin_model <agente> <modelo>   p. ej. /pin_model qa-kitten anthropic/claude-haiku-4-5",
+    "pin.unpin_usage": "Uso: /unpin <agente>",
+    "pin.unknown_agent": "Agente desconocido: {agent}",
+    "pin.failed": "No se pudo cambiar el modelo del agente: {error}",
+    "pin.done": "{agent} ahora usa {model}.",
+    "pin.unpinned": "{agent} ahora usa {model}.",
+    "pin.saved": "Guardado en {path}",
+    "pin.save_failed": "Cambiado para esta sesión, pero no guardado: {error}",
+    "pin.active_pinned": "Nota: {agent} tiene asignado {model}; usa /unpin {agent} para que use el nuevo modelo.",
+    "pin.load_failed": "{agent} tiene asignado {model}, que no se pudo preparar ({error}); usa el modelo configurado."
   }
 }

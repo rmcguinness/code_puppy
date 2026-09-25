@@ -146,13 +146,21 @@ func buildEnv(ctx context.Context, cfg *config.Config, o envOptions) (*env, erro
 	}
 
 	e.memory = memory.Load(e.tools.Workspace().Dir(), cfg.Memory)
-	e.engine, err = runtime.NewEngine(ctx, cfg, e.agents, e.skills, e.tools, llm,
-		runtime.WithSessionService(events),
+	opts := []runtime.Option{runtime.WithSessionService(events)}
+	for agent, ref := range agentModelRefs(cfg, e.agents, o.warn) {
+		m, err := runtime.NewModel(ctx, cfg, ref)
+		if err != nil {
+			o.warn(i18n.T("pin.load_failed", "agent", agent, "model", ref, "error", modelErrorSummary(err, cfg)))
+			continue
+		}
+		opts = append(opts, runtime.WithAgentModel(agent, m))
+	}
+	e.engine, err = runtime.NewEngine(ctx, cfg, e.agents, e.skills, e.tools, llm, append(opts,
 		runtime.WithInstructions(e.instructions()),
 		runtime.WithStreaming(o.streaming),
 		runtime.WithTurnStore(e.storage),
 		runtime.WithNotice(o.warn),
-	)
+	)...)
 	if err != nil {
 		e.Close()
 		return nil, fmt.Errorf("failed to initialize engine: %w", err)
@@ -194,6 +202,39 @@ func startObservability(ctx context.Context, cfg *config.Config, warn func(strin
 		}
 		logFile.Close()
 	}
+}
+
+// agentModelRefs returns the model each agent should run on when it isn't
+// the configured one: a pin in [agent_models] wins over the agent's own
+// default_model. Pins naming unknown agents are reported and skipped.
+func agentModelRefs(cfg *config.Config, reg *agents.Registry, warn func(string)) map[string]string {
+	refs := map[string]string{}
+	for _, spec := range reg.List() {
+		if spec.DefaultModel != "" {
+			refs[spec.Name] = spec.DefaultModel
+		}
+	}
+	for agent, ref := range cfg.AgentModels {
+		if _, ok := reg.Get(agent); !ok {
+			warn(i18n.T("pin.unknown_agent", "agent", agent))
+			continue
+		}
+		refs[agent] = ref
+	}
+	return refs
+}
+
+// saveAgentModel records (or with ref "" removes) a pin in the config file.
+func (e *env) saveAgentModel(agent, ref string) (string, error) {
+	if ref == "" {
+		delete(e.cfg.AgentModels, agent)
+	} else {
+		if e.cfg.AgentModels == nil {
+			e.cfg.AgentModels = map[string]string{}
+		}
+		e.cfg.AgentModels[agent] = ref
+	}
+	return config.SaveAgentModel(config.ConfigDir(""), agent, ref)
 }
 
 // reloadMemory re-reads instruction files into the engine.

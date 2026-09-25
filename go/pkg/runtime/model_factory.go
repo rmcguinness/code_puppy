@@ -18,13 +18,18 @@ import (
 )
 
 // NewModel builds an ADK model.LLM based on configuration.
+//
+// The model (overrideModel, else the configured one) may name its provider,
+// "anthropic/claude-sonnet-5", to use a provider other than llm.provider.
+// Bare fallback names use llm.provider.
 func NewModel(ctx context.Context, cfg *config.Config, overrideModel string) (model.LLM, error) {
-	provider := strings.ToLower(cfg.LLM.Provider)
-	modelName := cfg.ModelName()
+	ref := cfg.ModelName()
 	if overrideModel != "" {
-		modelName = overrideModel
+		ref = overrideModel
 	}
-	primary, err := newProviderModel(ctx, cfg, provider, modelName)
+	provider := strings.ToLower(cfg.LLM.Provider)
+	p, modelName := ParseModelRef(ref, provider)
+	primary, err := newProviderModel(ctx, cfg, p, modelName)
 	if err != nil || len(cfg.LLM.FallbackModels) == 0 {
 		return primary, err
 	}

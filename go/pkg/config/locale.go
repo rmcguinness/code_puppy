@@ -18,6 +18,20 @@ var tableRE = regexp.MustCompile(`^\s*\[\[?\s*([^\]]+?)\s*\]\]?\s*(#.*)?$`)
 // that line so comments, ordering and encrypted values are kept. The file is
 // created (mode 600) if missing. It returns the file written.
 func SaveUILocale(dir, locale string) (string, error) {
+	return editConfigFile(dir,
+		func(doc string) string { return setTOMLKey(doc, "ui", "locale", strconv.Quote(locale)) },
+		func(check map[string]any) error {
+			if ui, _ := check["ui"].(map[string]any); ui == nil || ui["locale"] != locale {
+				return errors.New("could not set [ui] locale")
+			}
+			return nil
+		})
+}
+
+// editConfigFile applies edit to dir/.env.toml (created mode 600 if
+// missing), refuses results that aren't valid TOML or fail verify, and
+// replaces the file atomically with its permissions kept.
+func editConfigFile(dir string, edit func(doc string) string, verify func(map[string]any) error) (string, error) {
 	if dir == "" {
 		return "", errors.New("no configuration directory")
 	}
@@ -31,13 +45,13 @@ func SaveUILocale(dir, locale string) (string, error) {
 		perm = info.Mode().Perm()
 	}
 
-	updated := setTOMLKey(string(orig), "ui", "locale", strconv.Quote(locale))
+	updated := edit(string(orig))
 	var check map[string]any
 	if _, err := toml.Decode(updated, &check); err != nil {
 		return "", fmt.Errorf("%s would not be valid TOML after the change: %w", path, err)
 	}
-	if ui, _ := check["ui"].(map[string]any); ui == nil || ui["locale"] != locale {
-		return "", fmt.Errorf("could not set [ui] locale in %s", path)
+	if err := verify(check); err != nil {
+		return "", fmt.Errorf("%s: %w", path, err)
 	}
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return "", err

@@ -199,6 +199,20 @@
     "tools.mcp_prefix": "(named {prefix}…)",
     "tools.legend": "● also available in /plan. Tools that change files or run commands ask for approval unless auto-approved.",
     "model.fallback": "{primary} is unavailable; answering with fallback {model} for now.",
-    "model.fallback_recovered": "{model} is answering again."
+    "model.fallback_recovered": "{model} is answering again.",
+    "help.pin": "Run an agent on its own model (\"provider/model\"); no arguments lists pins",
+    "help.unpin": "Return an agent to the configured model",
+    "pin.title": "Pinned models",
+    "pin.none": "No agent is pinned to a model. Use /pin_model <agent> <provider/model>.",
+    "pin.usage": "Usage: /pin_model <agent> <model>   e.g. /pin_model qa-kitten anthropic/claude-haiku-4-5",
+    "pin.unpin_usage": "Usage: /unpin <agent>",
+    "pin.unknown_agent": "Unknown agent: {agent}",
+    "pin.failed": "Could not change the agent's model: {error}",
+    "pin.done": "{agent} now runs on {model}.",
+    "pin.unpinned": "{agent} now runs on {model}.",
+    "pin.saved": "Saved in {path}",
+    "pin.save_failed": "Changed for this session, but not saved: {error}",
+    "pin.active_pinned": "Note: {agent} is pinned to {model}; /unpin {agent} to use the new model with it.",
+    "pin.load_failed": "{agent} is pinned to {model}, which could not be set up ({error}); it uses the configured model."
   }
 }

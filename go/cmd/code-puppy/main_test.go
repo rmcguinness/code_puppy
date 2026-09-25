@@ -386,3 +386,24 @@ func TestOneShotPlanRefusesEdits(t *testing.T) {
 		t.Fatalf("create_file result %+v", res.ToolCalls[0])
 	}
 }
+
+func TestAgentModelRefsPrecedence(t *testing.T) {
+	dir := t.TempDir()
+	for name, model := range map[string]string{"alpha": "anthropic/claude-haiku-4-5", "beta": "openai/gpt-5"} {
+		os.WriteFile(filepath.Join(dir, name+".md"), []byte("---\nname: "+name+"\ndisplay_name: "+name+"\ndescription: d\ntools: []\ndefault_model: "+model+"\n---\nprompt\n"), 0o600)
+	}
+	reg, _ := agents.NewRegistry()
+	if err := reg.LoadExternalAgents(dir); err != nil {
+		t.Fatal(err)
+	}
+	cfg := config.DefaultConfig()
+	cfg.AgentModels = map[string]string{"alpha": "gemini-3.8-flash", "ghost": "x"}
+	var warnings []string
+	refs := agentModelRefs(cfg, reg, func(s string) { warnings = append(warnings, s) })
+	if refs["alpha"] != "gemini-3.8-flash" || refs["beta"] != "openai/gpt-5" || len(refs) != 2 {
+		t.Fatalf("refs = %v (config pin must win over default_model)", refs)
+	}
+	if len(warnings) != 1 || !strings.Contains(warnings[0], "ghost") {
+		t.Fatalf("warnings = %v", warnings)
+	}
+}

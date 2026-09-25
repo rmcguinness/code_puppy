@@ -90,6 +90,17 @@ func WithTurnStore(s TurnStore) Option { return func(e *Engine) { e.turns = s } 
 // about, such as a fallback model taking over (default: nowhere).
 func WithNotice(f func(string)) Option { return func(e *Engine) { e.notice = f } }
 
+// WithAgentModel runs agent on llm instead of the engine's model (a pin
+// from [agent_models] or the agent's own default_model).
+func WithAgentModel(agent string, llm model.LLM) Option {
+	return func(e *Engine) {
+		if e.agentModels == nil {
+			e.agentModels = map[string]model.LLM{}
+		}
+		e.agentModels[agent] = withImages(llm, e.toolReg.Images())
+	}
+}
+
 // WithInstructions appends text (e.g. project memory) to every agent's instructions.
 func WithInstructions(text string) Option { return func(e *Engine) { e.extraInstructions = text } }
 
@@ -119,6 +130,7 @@ type Engine struct {
 
 	mu                sync.RWMutex
 	llm               model.LLM
+	agentModels       map[string]model.LLM // pinned agents; others use llm
 	runner            *runner.Runner
 	active            string
 	extraInstructions string
@@ -225,11 +237,69 @@ func (e *Engine) ActiveAgent() string {
 	return e.active
 }
 
-// ModelName returns the name of the active LLM.
+// ModelName returns the name of the model the active agent runs on.
 func (e *Engine) ModelName() string {
 	e.mu.RLock()
 	defer e.mu.RUnlock()
-	return e.llm.Name()
+	return e.modelForLocked(e.active).Name()
+}
+
+// AgentModel returns the model agent runs on and whether it is pinned.
+func (e *Engine) AgentModel(agent string) (name string, pinned bool) {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+	_, pinned = e.agentModels[agent]
+	return e.modelForLocked(agent).Name(), pinned
+}
+
+// PinModel runs agent on llm from now on (other agents are unaffected).
+func (e *Engine) PinModel(ctx context.Context, agent string, llm model.LLM) error {
+	if llm == nil {
+		return errors.New("model must not be nil")
+	}
+	if _, ok := e.agentReg.Get(agent); !ok {
+		return fmt.Errorf("agent '%s' not found", agent)
+	}
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	prev, had := e.agentModels[agent]
+	if e.agentModels == nil {
+		e.agentModels = map[string]model.LLM{}
+	}
+	e.agentModels[agent] = withImages(llm, e.toolReg.Images())
+	if err := e.rebuildLocked(); err != nil {
+		if had {
+			e.agentModels[agent] = prev
+		} else {
+			delete(e.agentModels, agent)
+		}
+		return err
+	}
+	return nil
+}
+
+// Unpin returns agent to the engine's model.
+func (e *Engine) Unpin(ctx context.Context, agent string) error {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	prev, had := e.agentModels[agent]
+	if !had {
+		return nil
+	}
+	delete(e.agentModels, agent)
+	if err := e.rebuildLocked(); err != nil {
+		e.agentModels[agent] = prev
+		return err
+	}
+	return nil
+}
+
+// modelForLocked returns the model agent runs on; e.mu must be held.
+func (e *Engine) modelForLocked(agent string) model.LLM {
+	if m, ok := e.agentModels[agent]; ok {
+		return m
+	}
+	return e.llm
 }
 
 // Usage returns the token usage and estimated cost recorded for a session.
@@ -251,7 +321,7 @@ func (e *Engine) newLLMAgent(spec *agents.AgentSpec, instruction string, subAgen
 		Name:                  spec.Name,
 		Description:           spec.Description,
 		Instruction:           instruction + e.imageInstruction(spec) + e.extraInstructions,
-		Model:                 e.llm,
+		Model:                 e.modelForLocked(spec.Name),
 		Tools:                 e.toolReg.GetToolsForAgent(spec.Tools),
 		Toolsets:              toolsets,
 		SubAgents:             subAgents,
@@ -290,7 +360,8 @@ func (e *Engine) afterModel(ctx agent.Context, resp *model.LLMResponse, respErr 
 	// it can differ from the configured one.
 	served := resp.ModelVersion
 	if served == "" || !e.usage.HasPrice(served) {
-		served = e.ModelName()
+		name, _ := e.AgentModel(ctx.AgentName()) // the calling agent's model (it may be pinned)
+		served = name
 	}
 	var writes int64
 	switch v := resp.CustomMetadata[CacheWriteTokensKey].(type) {

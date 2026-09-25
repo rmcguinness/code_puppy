@@ -45,7 +45,11 @@ func HandleCommand(ctx context.Context, input string, app *App) (bool, error) {
 			if a.Name == active {
 				marker = "👉"
 			}
-			fmt.Printf("%s %s%s%s (%s): %s\n", marker, Bold, safe(a.DisplayName), Reset, safe(a.Name), safe(a.Description))
+			pin := ""
+			if m, pinned := eng.AgentModel(a.Name); pinned {
+				pin = fmt.Sprintf(" %s[📌 %s]%s", Cyan, safe(m), Reset)
+			}
+			fmt.Printf("%s %s%s%s (%s)%s: %s\n", marker, Bold, safe(a.DisplayName), Reset, safe(a.Name), pin, safe(a.Description))
 		}
 		fmt.Println()
 
@@ -82,6 +86,9 @@ func HandleCommand(ctx context.Context, input string, app *App) (bool, error) {
 		}
 		cfg.CodePuppy.DefaultModel = args[0]
 		fmt.Printf("%s %s%s\n", Green, i18n.T("model.set", "model", Cyan+safe(args[0])), Reset)
+		if m, pinned := eng.AgentModel(eng.ActiveAgent()); pinned {
+			fmt.Printf("%s%s%s\n", Dim, i18n.T("pin.active_pinned", "agent", eng.ActiveAgent(), "model", safe(m)), Reset)
+		}
 
 	case "skills":
 		handleSkillsCommand(args, app.Skills)
@@ -158,6 +165,8 @@ func printHelp() {
 		{"/agents", "help.agents"},
 		{"/agent [name]", "help.agent"},
 		{"/model [name]", "help.model"},
+		{"/pin_model [<agent> <model>]", "help.pin"},
+		{"/unpin <agent>", "help.unpin"},
 		{"/skills list|search <q>", "help.skills"},
 		{"/session list [--all]|new|load <id>", "help.session"},
 		{"/undo [--force]", "help.undo"},

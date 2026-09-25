@@ -68,7 +68,8 @@ Subcommands: `doctor [--online]`, `config init|show|path`, `completion bash|zsh|
 | `/memory [reload\|add <note>]` | Project instructions (`AGENTS.md`, `PUPPY.md`) |
 | `/approvals [revoke <n>\|clear]` | Remembered approval rules |
 | `/session list [--all]\|new\|load <id>`, `/resume <id>` | Saved sessions — scoped to the current workspace; `--all` shows every directory |
-| `/agents`, `/agent <name>`, `/model <name>` | Personas and models |
+| `/agents`, `/agent <name>`, `/model <name>` | Personas and models; `/model anthropic/claude-sonnet-5` can switch provider |
+| `/pin_model [<agent> <model>]`, `/unpin <agent>` | Run an agent on its own model (e.g. qa-kitten on a cheaper one); saved under `[agent_models]` |
 | `/sandbox`, `/mcp`, `/tools` | Active policy; MCP servers; the tools the active agent can use |
 | `/plan <goal>` | Ask for a plan without changing anything. The agent can read, search and delegate, but edits, commands and MCP tools are refused for that turn |
 | `!<command>` | Run a command yourself, like in your own terminal: in the workspace, with your environment, outside the agent's sandbox and approvals. The agent doesn't see it; the audit log records it |
@@ -167,6 +168,13 @@ provider = "gemini"
 fallback_models = ["anthropic/claude-sonnet-5", "gemini-3.5-flash-lite"]   # "provider/model", or a model of the same provider
 ```
 Each provider uses its own credentials section. A failed model is skipped for 15 s, doubling up to 5 minutes, then tried again. You see one notice when a fallback takes over and one when the primary is back. Cost is priced by the model that answered. A model that fails after it started answering isn't replaced, because part of the answer is already on screen. For OpenRouter names that contain a slash, write the provider first: `openai/anthropic/claude-sonnet-5`. `code-puppy doctor --online` checks each model separately.
+
+**Per-agent models** — agents can run on different models, e.g. a cheap one for reviews:
+```toml
+[agent_models]
+qa-kitten = "anthropic/claude-haiku-4-5"
+```
+A pin wins over an agent's own `default_model` (agent frontmatter), and both win over the configured model. Pinned agents keep the `fallback_models` chain, and each agent's tokens are priced by its own model. `/pin_model` and `/unpin` change pins in the session and in the config file, keeping its comments. `doctor` checks each pinned model.
 
 **Context & cost** — history is compacted automatically once a prompt reaches `context.token_threshold` tokens, or on demand with `/compact`. Estimated list prices for the default models are built in; override or add them under `[pricing."model-name"]` (`input_per_mtok`, `output_per_mtok`, `cached_input_per_mtok`, `cache_write_per_mtok`). Costs use the model that actually answered, so refusal fallbacks are priced correctly; `doctor` warns when the active model has no price.
 

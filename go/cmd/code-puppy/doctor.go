@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
@@ -158,6 +159,16 @@ func runDoctor(ctx context.Context, g *globalFlags, online bool) []check {
 	for i, ref := range cfg.LLM.FallbackModels {
 		m, err := runtime.NewModelRef(ctx, cfg, ref)
 		checkModel(fmt.Sprintf("fallback %d", i+1), m, err, ref)
+	}
+	pins := make([]string, 0, len(cfg.AgentModels))
+	for agent := range cfg.AgentModels {
+		pins = append(pins, agent)
+	}
+	sort.Strings(pins)
+	for _, agent := range pins {
+		ref := cfg.AgentModels[agent]
+		m, err := runtime.NewModelRef(ctx, cfg, ref)
+		checkModel("pin "+agent, m, err, ref)
 	}
 
 	for _, bin := range []string{"bash", "git"} {

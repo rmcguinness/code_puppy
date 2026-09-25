@@ -40,6 +40,10 @@ type Config struct {
 	Log         LogConfig             `toml:"log"`
 	Telemetry   TelemetryConfig       `toml:"telemetry"`
 	Pricing     map[string]ModelPrice `toml:"pricing"`
+	// AgentModels pins agents to models: agent name -> "provider/model".
+	// A pin wins over the agent's own default_model; unpinned agents use
+	// the configured model. Set with /pin_model, removed with /unpin.
+	AgentModels map[string]string `toml:"agent_models"`
 }
 
 // CodePuppyConfig controls the core persona and behavior settings.

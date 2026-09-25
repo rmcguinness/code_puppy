@@ -199,6 +199,20 @@
     "tools.mcp_prefix": "(nommés {prefix}…)",
     "tools.legend": "● aussi disponible dans /plan. Les outils qui modifient des fichiers ou exécutent des commandes demandent une approbation, sauf s’ils sont approuvés d’office.",
     "model.fallback": "{primary} n’est pas disponible; le modèle de relève {model} répond pour l’instant.",
-    "model.fallback_recovered": "{model} répond de nouveau."
+    "model.fallback_recovered": "{model} répond de nouveau.",
+    "help.pin": "Faire tourner un agent sur son propre modèle (« fournisseur/modèle »); sans argument, liste les assignations",
+    "help.unpin": "Remettre un agent sur le modèle configuré",
+    "pin.title": "Modèles assignés",
+    "pin.none": "Aucun agent n’a de modèle assigné. Utilisez /pin_model <agent> <fournisseur/modèle>.",
+    "pin.usage": "Utilisation : /pin_model <agent> <modèle>   p. ex. /pin_model qa-kitten anthropic/claude-haiku-4-5",
+    "pin.unpin_usage": "Utilisation : /unpin <agent>",
+    "pin.unknown_agent": "Agent inconnu : {agent}",
+    "pin.failed": "Impossible de changer le modèle de l’agent : {error}",
+    "pin.done": "{agent} utilise maintenant {model}.",
+    "pin.unpinned": "{agent} utilise maintenant {model}.",
+    "pin.saved": "Enregistré dans {path}",
+    "pin.save_failed": "Changé pour cette session, mais non enregistré : {error}",
+    "pin.active_pinned": "Note : {agent} est assigné à {model}; faites /unpin {agent} pour qu’il utilise le nouveau modèle.",
+    "pin.load_failed": "{agent} est assigné à {model}, qui n’a pas pu être préparé ({error}); il utilise le modèle configuré."
   }
 }
