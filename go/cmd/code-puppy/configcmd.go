@@ -111,6 +111,8 @@ trust_workspace = false     # load ./agents and ./skills from the project
 
 [llm]
 provider = "gemini"         # gemini | anthropic | openai | ollama
+max_retries = 3             # retries for rate limits, overload, 5xx and dropped connections
+stall_timeout_seconds = 600 # fail a model request that sends nothing for this long
 
 [llm.gemini]
 # api_key = "..."           # or export GEMINI_API_KEY
@@ -130,6 +132,7 @@ fallbacks = "default"       # server-side refusal fallback: "default", a model I
 [tools]
 shell_timeout_seconds = 120
 auto_approve_commands = false
+max_parallel = 8   # tool calls from one model response that run at once
 
 [sandbox]
 # allowed_paths   = ["~/src/shared"]     # extra read-write roots for file tools

@@ -129,7 +129,7 @@ env     = { GITHUB_PERSONAL_ACCESS_TOKEN = "..." }
 # prefix = "gh"                     # expose tools as gh__create_issue
 # agents = ["code-puppy", "qa-kitten"]  # who gets these tools; default: primary agent; "*" = all
 ```
-MCP tools need approval per server/tool unless `auto_approve = true`, and can't shadow built-in tools (use `prefix` to avoid clashes).
+MCP tools need approval per server/tool unless `auto_approve = true`, and can't shadow built-in tools (use `prefix` to avoid clashes). Listing a server's tools times out after 30 s and each call after `timeout_seconds` (default 300). A stdio server that crashes is restarted on the next call. After two failures in a row a server is paused (its tools disappear from the model's list) for 15 s, doubling up to 5 minutes, and then one call is let through as a trial. You get one warning when a server fails, one when it's paused, and one when it recovers.
 
 **Hooks** receive a JSON event on stdin (`event`, `tool`, `args`, `result`, `prompt`, `session_id`, `workspace`). Exit `2` blocks (stderr is the reason) or print `{"decision":"block","reason":"…"}`; other failures warn unless `fail_closed = true`. `pre_tool` and `prompt_submit` hooks run before the action and can block it. `post_tool` hooks only observe, so they run in the background, in order, and never delay the agent. Each event is captured when the tool finishes. If hooks fall far behind (256 queued), further events are dropped with a warning, and at exit queued hooks get up to 5 s to finish. Hooks are your own code from trusted config, so they run outside the OS sandbox with your full environment (they are still killed with Code Puppy).
 ```toml
@@ -153,6 +153,8 @@ enabled = true
 endpoint = "http://localhost:4318"
 # capture_content = false
 ```
+
+**Resilience** — model requests are retried on rate limits, overload, 5xx responses and dropped connections, with exponential backoff that honours `Retry-After` (`llm.max_retries`, default 3; `0` disables retries). A request that sends nothing for `llm.stall_timeout_seconds` (default 600: no response headers, or a stream that goes quiet) fails instead of hanging the turn. Keep this above your longest non-streamed generation. A stream that fails partway through is not retried, because the text has already been shown. At most `tools.max_parallel` (default 8) tool calls from one model response run at once. Each sub-agent's calls are capped separately.
 
 **Context & cost** — history is compacted automatically once a prompt reaches `context.token_threshold` tokens, or on demand with `/compact`. Estimated list prices for the default models are built in; override or add them under `[pricing."model-name"]` (`input_per_mtok`, `output_per_mtok`, `cached_input_per_mtok`, `cache_write_per_mtok`). Costs use the model that actually answered, so refusal fallbacks are priced correctly; `doctor` warns when the active model has no price.
 

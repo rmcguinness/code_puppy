@@ -118,6 +118,8 @@ prefix = "fs"
 - [ ] Ask the agent to list files using the fs server. **Expected:** approval prompt naming `fs__…` and the server; the call works inside the sandbox.
 - [ ] Add `agents = ["qa-kitten"]`. **Expected:** the main agent no longer sees `fs__` tools; `invoke_agent` → qa-kitten can use them.
 - [ ] `kill -9` the CLI. **Expected:** no leftover `npx` / server processes.
+- [ ] During a session, `pkill -f server-filesystem` (kill the MCP server), then ask for another fs tool call. **Expected:** it works; `ps` shows a new server process.
+- [ ] Point an MCP server at a command that exits immediately (e.g. `command = "false"`). **Expected:** one "unavailable" warning, then one "paused for 15s" warning; later turns aren't slowed and don't repeat the warning.
 
 ## 13. Hooks
 
@@ -208,3 +210,9 @@ Use a real screenshot (e.g. a UI with visible text) saved in the workspace as `s
 - [ ] Stop the collector, then run and quit a session. **Expected:** exit is not delayed by more than about 3 s; no telemetry errors in the terminal (they go to the log at debug level).
 - [ ] `code-puppy doctor`. **Expected:** `log` and `telemetry` lines matching your settings.
 
+## 23. Resilience 💲
+
+- [ ] Turn Wi-Fi off, send a prompt, turn it back on within about 5 s. **Expected:** the turn completes (retried); the log shows the failed attempts.
+- [ ] `max_retries = 0`, Wi-Fi off, send a prompt. **Expected:** a clear error; the session keeps working afterwards.
+- [ ] `stall_timeout_seconds = 5`, then ask for a long answer with `provider = "openai"` (not streamed). **Expected:** it fails after about 5 s with "model API stopped responding". Restore the default afterwards.
+- [ ] Ask for a task that makes many tool calls at once (e.g. "read these 12 files"), with `max_parallel = 2`. **Expected:** it completes; with telemetry on, no more than two `execute_tool` spans overlap.

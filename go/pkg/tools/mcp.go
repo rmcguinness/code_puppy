@@ -3,10 +3,12 @@ package tools
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"os"
 	"sort"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/retail-cortex/code_puppy/pkg/config"
@@ -29,10 +31,76 @@ type MCPManager struct {
 }
 
 type mcpServer struct {
-	cfg     config.MCPServerConfig
-	toolset tool.Toolset
-	allowed map[string]bool // optional allow-list
-	cmd     *guardedCmd     // stdio server process, if any
+	cfg       config.MCPServerConfig
+	toolset   tool.Toolset
+	allowed   map[string]bool // optional allow-list
+	transport *stdioTransport // stdio servers only
+	health    *breaker
+}
+
+const (
+	// mcpListTimeout bounds connecting to a server and listing its tools,
+	// which happens before every model call.
+	mcpListTimeout = 30 * time.Second
+	// defaultMCPCallTimeout bounds one tool call unless timeout_seconds is set.
+	defaultMCPCallTimeout = 5 * time.Minute
+)
+
+func (s *mcpServer) callTimeout() time.Duration {
+	if s.cfg.TimeoutSeconds > 0 {
+		return time.Duration(s.cfg.TimeoutSeconds) * time.Second
+	}
+	return defaultMCPCallTimeout
+}
+
+// stdioTransport starts a new server process on every Connect. The SDK's
+// CommandTransport wraps a single exec.Cmd, which can only be started once,
+// so after a server crash the ADK's automatic reconnect could never succeed.
+// Each process is guarded (dies with Code Puppy); the previous one is killed
+// when a new one starts.
+type stdioTransport struct {
+	build func() (*guardedCmd, error)
+
+	mu  sync.Mutex
+	cur *guardedCmd
+}
+
+func (t *stdioTransport) Connect(ctx context.Context) (mcp.Connection, error) {
+	cmd, err := t.build()
+	if err != nil {
+		return nil, err
+	}
+	t.mu.Lock()
+	prev := t.cur
+	t.cur = cmd
+	t.mu.Unlock()
+	stopProcess(prev)
+
+	conn, err := (&mcp.CommandTransport{Command: cmd.Cmd}).Connect(ctx)
+	if cmd.childEnd != nil {
+		cmd.childEnd.Close() // the child holds its end; see guardedCmd.Start
+	}
+	if err != nil {
+		cmd.Release()
+		return nil, err
+	}
+	return conn, nil
+}
+
+// Close kills the current server process.
+func (t *stdioTransport) Close() {
+	t.mu.Lock()
+	cur := t.cur
+	t.cur = nil
+	t.mu.Unlock()
+	stopProcess(cur)
+}
+
+func stopProcess(cmd *guardedCmd) {
+	if cmd != nil && cmd.Process != nil {
+		_ = killProcessGroup(cmd.Cmd)
+		cmd.Release()
+	}
 }
 
 // NewMCPManager validates configs and prepares toolsets. Servers connect
@@ -57,7 +125,7 @@ func NewMCPManager(cfgs []config.MCPServerConfig, env *ExecEnv, reserved []strin
 			return nil, fmt.Errorf("mcp server %q: set exactly one of command or url", c.Name)
 		}
 
-		srv := &mcpServer{cfg: c}
+		srv := &mcpServer{cfg: c, health: newBreaker()}
 		if len(c.Tools) > 0 {
 			srv.allowed = map[string]bool{}
 			for _, t := range c.Tools {
@@ -71,20 +139,29 @@ func NewMCPManager(cfgs []config.MCPServerConfig, env *ExecEnv, reserved []strin
 			if c.Sandbox != nil && !*c.Sandbox && env != nil {
 				serverEnv = &ExecEnv{ScrubEnv: env.ScrubEnv}
 			}
-			cmd, err := serverEnv.command(context.Background(), append([]string{c.Command}, c.Args...))
-			if err != nil {
+			argv := append([]string{c.Command}, c.Args...)
+			build := func() (*guardedCmd, error) {
+				// Not tied to a request context: the server outlives the call
+				// that started it.
+				cmd, err := serverEnv.command(context.Background(), argv)
+				if err != nil {
+					return nil, err
+				}
+				base := cmd.Env
+				if base == nil {
+					base = os.Environ()
+				}
+				for k, v := range c.Env {
+					base = append(base, k+"="+v)
+				}
+				cmd.Env = base
+				return cmd, nil
+			}
+			if _, err := build(); err != nil { // validate the sandbox wrapping up front
 				return nil, fmt.Errorf("mcp server %q: %w", c.Name, err)
 			}
-			base := cmd.Env
-			if base == nil {
-				base = os.Environ()
-			}
-			for k, v := range c.Env {
-				base = append(base, k+"="+v)
-			}
-			cmd.Env = base
-			srv.cmd = cmd
-			tsCfg.Transport = &mcp.CommandTransport{Command: cmd.Cmd}
+			srv.transport = &stdioTransport{build: build}
+			tsCfg.Transport = srv.transport
 		} else {
 			tsCfg.Endpoint = c.URL
 		}
@@ -113,7 +190,7 @@ func NewMCPManagerFromToolsets(servers []MCPToolset, reserved []string) *MCPMana
 		m.reserved[r] = true
 	}
 	for _, s := range servers {
-		srv := &mcpServer{cfg: s.Config, toolset: s.Toolset}
+		srv := &mcpServer{cfg: s.Config, toolset: s.Toolset, health: newBreaker()}
 		if len(s.Config.Tools) > 0 {
 			srv.allowed = map[string]bool{}
 			for _, t := range s.Config.Tools {
@@ -201,9 +278,8 @@ func (m *MCPManager) Close() {
 		return
 	}
 	for _, s := range m.servers {
-		if s.cmd != nil && s.cmd.Process != nil {
-			_ = killProcessGroup(s.cmd.Cmd)
-			s.cmd.Release()
+		if s.transport != nil {
+			s.transport.Close()
 		}
 	}
 }
@@ -216,13 +292,21 @@ type recordingToolset struct {
 func (r *recordingToolset) Name() string { return "mcp:" + r.srv.cfg.Name }
 
 // Tools lists the server's tools, dropping ones not allow-listed or that
-// would shadow a built-in tool, and records ownership for approvals.
+// would shadow a built-in tool, and records ownership for approvals. It runs
+// before every model call, so an unhealthy server is skipped (its tools are
+// simply absent) until its circuit breaker lets a trial through.
 func (r *recordingToolset) Tools(ctx agent.ReadonlyContext) ([]tool.Tool, error) {
-	tools, err := r.srv.toolset.Tools(ctx)
+	if ok, _ := r.srv.health.allow(); !ok {
+		return nil, nil
+	}
+	lctx, cancel := context.WithTimeout(ctx, mcpListTimeout)
+	defer cancel()
+	tools, err := r.srv.toolset.Tools(readonlyWith{ctx, lctx})
 	if err != nil {
-		r.m.Warn(fmt.Sprintf("mcp server %q unavailable: %v", r.srv.cfg.Name, err))
+		r.m.recordFailure(ctx, r.srv, err)
 		return nil, nil // one broken server shouldn't break every turn
 	}
+	r.m.recordSuccess(ctx, r.srv)
 	out := tools[:0:0]
 	r.m.mu.Lock()
 	defer r.m.mu.Unlock()
@@ -230,13 +314,15 @@ func (r *recordingToolset) Tools(ctx agent.ReadonlyContext) ([]tool.Tool, error)
 		if r.srv.allowed != nil && !r.srv.allowed[t.Name()] {
 			continue
 		}
-		if p := r.srv.cfg.Prefix; p != "" {
-			ft, ok := t.(functionTool)
-			if !ok {
-				r.m.Warn(fmt.Sprintf("mcp server %q: tool %q can't be renamed and was skipped", r.srv.cfg.Name, t.Name()))
-				continue
+		if ft, ok := t.(functionTool); ok {
+			name := t.Name()
+			if p := r.srv.cfg.Prefix; p != "" {
+				name = p + "__" + name
 			}
-			t = &prefixedTool{inner: ft, name: p + "__" + t.Name()}
+			t = &managedTool{inner: ft, name: name, m: r.m, srv: r.srv}
+		} else if r.srv.cfg.Prefix != "" {
+			r.m.Warn(fmt.Sprintf("mcp server %q: tool %q can't be renamed and was skipped", r.srv.cfg.Name, t.Name()))
+			continue
 		}
 		name := t.Name()
 		if r.m.reserved[name] {
@@ -260,19 +346,22 @@ type functionTool interface {
 	Run(ctx agent.Context, args any) (map[string]any, error)
 }
 
-// prefixedTool exposes an MCP tool under a namespaced name. Calls still go
-// to the server under the tool's original name.
-type prefixedTool struct {
+// managedTool wraps an MCP tool: it may expose it under a prefixed name
+// (calls still reach the server under the original name), bounds each call
+// with the server's timeout, and feeds the server's circuit breaker.
+type managedTool struct {
 	inner functionTool
 	name  string
+	m     *MCPManager
+	srv   *mcpServer
 }
 
-func (p *prefixedTool) Name() string        { return p.name }
-func (p *prefixedTool) Description() string { return p.inner.Description() }
-func (p *prefixedTool) IsLongRunning() bool { return p.inner.IsLongRunning() }
+func (p *managedTool) Name() string        { return p.name }
+func (p *managedTool) Description() string { return p.inner.Description() }
+func (p *managedTool) IsLongRunning() bool { return p.inner.IsLongRunning() }
 
-// Declaration is the inner declaration under the prefixed name.
-func (p *prefixedTool) Declaration() *genai.FunctionDeclaration {
+// Declaration is the inner declaration under the exposed name.
+func (p *managedTool) Declaration() *genai.FunctionDeclaration {
 	d := p.inner.Declaration()
 	if d == nil {
 		return nil
@@ -282,14 +371,81 @@ func (p *prefixedTool) Declaration() *genai.FunctionDeclaration {
 	return &c
 }
 
-func (p *prefixedTool) Run(ctx agent.Context, args any) (map[string]any, error) {
-	return p.inner.Run(ctx, args)
+func (p *managedTool) Run(ctx agent.Context, args any) (map[string]any, error) {
+	if ok, retryIn := p.srv.health.allow(); !ok {
+		return nil, fmt.Errorf("MCP server %q is unavailable after repeated failures; retrying in %s", p.srv.cfg.Name, retryIn.Round(time.Second))
+	}
+	cctx, cancel := context.WithTimeout(ctx, p.srv.callTimeout())
+	defer cancel()
+	res, err := p.inner.Run(toolWith{ctx, cctx}, args)
+	switch {
+	case err == nil:
+		p.m.recordSuccess(ctx, p.srv)
+	case cctx.Err() == context.DeadlineExceeded && ctx.Err() == nil:
+		err = fmt.Errorf("MCP tool %q timed out after %s", p.name, p.srv.callTimeout())
+		p.m.recordFailure(ctx, p.srv, err)
+	case transportFailure(err):
+		p.m.recordFailure(ctx, p.srv, err)
+	default:
+		// The server answered with a tool error: it is healthy.
+		p.m.recordSuccess(ctx, p.srv)
+	}
+	return res, err
 }
 
-// ProcessRequest registers the tool in the request under its prefixed name.
-func (p *prefixedTool) ProcessRequest(ctx agent.Context, req *model.LLMRequest) error {
+// transportFailure reports whether a tool call failed to reach the server
+// (as opposed to the server reporting a tool error). The ADK wraps
+// connection errors this way; tool errors start "Tool execution failed".
+func transportFailure(err error) bool {
+	return strings.HasPrefix(err.Error(), "failed to call MCP tool")
+}
+
+// ProcessRequest registers the tool in the request under its exposed name.
+func (p *managedTool) ProcessRequest(ctx agent.Context, req *model.LLMRequest) error {
 	return toolutils.PackTool(req, p)
 }
+
+// recordFailure feeds the breaker. The terminal hears about the first
+// failure of a streak and about the server being paused, not about every
+// failed call; the log gets each one.
+func (m *MCPManager) recordFailure(ctx context.Context, s *mcpServer, err error) {
+	slog.WarnContext(ctx, "mcp server call failed", "server", s.cfg.Name, "error", err)
+	switch streak, opened, cooldown := s.health.failure(); {
+	case opened:
+		m.Warn(fmt.Sprintf("mcp server %q keeps failing; its tools are paused for %s", s.cfg.Name, cooldown))
+	case streak == 1:
+		m.Warn(fmt.Sprintf("mcp server %q unavailable: %v", s.cfg.Name, err))
+	}
+}
+
+func (m *MCPManager) recordSuccess(ctx context.Context, s *mcpServer) {
+	if s.health.success() {
+		slog.InfoContext(ctx, "mcp server recovered", "server", s.cfg.Name)
+		m.Warn(fmt.Sprintf("mcp server %q is available again", s.cfg.Name))
+	}
+}
+
+// readonlyWith and toolWith keep an ADK context's methods but take
+// deadline, cancellation and values from a derived context.
+type readonlyWith struct {
+	agent.ReadonlyContext
+	ctx context.Context
+}
+
+func (c readonlyWith) Deadline() (time.Time, bool) { return c.ctx.Deadline() }
+func (c readonlyWith) Done() <-chan struct{}       { return c.ctx.Done() }
+func (c readonlyWith) Err() error                  { return c.ctx.Err() }
+func (c readonlyWith) Value(key any) any           { return c.ctx.Value(key) }
+
+type toolWith struct {
+	agent.Context
+	ctx context.Context
+}
+
+func (c toolWith) Deadline() (time.Time, bool) { return c.ctx.Deadline() }
+func (c toolWith) Done() <-chan struct{}       { return c.ctx.Done() }
+func (c toolWith) Err() error                  { return c.ctx.Err() }
+func (c toolWith) Value(key any) any           { return c.ctx.Value(key) }
 
 // mcpApproval builds the approval request for an MCP tool call.
 func mcpApproval(server, toolName string, args map[string]any) ApprovalRequest {

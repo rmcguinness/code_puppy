@@ -121,6 +121,27 @@ Also fixed: the model name now resolves per provider (`code_puppy.default_model`
 
 ---
 
+## 12. Resilience — ✅ done (M)
+
+**Findings.**
+- The Gemini SDK doesn't retry unless configured, and it wasn't: one 429 or 503 failed the turn. The Anthropic and OpenAI SDKs retry twice by default.
+- No provider had timeouts, so a hung connection or stalled stream blocked a turn forever. In CI there's no Ctrl+C to recover.
+- A crashed MCP stdio server could never reconnect. The SDK's `CommandTransport` wraps one `exec.Cmd`, which can only be started once (`exec: Stdout already set`). It also bypassed the process guard's startup step.
+- A down MCP server was contacted, with no timeout, before every model call, and printed a warning each time.
+- The ADK runs all tool calls of a response at once, with no upper limit.
+
+**Changes.**
+- **Model requests** (`pkg/runtime/httpclient.go`): one retry budget for all providers (`llm.max_retries`, default 3). Gemini gets `HTTPRetryOptions` (backoff from 1 s up to 30 s); the other two SDKs keep their own backoff and `Retry-After` handling. A shared HTTP client sets 30 s dial and 15 s TLS timeouts, and a stall timeout (`llm.stall_timeout_seconds`, default 600) on response headers and on gaps between body reads, so steady streams are never cut off.
+- **MCP**: a stdio transport that starts a fresh guarded process on each connect and kills the previous one. A circuit breaker per server: it opens after 2 consecutive failures, skips the server for 15 s doubling to 5 min, then allows one trial call. Tool errors reported by the server don't count against it. Listing times out after 30 s, calls after `timeout_seconds` (default 300). Warnings go out on the first failure, on pause and on recovery.
+- **Parallel tool cap**: an ADK `TaskRunner` caps each batch of tool calls (`tools.max_parallel`, default 8). The cap is per batch, so a sub-agent's calls running inside a parent's call can't deadlock.
+- **Hook worker**: a panic is contained to one event and logged.
+
+**Not changed.** A stream that fails mid-response isn't retried (the text is already on screen). There is no model fallback (Python's round-robin), and session files aren't fsynced (a crash loses nothing the OS already has; a power loss can lose the last event).
+
+**Tests.** Stall, steady stream and header timeouts. For each provider: a server that fails twice with 529/503/429, then 3 attempts with `max_retries = 2`, 1 attempt with 0, and no retry on 400. Breaker state machine on a fake clock. A down server is skipped after 2 attempts and recovers after the cooldown. The test binary runs as a real stdio MCP server: a crash is followed by a new process, a slow call times out, and a tool error keeps the server healthy. The restart test was confirmed to fail with the old transport. Runner: concurrency cap, every task runs, nested batches don't deadlock, and the engine really serialises with `max_parallel = 1`. Worker survives a panic.
+
+---
+
 ## 9. Real-environment verification — 🔜 needs a person; see [MANUAL_VERIFICATION.md](MANUAL_VERIFICATION.md)
 
 Not automatable here; run once and record results in this file:

@@ -152,7 +152,7 @@ func TestMCPPrefixedTools(t *testing.T) {
 	if got := strings.Join(toolNames(tl), ","); got != "gh__create_issue,gh__grep" {
 		t.Fatalf("prefixed names = %s", got)
 	}
-	pt := tl[0].(*prefixedTool)
+	pt := tl[0].(*managedTool)
 	if d := pt.Declaration(); d == nil || d.Name != "gh__create_issue" {
 		t.Errorf("declaration name %+v", d)
 	}

@@ -123,6 +123,9 @@ type MCPServerConfig struct {
 	// active primary agent only, "*" means every agent (including ones run
 	// through invoke_agent).
 	Agents []string `toml:"agents"`
+	// TimeoutSeconds bounds one tool call (default 300). A server that fails
+	// or times out twice in a row is paused, with growing back-off.
+	TimeoutSeconds int `toml:"timeout_seconds"`
 }
 
 // MCPConfig lists MCP servers.

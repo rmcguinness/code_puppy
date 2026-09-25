@@ -24,12 +24,11 @@ func NewModel(ctx context.Context, cfg *config.Config, overrideModel string) (mo
 		modelName = overrideModel
 	}
 
+	pol := policyFrom(cfg.LLM)
 	switch provider {
 	case "gemini":
 		apiKey := cfg.LLM.Gemini.APIKey
-		clientCfg := &genai.ClientConfig{
-			APIKey: apiKey,
-		}
+		clientCfg := pol.geminiConfig(apiKey)
 		if cfg.LLM.Gemini.ProjectID != "" {
 			clientCfg.Project = cfg.LLM.Gemini.ProjectID
 		}
@@ -51,36 +50,38 @@ func NewModel(ctx context.Context, cfg *config.Config, overrideModel string) (mo
 		if baseURL == "" && provider == "ollama" {
 			baseURL = "http://localhost:11434/v1"
 		}
-		return newOpenAIModel(ctx, modelName, apiKey, baseURL)
+		return newOpenAIModel(ctx, modelName, apiKey, baseURL, pol.openAIOptions()...)
 
 	case "anthropic":
-		return newAnthropicModel(cfg.LLM.Anthropic, modelName), nil
+		return newAnthropicModel(cfg.LLM.Anthropic, modelName, pol.anthropicOptions()...), nil
 
 	case "":
 		// If Gemini key is set and provider is empty, try gemini, else fallback to openai/ollama
 		if cfg.LLM.Gemini.APIKey != "" {
-			return gemini.NewModel(ctx, modelName, &genai.ClientConfig{APIKey: cfg.LLM.Gemini.APIKey, Backend: genai.BackendGeminiAPI})
+			gc := pol.geminiConfig(cfg.LLM.Gemini.APIKey)
+			gc.Backend = genai.BackendGeminiAPI
+			return gemini.NewModel(ctx, modelName, gc)
 		}
 		if cfg.LLM.Anthropic.APIKey != "" {
 			if cfg.CodePuppy.DefaultModel == "" {
 				modelName = cfg.LLM.Anthropic.Model
 			}
-			return newAnthropicModel(cfg.LLM.Anthropic, modelName), nil
+			return newAnthropicModel(cfg.LLM.Anthropic, modelName, pol.anthropicOptions()...), nil
 		}
 		if cfg.LLM.OpenAI.APIKey != "" || cfg.LLM.OpenAI.BaseURL != "" {
 			apiKey := cfg.LLM.OpenAI.APIKey
 			if apiKey == "" {
 				apiKey = "ollama"
 			}
-			return newOpenAIModel(ctx, modelName, apiKey, cfg.LLM.OpenAI.BaseURL)
+			return newOpenAIModel(ctx, modelName, apiKey, cfg.LLM.OpenAI.BaseURL, pol.openAIOptions()...)
 		}
 		// Default to local Ollama if available
-		return newOpenAIModel(ctx, modelName, "ollama", "http://localhost:11434/v1")
+		return newOpenAIModel(ctx, modelName, "ollama", "http://localhost:11434/v1", pol.openAIOptions()...)
 
 	default:
 		// Fallback to Gemini if configured
 		if cfg.LLM.Gemini.APIKey != "" {
-			return gemini.NewModel(ctx, modelName, &genai.ClientConfig{APIKey: cfg.LLM.Gemini.APIKey})
+			return gemini.NewModel(ctx, modelName, pol.geminiConfig(cfg.LLM.Gemini.APIKey))
 		}
 		return nil, fmt.Errorf("unsupported or unconfigured LLM provider '%s'", provider)
 	}

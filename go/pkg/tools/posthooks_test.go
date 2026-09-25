@@ -148,3 +148,20 @@ func TestFullQueueDropsInsteadOfBlocking(t *testing.T) {
 		t.Fatalf("want one warning for the whole backlog, got %v", *warnings)
 	}
 }
+
+func TestPostToolWorkerSurvivesAPanic(t *testing.T) {
+	out := filepath.Join(t.TempDir(), "events.jsonl")
+	h, _ := newHooks(t, config.HooksConfig{PostTool: []config.HookConfig{
+		{Match: "boom", Command: "exit 1"}, // failure -> Warn, which panics below
+		{Match: "grep", Command: "cat >> " + out},
+	}})
+	h.Warn = func(string) { panic("warn exploded") }
+	h.PostTool(context.Background(), "s", "boom", nil, nil, nil)
+	h.PostTool(context.Background(), "s", "grep", nil, nil, nil)
+	if err := h.flush(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if b, _ := os.ReadFile(out); !strings.Contains(string(b), `"tool":"grep"`) {
+		t.Fatal("worker stopped after a panic")
+	}
+}

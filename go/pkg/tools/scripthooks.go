@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"log/slog"
 	"path"
+	"runtime/debug"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -164,11 +165,23 @@ func (s *ScriptHooks) startPost() *postQueue {
 					close(job.barrier)
 					continue
 				}
-				s.dispatch(job.ctx, s.post, job.tool, "post_tool", job.payload)
+				s.dispatchSafely(job)
 			}
 		}()
 	})
 	return q
+}
+
+// dispatchSafely runs one queued event. The worker lives for the whole
+// session, so a panic (in a hook's Warn callback, say) is contained to the
+// event and logged; later events still run.
+func (s *ScriptHooks) dispatchSafely(job postJob) {
+	defer func() {
+		if r := recover(); r != nil {
+			slog.ErrorContext(job.ctx, "post_tool hook panicked", "tool", job.tool, "panic", r, "stack", string(debug.Stack()))
+		}
+	}()
+	s.dispatch(job.ctx, s.post, job.tool, "post_tool", job.payload)
 }
 
 // flush waits until every post_tool event queued so far has been handled.

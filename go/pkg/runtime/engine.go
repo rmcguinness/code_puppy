@@ -24,6 +24,7 @@ import (
 	"google.golang.org/adk/v2/artifact"
 	"google.golang.org/adk/v2/memory"
 	"google.golang.org/adk/v2/model"
+	"google.golang.org/adk/v2/platform"
 	"google.golang.org/adk/v2/runner"
 	"google.golang.org/adk/v2/session"
 	"google.golang.org/adk/v2/session/compaction"
@@ -437,6 +438,9 @@ func (e *Engine) Execute(ctx context.Context, sessionID, prompt string, handler 
 		o(st)
 	}
 	ctx = context.WithValue(ctx, runStateKey{}, st)
+	if n := e.cfg.Tools.MaxParallel; n > 0 {
+		ctx = platform.WithTaskRunner(ctx, boundedRunner(n))
+	}
 	rc := agent.RunConfig{}
 	if e.streaming {
 		rc.StreamingMode = agent.StreamingModeSSE
@@ -466,6 +470,27 @@ func (e *Engine) Execute(ctx context.Context, sessionID, prompt string, handler 
 		slog.ErrorContext(ctx, "turn failed", "session", sessionID, "error", err)
 	}
 	return err
+}
+
+// boundedRunner runs the tool calls of one model response with at most
+// limit in flight. The limit is per batch, not global: a tool that runs a
+// sub-agent holds a slot while the sub-agent's own batch runs, and a shared
+// pool could deadlock with every slot held by a waiting parent. Every task
+// runs exactly once, as the ADK requires; after cancellation queued tasks
+// still start and fail fast on their cancelled context.
+func boundedRunner(limit int) platform.TaskRunner {
+	return func(ctx context.Context, tasks []func(context.Context)) {
+		sem := make(chan struct{}, limit)
+		var wg sync.WaitGroup
+		for _, task := range tasks {
+			sem <- struct{}{}
+			wg.Go(func() {
+				defer func() { <-sem }()
+				task(ctx)
+			})
+		}
+		wg.Wait()
+	}
 }
 
 // startTurn starts the span for one turn. Each turn is its own trace (a

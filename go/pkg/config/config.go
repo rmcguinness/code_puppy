@@ -61,7 +61,17 @@ type CodePuppyConfig struct {
 
 // LLMConfig holds provider configurations for LLM backends.
 type LLMConfig struct {
-	Provider  string          `toml:"provider"` // gemini, openai, anthropic, ollama
+	Provider string `toml:"provider"` // gemini, openai, anthropic, ollama
+	// MaxRetries is how often a failed model request is retried (rate
+	// limits, overload, 5xx, connection errors), with exponential backoff
+	// that honours Retry-After. 0 disables retries.
+	MaxRetries int `toml:"max_retries"`
+	// StallTimeoutSeconds fails a model request that sends nothing (no
+	// headers, or no streamed data) for this long, so a hung connection
+	// can't block a turn forever. It must exceed the longest non-streamed
+	// generation.
+	StallTimeoutSeconds int `toml:"stall_timeout_seconds"`
+
 	Gemini    GeminiConfig    `toml:"gemini"`
 	OpenAI    OpenAIConfig    `toml:"openai"`
 	Anthropic AnthropicConfig `toml:"anthropic"`
@@ -126,6 +136,9 @@ type ToolsConfig struct {
 	UCToolsDir          string `toml:"uc_tools_dir"`
 	// ApprovalsFile stores "always allow" decisions.
 	ApprovalsFile string `toml:"approvals_file"`
+	// MaxParallel caps how many tool calls from one model response run at
+	// once (0 = unlimited). Nested batches (sub-agents) get their own cap.
+	MaxParallel int `toml:"max_parallel"`
 }
 
 // SandboxConfig bounds what tools may touch.
@@ -203,7 +216,9 @@ func DefaultConfig() *Config {
 			AutoApprove:  false,
 		},
 		LLM: LLMConfig{
-			Provider: "gemini",
+			Provider:            "gemini",
+			MaxRetries:          3,
+			StallTimeoutSeconds: 600,
 			Gemini: GeminiConfig{
 				APIKey: os.Getenv("GEMINI_API_KEY"),
 				Model:  "gemini-2.5-flash",
@@ -232,6 +247,7 @@ func DefaultConfig() *Config {
 			MaxFileSizeBytes:    10 * 1024 * 1024, // 10MB
 			WorkspaceDir:        ".",
 			AutoApproveCommands: false,
+			MaxParallel:         8,
 		},
 		Session: SessionConfig{
 			StorageDir: filepath.Join(homeDir, ".code_puppy", "sessions"),
