@@ -123,6 +123,7 @@ prefix = "fs"
 
 - [ ] A `pre_tool` hook for `run_shell_command` that exits 2 with a message. **Expected:** shell calls are blocked with that message; other tools work.
 - [ ] A `post_tool` hook appending the JSON event to a file. **Expected:** one line per tool call, including tool name and args.
+- [ ] A `post_tool` hook `sleep 3; cat >> /tmp/post.jsonl`, then a turn with several tool calls. **Expected:** the turn is not slowed down; the events arrive in `/tmp/post.jsonl` a few seconds later, in tool-call order. Quit right after a turn: the pending events are still written (within about 5 s).
 - [ ] A `prompt_submit` hook that blocks prompts containing `password`. **Expected:** "Prompt blocked by hook".
 
 ## 14. Web 💲 (search key)

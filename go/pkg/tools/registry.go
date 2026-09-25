@@ -259,6 +259,7 @@ func (r *Registry) ShellSandbox() *OSSandbox { return r.exec.Sandbox }
 
 // Close kills background processes and MCP servers and releases the workspace root.
 func (r *Registry) Close() error {
+	r.scripts.Close() // let queued post_tool hooks finish first
 	r.processes.Shutdown()
 	r.mcp.Close()
 	return r.workspace.Close()

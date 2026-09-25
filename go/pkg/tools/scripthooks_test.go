@@ -18,6 +18,7 @@ func newHooks(t *testing.T, cfg config.HooksConfig) (*ScriptHooks, *[]string) {
 	}
 	var warnings []string
 	h.Warn = func(s string) { warnings = append(warnings, s) }
+	t.Cleanup(h.Close)
 	return h, &warnings
 }
 
@@ -46,6 +47,9 @@ func TestScriptHookReceivesEvent(t *testing.T) {
 		PromptSubmit: []config.HookConfig{{Command: "cat >> " + out}},
 	})
 	h.PostTool(context.Background(), "sess", "grep", map[string]any{"query": "x"}, map[string]any{"total_matches": 1}, nil)
+	if err := h.flush(context.Background()); err != nil {
+		t.Fatal(err)
+	}
 	b, _ := os.ReadFile(out)
 	for _, want := range []string{`"event":"post_tool"`, `"tool":"grep"`, `"session_id":"sess"`, `"query":"x"`, `"total_matches":1`} {
 		if !strings.Contains(string(b), want) {

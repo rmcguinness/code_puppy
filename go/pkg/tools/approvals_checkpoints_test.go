@@ -270,6 +270,7 @@ func TestHooksRunOutsideSandbox(t *testing.T) {
 	}
 	defer reg.Close()
 	reg.ScriptHooks().PostTool(context.Background(), "s", "grep", nil, nil, nil)
+	reg.ScriptHooks().flush(context.Background()) // post_tool hooks run in the background
 	if b, _ := os.ReadFile(outside); !strings.Contains(string(b), "logged") {
 		t.Error("hook could not write outside the workspace; hooks should not be sandboxed")
 	}

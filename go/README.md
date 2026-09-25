@@ -131,7 +131,7 @@ env     = { GITHUB_PERSONAL_ACCESS_TOKEN = "..." }
 ```
 MCP tools need approval per server/tool unless `auto_approve = true`, and can't shadow built-in tools (use `prefix` to avoid clashes).
 
-**Hooks** receive a JSON event on stdin (`event`, `tool`, `args`, `result`, `prompt`, `session_id`, `workspace`). Exit `2` blocks (stderr is the reason) or print `{"decision":"block","reason":"…"}`; other failures warn unless `fail_closed = true`. Hooks are your own code from trusted config, so they run outside the OS sandbox with your full environment (they are still killed with Code Puppy).
+**Hooks** receive a JSON event on stdin (`event`, `tool`, `args`, `result`, `prompt`, `session_id`, `workspace`). Exit `2` blocks (stderr is the reason) or print `{"decision":"block","reason":"…"}`; other failures warn unless `fail_closed = true`. `pre_tool` and `prompt_submit` hooks run before the action and can block it. `post_tool` hooks only observe, so they run in the background, in order, and never delay the agent. Each event is captured when the tool finishes. If hooks fall far behind (256 queued), further events are dropped with a warning, and at exit queued hooks get up to 5 s to finish. Hooks are your own code from trusted config, so they run outside the OS sandbox with your full environment (they are still killed with Code Puppy).
 ```toml
 [[hooks.pre_tool]]
 match   = "run_shell_command"   # tool-name glob
