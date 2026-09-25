@@ -51,6 +51,7 @@ Go measurements were taken on 2026-09-24 on Apple Silicon (arm64), macOS, warm c
 | **Web** | ➖ browser tooling | ✅ `web_fetch`, `web_search` (Brave, Tavily, SearXNG) | SSRF protection on every hop; no browser automation |
 | **Images / attachments** | ✅ | ✅ `@image` mentions, `/attach`, `/paste`, `--image`, `view_image` tool | Gemini, Anthropic, OpenAI-compatible; images kept out of session files |
 | **i18n** | ✅ | ✅ English, Spanish, Canadian French | `/locale`; external JSON catalogs; model replies in the chosen language |
+| **Steering mid-turn** | ✅ Ctrl+T, injected before the next model call | ✅ type or Ctrl+T; delivered with the next tool result | macOS and Linux; late messages become the next prompt |
 | **Onboarding / menus** | ✅ wizard, interactive menus | ➖ `config init`, `doctor`, line editor with completion | |
 | **Scripting** | ➖ | ✅ `json` / `stream-json`, `--max-turns`, exit codes | |
 | **File sandbox** | ➖ access checks (`fs_access.py`) | ✅ `os.Root` roots, read-only roots, blocked globs incl. symlinks | |

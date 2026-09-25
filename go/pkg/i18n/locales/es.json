@@ -177,6 +177,12 @@
     "attach.disabled": "Las imágenes están desactivadas ([images] enabled = false).",
     "attach.no_clipboard": "El portapapeles no contiene ninguna imagen. (En Linux se necesita wl-paste o xclip).",
     "attach.duplicate": "{name} ya está en la cola.",
-    "attach.queued": "{summary} se enviará con tu próximo mensaje."
+    "attach.queued": "{summary} se enviará con tu próximo mensaje.",
+    "steer.hint": "Mientras el agente trabaja, empieza a escribir (o pulsa Ctrl+T) para enviarle un mensaje; lo leerá tras su paso actual.",
+    "steer.prompt": "↪ mensaje para el agente (Intro para enviar, vacío para cancelar): ",
+    "steer.queued": "↪ Enviado. El agente lo leerá tras su paso actual.",
+    "steer.cancelled": "↪ No se envió nada.",
+    "steer.sending": "↪ El agente terminó antes de leer tu mensaje; enviándolo ahora.",
+    "steer.dropped": "↪ Turno interrumpido; tu mensaje no se envió: {text}"
   }
 }

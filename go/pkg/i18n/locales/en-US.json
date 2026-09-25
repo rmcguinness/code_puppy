@@ -177,6 +177,12 @@
     "attach.disabled": "Images are disabled ([images] enabled = false).",
     "attach.no_clipboard": "The clipboard has no image. (On Linux this needs wl-paste or xclip.)",
     "attach.duplicate": "{name} is already queued.",
-    "attach.queued": "{summary} will be sent with your next message."
+    "attach.queued": "{summary} will be sent with your next message.",
+    "steer.hint": "While the agent works, just start typing (or press Ctrl+T) to send it a message; it reads it after its current step.",
+    "steer.prompt": "↪ message for the agent (Enter to send, empty to cancel): ",
+    "steer.queued": "↪ Sent. The agent will read it after its current step.",
+    "steer.cancelled": "↪ Nothing sent.",
+    "steer.sending": "↪ The agent finished before reading your message; sending it now.",
+    "steer.dropped": "↪ Turn interrupted; your message was not sent: {text}"
   }
 }

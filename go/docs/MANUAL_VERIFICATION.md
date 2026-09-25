@@ -216,3 +216,16 @@ Use a real screenshot (e.g. a UI with visible text) saved in the workspace as `s
 - [ ] `max_retries = 0`, Wi-Fi off, send a prompt. **Expected:** a clear error; the session keeps working afterwards.
 - [ ] `stall_timeout_seconds = 5`, then ask for a long answer with `provider = "openai"` (not streamed). **Expected:** it fails after about 5 s with "model API stopped responding". Restore the default afterwards.
 - [ ] Ask for a task that makes many tool calls at once (e.g. "read these 12 files"), with `max_parallel = 2`. **Expected:** it completes; with telemetry on, no more than two `execute_tool` spans overlap.
+
+## 24. Steering 💲
+
+- [ ] Start the REPL. **Expected:** the hint line mentions typing (or Ctrl+T) to message the agent.
+- [ ] Ask for a multi-step task (read several files, then edit). While it works, type `use tabs for indentation`. **Expected:** output pauses and a `↪ message for the agent` prompt appears with your text. Enter shows "Sent", output resumes, and the agent's next step reflects the message.
+- [ ] Press Ctrl+T during a turn. **Expected:** the same prompt, empty. Enter on an empty line shows "Nothing sent".
+- [ ] Type a message while an approval prompt is showing. **Expected:** your keys go to the approval prompt, not a steer prompt.
+- [ ] Send a message just as the agent writes its final answer (no more tool calls). **Expected:** "The agent finished before reading your message; sending it now", then a new turn with it.
+- [ ] During a steer prompt press Ctrl+C. **Expected:** the turn is cancelled ("Interrupted"), as Ctrl+C always does.
+- [ ] After a few steered turns, quit and `--continue "what did I ask you mid-way?"`. **Expected:** it knows.
+- [ ] After quitting, type in the shell. **Expected:** echo and line editing work normally (the terminal mode was restored).
+- [ ] Linux desktop: the same basic check.
+

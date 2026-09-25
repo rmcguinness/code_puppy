@@ -177,6 +177,12 @@
     "attach.disabled": "Les images sont désactivées ([images] enabled = false).",
     "attach.no_clipboard": "Le presse-papiers ne contient aucune image. (Sous Linux, wl-paste ou xclip est requis.)",
     "attach.duplicate": "{name} est déjà dans la file.",
-    "attach.queued": "{summary} sera envoyée avec votre prochain message."
+    "attach.queued": "{summary} sera envoyée avec votre prochain message.",
+    "steer.hint": "Pendant que l’agent travaille, commencez à taper (ou faites Ctrl+T) pour lui envoyer un message; il le lira après son étape en cours.",
+    "steer.prompt": "↪ message pour l’agent (Entrée pour envoyer, vide pour annuler) : ",
+    "steer.queued": "↪ Envoyé. L’agent le lira après son étape en cours.",
+    "steer.cancelled": "↪ Rien n’a été envoyé.",
+    "steer.sending": "↪ L’agent a terminé avant de lire votre message; envoi maintenant.",
+    "steer.dropped": "↪ Tour interrompu; votre message n’a pas été envoyé : {text}"
   }
 }

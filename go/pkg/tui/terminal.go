@@ -22,6 +22,31 @@ type TerminalInput struct {
 
 	mu          sync.Mutex
 	onInterrupt func()
+	keys        *keyWatcher // set while a turn is running (steering)
+}
+
+// WatchKeys lets the user steer the running turn: typing (or Ctrl+T) calls
+// onKey with the typed text, from a watcher goroutine. Prompts during the
+// turn pause the watcher automatically. Call stop when the turn ends; it
+// waits for an open steer prompt to be finished.
+func (t *TerminalInput) WatchKeys(onKey func(prefill string)) (stop func()) {
+	w := startKeyWatcher(newTTYKeys(int(os.Stdin.Fd())), onKey)
+	t.mu.Lock()
+	t.keys = w
+	t.mu.Unlock()
+	return func() {
+		t.mu.Lock()
+		t.keys = nil
+		t.mu.Unlock()
+		w.close()
+	}
+}
+
+// AskSteer reads a steer message pre-filled with what the user already
+// typed. It is called from the key watcher, which has handed over the
+// terminal, so it doesn't pause the watcher itself.
+func (t *TerminalInput) AskSteer(ctx context.Context, prompt, prefill string) (string, error) {
+	return t.readLine(ctx, prompt, false, prefill)
 }
 
 // SetInterruptHandler sets what Ctrl+C does while a prompt is shown during a
@@ -75,6 +100,22 @@ func (t *TerminalInput) Ask(ctx context.Context, text string) (string, error) {
 	return t.read(ctx, text, false)
 }
 
+// read pauses the key watcher (if a turn is running) so the prompt gets the
+// keyboard, then reads a line.
+func (t *TerminalInput) read(ctx context.Context, text string, history bool) (string, error) {
+	t.mu.Lock()
+	keys := t.keys
+	t.mu.Unlock()
+	if keys != nil {
+		resume, err := keys.pause(ctx)
+		if err != nil {
+			return "", err
+		}
+		defer resume()
+	}
+	return t.readLine(ctx, text, history, "")
+}
+
 // ReadInput reads a REPL entry (multi-line aware) and saves it to history.
 func (t *TerminalInput) ReadInput(ctx context.Context, prompt string) (string, error) {
 	entry, err := readMultiline(ctx, prompt, func(ctx context.Context, p string) (string, error) {
@@ -86,7 +127,7 @@ func (t *TerminalInput) ReadInput(ctx context.Context, prompt string) (string, e
 	return entry, err
 }
 
-func (t *TerminalInput) read(ctx context.Context, text string, history bool) (string, error) {
+func (t *TerminalInput) readLine(ctx context.Context, text string, history bool, prefill string) (string, error) {
 	select {
 	case t.turn <- struct{}{}:
 	case <-ctx.Done():
@@ -111,7 +152,13 @@ func (t *TerminalInput) read(ctx context.Context, text string, history bool) (st
 	stop := context.AfterFunc(ctx, func() { t.rl.Close() })
 	defer stop()
 
-	line, err := t.rl.ReadLine()
+	var line string
+	var err error
+	if prefill != "" {
+		line, err = t.rl.ReadLineWithDefault(prefill)
+	} else {
+		line, err = t.rl.ReadLine()
+	}
 	switch {
 	case errors.Is(err, readline.ErrInterrupt):
 		t.mu.Lock()

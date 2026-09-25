@@ -54,6 +54,16 @@ func (s *Spinner) Start(label string) {
 	}()
 }
 
+// Running reports whether the spinner is showing.
+func (s *Spinner) Running() bool {
+	if s == nil || !s.enabled {
+		return false
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.stop != nil
+}
+
 // Stop clears the spinner line.
 func (s *Spinner) Stop() {
 	if s == nil || !s.enabled {

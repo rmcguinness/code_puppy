@@ -104,6 +104,9 @@ type Engine struct {
 	subagentSeq atomic.Int64
 	turns       TurnStore // nil: turns are not chained
 
+	steerMu sync.Mutex
+	steers  map[string][]string // session ID -> messages sent mid-turn
+
 	mu                sync.RWMutex
 	llm               model.LLM
 	runner            *runner.Runner
@@ -303,7 +306,8 @@ func (e *Engine) beforeTool(ctx agent.Context, t tool.Tool, args map[string]any)
 	return nil, nil
 }
 
-// afterTool runs post_tool hooks and audits the outcome.
+// afterTool runs post_tool hooks, audits the outcome, and attaches messages
+// the user sent while the turn was running (see Steer).
 func (e *Engine) afterTool(ctx agent.Context, t tool.Tool, args, result map[string]any, toolErr error) (map[string]any, error) {
 	e.toolReg.ScriptHooks().PostTool(ctx, e.sessionOf(ctx), t.Name(), args, result, toolErr)
 	entry := audit.Entry{Kind: audit.KindToolResult, Tool: t.Name(), Decision: "ok"}
@@ -313,6 +317,9 @@ func (e *Engine) afterTool(ctx agent.Context, t tool.Tool, args, result map[stri
 		entry.Decision, entry.Error = "error", msg
 	}
 	e.toolReg.Hooks().Audit().Log(entry)
+	if r := e.attachSteers(ctx, result, toolErr); r != nil {
+		return r, nil
+	}
 	return nil, nil
 }
 

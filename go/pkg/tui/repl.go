@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -66,6 +67,8 @@ type App struct {
 // activity, and a spinner while waiting.
 type Printer struct {
 	out        io.Writer
+	pause      *pausableWriter
+	respin     bool // Resume restarts the spinner (it was showing at Pause)
 	md         *markdownStream
 	spin       *Spinner
 	transcript *strings.Builder
@@ -87,9 +90,10 @@ func NewPrinter(o PrinterOptions) *Printer {
 	if o.Out == nil {
 		o.Out = os.Stdout
 	}
-	p := &Printer{out: o.Out, transcript: o.Transcript, spin: NewSpinner(o.Out, o.Spinner)}
+	pw := &pausableWriter{w: o.Out}
+	p := &Printer{out: pw, pause: pw, transcript: o.Transcript, spin: NewSpinner(pw, o.Spinner)}
 	if o.Markdown {
-		if md, err := newMarkdownStream(o.Out, o.Theme, o.Width); err == nil {
+		if md, err := newMarkdownStream(pw, o.Theme, o.Width); err == nil {
 			p.md = md
 		}
 	}
@@ -110,6 +114,58 @@ func (p *Printer) End() {
 	p.spin.Stop()
 	if p.md != nil {
 		p.md.Flush()
+	}
+}
+
+// Pause holds back output (e.g. while the user types a steer message) until
+// Resume, which prints what arrived meanwhile.
+func (p *Printer) Pause() {
+	p.respin = p.spin.Running()
+	p.spin.Stop()
+	p.pause.hold()
+}
+
+// Resume prints held-back output and continues normally. The spinner comes
+// back only if it was showing: restarting it mid-sentence would erase the
+// partly printed line.
+func (p *Printer) Resume() {
+	p.pause.release()
+	if p.respin {
+		p.spin.Start(i18n.T("spinner.working"))
+	}
+}
+
+// pausableWriter buffers writes while held. Printer output arrives from the
+// turn's goroutine while the steer prompt runs on another.
+type pausableWriter struct {
+	mu   sync.Mutex
+	w    io.Writer
+	held bool
+	buf  bytes.Buffer
+}
+
+func (p *pausableWriter) Write(b []byte) (int, error) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.held {
+		return p.buf.Write(b)
+	}
+	return p.w.Write(b)
+}
+
+func (p *pausableWriter) hold() {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.held = true
+}
+
+func (p *pausableWriter) release() {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.held = false
+	if p.buf.Len() > 0 {
+		p.w.Write(p.buf.Bytes())
+		p.buf.Reset()
 	}
 }
 
@@ -172,7 +228,11 @@ func RunREPL(ctx context.Context, app *App) error {
 	PrintBanner(app.Version, app.Engine.ActiveAgent(), app.Engine.ModelName())
 	if len(app.SandboxSummary) > 0 {
 		fmt.Printf("🛡️  %s%s%s\n", Dim, safe(app.SandboxSummary[0]), Reset)
-		fmt.Printf("   %s%s%s\n\n", Dim, i18n.T("repl.hint"), Reset)
+		fmt.Printf("   %s%s%s\n", Dim, i18n.T("repl.hint"), Reset)
+		if _, ok := app.Input.(steerInput); ok {
+			fmt.Printf("   %s%s%s\n", Dim, i18n.T("steer.hint"), Reset)
+		}
+		fmt.Println()
 	}
 
 	if app.Storage.Active() == nil {
@@ -238,17 +298,16 @@ func RunREPL(ctx context.Context, app *App) error {
 			fmt.Printf("%s❌ %s%s\n", Red, i18n.T("session.none_active"), Reset)
 			continue
 		}
-		runTurn(ctx, app, active.ID, line, interrupts)
+		runTurn(ctx, app, active.ID, line, interrupts, false)
 	}
 }
 
-// runTurn sends one prompt to the agent and renders the result.
-func runTurn(ctx context.Context, app *App, sessionID, line string, interrupts <-chan os.Signal) {
-	if app.Tools != nil {
-		if reason := app.Tools.ScriptHooks().PromptSubmit(ctx, sessionID, line); reason != "" {
-			fmt.Printf("%s⛔ %s%s\n", Red, i18n.T("repl.prompt_blocked", "reason", safe(reason)), Reset)
-			return
-		}
+// runTurn sends one prompt to the agent and renders the result. accepted
+// means the prompt already passed prompt_submit hooks and was recorded
+// (a steer message that arrived too late to be read mid-turn).
+func runTurn(ctx context.Context, app *App, sessionID, line string, interrupts <-chan os.Signal, accepted bool) {
+	if !accepted && !acceptPrompt(ctx, app, sessionID, line) {
+		return
 	}
 	attached, ok := takeAttachments(app, line)
 	if !ok {
@@ -256,9 +315,10 @@ func runTurn(ctx context.Context, app *App, sessionID, line string, interrupts <
 	}
 	if app.Tools != nil {
 		app.Tools.Checkpoints().Begin(textutil.Ellipsize(strings.Join(strings.Fields(line), " "), 60))
-		app.Tools.Hooks().Audit().Log(audit.Entry{Kind: audit.KindPrompt, Session: sessionID, Detail: line})
 	}
-	warnOnErr(app.Storage.AddMessage("user", line+AttachmentNote(attached)))
+	if !accepted {
+		warnOnErr(app.Storage.AddMessage("user", line+AttachmentNote(attached)))
+	}
 
 	fmt.Println()
 	var modelOutput strings.Builder
@@ -277,7 +337,9 @@ func runTurn(ctx context.Context, app *App, sessionID, line string, interrupts <
 	for _, img := range attached {
 		execOpts = append(execOpts, runtime.WithAttachments(images.Part(img)))
 	}
+	stopSteering := watchSteering(turnCtx, app, sessionID, printer)
 	streamErr := app.Engine.Execute(turnCtx, sessionID, line, printer.Handle, execOpts...)
+	stopSteering() // waits for a message being typed, so it isn't lost
 	printer.End()
 	turnInterrupted := turnCtx.Err() != nil
 	stopTurn()
@@ -297,6 +359,65 @@ func runTurn(ctx context.Context, app *App, sessionID, line string, interrupts <
 		warnOnErr(app.Storage.AddMessage("model", modelOutput.String()))
 	}
 	fmt.Println()
+
+	// Messages sent after the model's last tool call were never read.
+	if left := app.Engine.TakeSteers(sessionID); len(left) > 0 {
+		text := strings.Join(left, "\n\n")
+		if turnInterrupted {
+			fmt.Printf("%s%s%s\n\n", Yellow, i18n.T("steer.dropped", "text", safe(text)), Reset)
+			return
+		}
+		fmt.Printf("%s%s%s\n", Cyan, i18n.T("steer.sending"), Reset)
+		runTurn(ctx, app, sessionID, text, interrupts, true)
+	}
+}
+
+// acceptPrompt runs prompt_submit hooks and audits the prompt.
+func acceptPrompt(ctx context.Context, app *App, sessionID, text string) bool {
+	if app.Tools == nil {
+		return true
+	}
+	if reason := app.Tools.ScriptHooks().PromptSubmit(ctx, sessionID, text); reason != "" {
+		fmt.Printf("%s⛔ %s%s\n", Red, i18n.T("repl.prompt_blocked", "reason", safe(reason)), Reset)
+		return false
+	}
+	app.Tools.Hooks().Audit().Log(audit.Entry{Kind: audit.KindPrompt, Session: sessionID, Detail: text})
+	return true
+}
+
+// steerInput is an Input that can watch the keyboard during a turn.
+type steerInput interface {
+	WatchKeys(onKey func(prefill string)) (stop func())
+	AskSteer(ctx context.Context, prompt, prefill string) (string, error)
+}
+
+// watchSteering lets the user type a message while the turn runs. Output
+// is held back while they type. An accepted message (prompt_submit hooks
+// apply, as to any prompt) is queued for the agent, which reads it with its
+// next tool result.
+func watchSteering(ctx context.Context, app *App, sessionID string, printer *Printer) (stop func()) {
+	in, ok := app.Input.(steerInput)
+	if !ok {
+		return func() {}
+	}
+	return in.WatchKeys(func(prefill string) {
+		printer.Pause()
+		defer printer.Resume()
+		text, err := in.AskSteer(ctx, "\n"+Cyan+i18n.T("steer.prompt")+Reset, prefill)
+		text = strings.TrimSpace(text)
+		switch {
+		case err != nil: // Ctrl+C: the turn is being cancelled
+			return
+		case text == "":
+			fmt.Printf("%s%s%s\n", Dim, i18n.T("steer.cancelled"), Reset)
+			return
+		case !acceptPrompt(ctx, app, sessionID, text):
+			return
+		}
+		warnOnErr(app.Storage.AddMessage("user", text))
+		app.Engine.Steer(sessionID, text)
+		fmt.Printf("%s%s%s\n", Dim, i18n.T("steer.queued"), Reset)
+	})
 }
 
 // UsageLine summarises a turn's usage: tokens in/out, context size and cost.

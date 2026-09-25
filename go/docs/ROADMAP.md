@@ -142,6 +142,21 @@ Also fixed: the model name now resolves per provider (`code_puppy.default_model`
 
 ---
 
+## 13. Steering mid-turn — ✅ done (M)
+
+**Problem.** A long turn couldn't be corrected without Ctrl+C, which throws the turn's work away. Python lets you press Ctrl+T and type a message that the model sees before its next call.
+
+**Approach.**
+- **Delivery (`runtime.Engine.Steer`):** messages are queued per session and attached to the next tool result as `message_from_user`. The obvious alternative, adding a user message in a before-model callback, doesn't work: ADK callback contexts return nil from `Session()`, so the message would reach one request and then vanish from history. Tool results are recorded by the ADK in order, so a steer is seen by every later call, survives compaction and `--resume`, and avoids provider rules about message order. A failed tool's error is kept. Sub-agent tools (other sessions) don't take the parent's messages. Anything left when the turn ends is returned by `TakeSteers`.
+- **Keyboard (`pkg/tui/keywatch*.go`):** the line editor can't abandon a read, so a key watcher owns the terminal between prompts during a turn. It switches off line buffering and echo but keeps signals, so Ctrl+C works as before, and disables macOS's Ctrl+T STATUS key. It uses `select(2)` with a 50 ms timeout, since `poll(2)` doesn't work on macOS terminals. Typing or Ctrl+T opens a steer prompt pre-filled with what was typed, with printer output held back until Enter. The spinner returns only if it was showing. Approval and question prompts pause the watcher, and an open steer prompt finishes first. The editor only reads stdin when a prompt asks, so the two never race. Other platforms: the watcher exits and turns behave as before.
+- **REPL:** steer messages pass `prompt_submit` hooks and are audited and recorded like prompts. A message that arrives after the model's last tool call is sent as the next prompt, or reported as not sent if the turn was interrupted.
+
+**Not done.** The shared event stream proposed alongside this: steering didn't need it, and audit, hooks and traces are already fed from engine callbacks.
+
+**Tests.** Engine: delivery on the next tool result, history across turns and in session events, failed-tool errors kept, leftovers returned, scoping to the session and away from sub-agents. Watcher (a channel-backed fake terminal): triggers, ignored keys (Enter, arrow keys), pausing for prompts with no lost keys, pause waiting for an open steer prompt or giving up on its context, and the terminal mode restored. Printer: output held and flushed in order; spinner rule. REPL with a real engine and a fake keyboard: mid-turn delivery, a late message becoming the next prompt (recorded once), and a hook blocking a message. Also driven for real through a pseudo-terminal (`script`) against a local fake OpenAI server: the second request carried the message.
+
+---
+
 ## 9. Real-environment verification — 🔜 needs a person; see [MANUAL_VERIFICATION.md](MANUAL_VERIFICATION.md)
 
 Not automatable here; run once and record results in this file:
