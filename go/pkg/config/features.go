@@ -152,7 +152,9 @@ type WebConfig struct {
 // DefaultPricing holds estimated list prices for the default models. They
 // change over time; override them under [pricing."model-name"].
 var DefaultPricing = map[string]ModelPrice{
-	"gemini-2.5-flash": {InputPerMTok: 0.30, OutputPerMTok: 2.50, CachedInputPerMTok: 0.075},
+	// Gemini 3.8 Flash at its introductory price, valid through 2026-12-31;
+	// from 2027-01-01 it is 1.50 / 7.50 / 0.15. Update this entry then.
+	"gemini-3.8-flash": {InputPerMTok: 0.75, OutputPerMTok: 3.75, CachedInputPerMTok: 0.075},
 	"gemini-2.5-pro":   {InputPerMTok: 1.25, OutputPerMTok: 10.00, CachedInputPerMTok: 0.31},
 	"gpt-4o":           {InputPerMTok: 2.50, OutputPerMTok: 10.00, CachedInputPerMTok: 1.25},
 	// Claude list prices; cache reads bill at 10% of input, 5-minute cache

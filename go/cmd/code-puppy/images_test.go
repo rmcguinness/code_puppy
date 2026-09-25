@@ -46,7 +46,7 @@ func TestLoadAttachments(t *testing.T) {
 func TestOneShotWithImage(t *testing.T) {
 	e := testEnv(t)
 	writePNG(t, filepath.Join(e.tools.Workspace().Dir(), "ui.png"))
-	llm := runtime.NewMockLLM("gemini-2.5-flash", genai.NewContentFromText("a button", genai.RoleModel))
+	llm := runtime.NewMockLLM("gemini-3.8-flash", genai.NewContentFromText("a button", genai.RoleModel))
 	if err := e.engine.SetModel(context.Background(), llm); err != nil {
 		t.Fatal(err)
 	}

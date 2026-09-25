@@ -46,7 +46,7 @@ func newImageApp(t *testing.T, replies ...string) (*App, *runtime.MockLLM) {
 	for _, r := range replies {
 		contents = append(contents, genai.NewContentFromText(r, genai.RoleModel))
 	}
-	llm := runtime.NewMockLLM("gemini-2.5-flash", contents...)
+	llm := runtime.NewMockLLM("gemini-3.8-flash", contents...)
 	eng, err := runtime.NewEngine(context.Background(), cfg, agentReg, skillProv, reg, llm)
 	if err != nil {
 		t.Fatal(err)

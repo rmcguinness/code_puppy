@@ -19,10 +19,10 @@ import (
 )
 
 func TestUsageEstimate(t *testing.T) {
-	tr := NewUsageTracker(map[string]config.ModelPrice{"gemini-2.5-flash": {InputPerMTok: 1, OutputPerMTok: 10, CachedInputPerMTok: 0.1}})
+	tr := NewUsageTracker(map[string]config.ModelPrice{"gemini-3.8-flash": {InputPerMTok: 1, OutputPerMTok: 10, CachedInputPerMTok: 0.1}})
 	m := &genai.GenerateContentResponseUsageMetadata{PromptTokenCount: 1_000_000, CachedContentTokenCount: 500_000, CandidatesTokenCount: 100_000, ThoughtsTokenCount: 100_000}
 
-	u := tr.Estimate("gemini-2.5-flash-001", m, 0) // prefix match
+	u := tr.Estimate("gemini-3.8-flash-001", m, 0) // prefix match
 	want := 0.5*1 + 0.5*0.1 + 0.2*10
 	if !u.Priced || abs(u.CostUSD-want) > 1e-9 || u.Output != 200_000 || u.LastPrompt != 1_000_000 {
 		t.Errorf("estimate %+v, want cost %v", u, want)
@@ -31,8 +31,8 @@ func TestUsageEstimate(t *testing.T) {
 		t.Errorf("unknown model should be unpriced: %+v", u)
 	}
 
-	tr.Record("s", "gemini-2.5-flash", m)
-	tr.Record("s", "gemini-2.5-flash", &genai.GenerateContentResponseUsageMetadata{PromptTokenCount: 10})
+	tr.Record("s", "gemini-3.8-flash", m)
+	tr.Record("s", "gemini-3.8-flash", &genai.GenerateContentResponseUsageMetadata{PromptTokenCount: 10})
 	s := tr.Session("s")
 	if s.Calls != 2 || s.LastPrompt != 10 || s.Input != 1_000_010 {
 		t.Errorf("accumulated %+v", s)
@@ -76,7 +76,7 @@ func newEngineWith(t *testing.T, fo fixtureOpts, responses ...*genai.Content) en
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { toolReg.Close() })
-	llm := NewMockLLM("gemini-2.5-flash", responses...)
+	llm := NewMockLLM("gemini-3.8-flash", responses...)
 	eng, err := NewEngine(context.Background(), cfg, agentReg, skillProv, toolReg, llm, fo.opts...)
 	if err != nil {
 		t.Fatal(err)
@@ -255,7 +255,7 @@ func TestUsageCacheWrites(t *testing.T) {
 func TestEnginePricesServedModelAndCacheWrites(t *testing.T) {
 	f := newEngineWith(t, fixtureOpts{}, textContent("hi"))
 	f.llm.Usage = &genai.GenerateContentResponseUsageMetadata{PromptTokenCount: 1_000_000}
-	// Configured model is gemini-2.5-flash, but a fallback model served it.
+	// Configured model is gemini-3.8-flash, but a fallback model served it.
 	f.llm.ServedBy = "claude-opus-5"
 	f.llm.Metadata = map[string]any{CacheWriteTokensKey: int64(1_000_000)}
 	collect(t, f.eng, "s", "go")
@@ -266,9 +266,10 @@ func TestEnginePricesServedModelAndCacheWrites(t *testing.T) {
 	// An unknown served model falls back to the configured model's price.
 	g := newEngineWith(t, fixtureOpts{}, textContent("hi"))
 	g.llm.Usage = &genai.GenerateContentResponseUsageMetadata{PromptTokenCount: 1_000_000}
-	g.llm.ServedBy = "gemini-2.5-flash-exp-0927"
+	g.llm.ServedBy = "gemini-3.8-flash-exp-0927"
 	collect(t, g.eng, "s", "go")
-	if u := g.eng.Usage("s"); !u.Priced || abs(u.CostUSD-0.30) > 1e-9 {
+	want := config.DefaultPricing["gemini-3.8-flash"].InputPerMTok // 1M input tokens
+	if u := g.eng.Usage("s"); !u.Priced || abs(u.CostUSD-want) > 1e-9 {
 		t.Errorf("prefix-priced served model: %+v", u)
 	}
 }

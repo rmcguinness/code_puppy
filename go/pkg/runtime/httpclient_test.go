@@ -153,7 +153,7 @@ func TestProvidersRetryTransientErrors(t *testing.T) {
 			gc := retryPolicy{maxRetries: retries, stall: time.Minute}.geminiConfig("test-key")
 			gc.Backend = genai.BackendGeminiAPI
 			gc.HTTPOptions.BaseURL = url
-			m, err := gemini.NewModel(context.Background(), "gemini-2.5-flash", gc)
+			m, err := gemini.NewModel(context.Background(), "gemini-3.8-flash", gc)
 			if err != nil {
 				t.Fatal(err)
 			}

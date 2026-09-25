@@ -278,7 +278,7 @@ func TestGeminiDeveloperAPIAcceptsImages(t *testing.T) {
 		io.WriteString(w, `{"candidates":[{"content":{"role":"model","parts":[{"text":"a cat"}]},"finishReason":"STOP"}]}`)
 	}))
 	defer srv.Close()
-	llm, err := gemini.NewModel(context.Background(), "gemini-2.5-flash", &genai.ClientConfig{
+	llm, err := gemini.NewModel(context.Background(), "gemini-3.8-flash", &genai.ClientConfig{
 		APIKey: "test-key", Backend: genai.BackendGeminiAPI, HTTPOptions: genai.HTTPOptions{BaseURL: srv.URL}})
 	if err != nil {
 		t.Fatal(err)

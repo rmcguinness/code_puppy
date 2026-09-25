@@ -330,7 +330,7 @@ func TestAnthropicErrors(t *testing.T) {
 
 func TestModelNameResolution(t *testing.T) {
 	cfg := config.DefaultConfig()
-	for provider, want := range map[string]string{"gemini": "gemini-2.5-flash", "anthropic": "claude-opus-5", "openai": "gpt-4o", "ollama": "gpt-4o"} {
+	for provider, want := range map[string]string{"gemini": "gemini-3.8-flash", "anthropic": "claude-opus-5", "openai": "gpt-4o", "ollama": "gpt-4o"} {
 		cfg.LLM.Provider = provider
 		if got := cfg.ModelName(); got != want {
 			t.Errorf("%s: ModelName = %q, want %q", provider, got, want)

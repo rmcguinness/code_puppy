@@ -46,7 +46,7 @@ func NewUsageTracker(pricing map[string]config.ModelPrice) *UsageTracker {
 }
 
 // price finds the price for model: exact, else the longest configured prefix
-// ("gemini-2.5-flash-001" uses "gemini-2.5-flash").
+// ("gemini-3.8-flash-001" uses "gemini-3.8-flash").
 func (t *UsageTracker) price(model string) (config.ModelPrice, bool) {
 	if p, ok := t.pricing[model]; ok {
 		return p, true

@@ -239,7 +239,7 @@ func newSteerApp(t *testing.T, message string, cfgFn func(*config.Config), repli
 	}
 	t.Cleanup(func() { reg.Close() })
 	in := &fakeSteerInput{LineReader: NewLineReader(strings.NewReader(""), io.Discard), message: message, typed: make(chan struct{})}
-	llm := runtime.NewMockLLM("gemini-2.5-flash", replies...)
+	llm := runtime.NewMockLLM("gemini-3.8-flash", replies...)
 	eng, err := runtime.NewEngine(context.Background(), cfg, agentReg, skillProv, reg, &gatedLLM{MockLLM: llm, gate: in.typed})
 	if err != nil {
 		t.Fatal(err)

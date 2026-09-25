@@ -164,7 +164,7 @@ endpoint = "http://localhost:4318"
 ```toml
 [llm]
 provider = "gemini"
-fallback_models = ["anthropic/claude-sonnet-5", "gemini-2.5-flash-lite"]   # "provider/model", or a model of the same provider
+fallback_models = ["anthropic/claude-sonnet-5", "gemini-3.5-flash-lite"]   # "provider/model", or a model of the same provider
 ```
 Each provider uses its own credentials section. A failed model is skipped for 15 s, doubling up to 5 minutes, then tried again. You see one notice when a fallback takes over and one when the primary is back. Cost is priced by the model that answered. A model that fails after it started answering isn't replaced, because part of the answer is already on screen. For OpenRouter names that contain a slash, write the provider first: `openai/anthropic/claude-sonnet-5`. `code-puppy doctor --online` checks each model separately.
 

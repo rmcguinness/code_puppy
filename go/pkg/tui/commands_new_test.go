@@ -32,7 +32,7 @@ func newCommandApp(t *testing.T, input string, replies ...*genai.Content) (*App,
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { reg.Close() })
-	llm := runtime.NewMockLLM("gemini-2.5-flash", replies...)
+	llm := runtime.NewMockLLM("gemini-3.8-flash", replies...)
 	eng, err := runtime.NewEngine(context.Background(), cfg, agentReg, skillProv, reg, llm)
 	if err != nil {
 		t.Fatal(err)

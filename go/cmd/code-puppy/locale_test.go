@@ -38,7 +38,7 @@ func TestLocaleReachesModelAndConfig(t *testing.T) {
 
 	e.locales = setupLocale(e.cfg, func(s string) { t.Errorf("warning: %s", s) })
 	reply := func() *genai.Content { return genai.NewContentFromText("ok", genai.RoleModel) }
-	llm := runtime.NewMockLLM("gemini-2.5-flash", reply(), reply())
+	llm := runtime.NewMockLLM("gemini-3.8-flash", reply(), reply())
 	if err := e.engine.SetModel(ctx, llm); err != nil {
 		t.Fatal(err)
 	}

@@ -185,7 +185,7 @@ func newFullApp(t *testing.T) *App {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { reg.Close() })
-	llm := runtime.NewMockLLM("gemini-2.5-flash",
+	llm := runtime.NewMockLLM("gemini-3.8-flash",
 		&genai.Content{Role: genai.RoleModel, Parts: []*genai.Part{{FunctionCall: &genai.FunctionCall{Name: "create_file", Args: map[string]any{"path": "made.txt", "content": "by tool\n"}}}}},
 		genai.NewContentFromText("created", genai.RoleModel))
 	llm.Usage = &genai.GenerateContentResponseUsageMetadata{PromptTokenCount: 500, CandidatesTokenCount: 50}

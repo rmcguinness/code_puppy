@@ -179,8 +179,8 @@ func TestCancelledTrialIsReleased(t *testing.T) {
 func TestParseModelRef(t *testing.T) {
 	cases := []struct{ ref, def, p, n string }{
 		{"anthropic/claude-sonnet-5", "gemini", "anthropic", "claude-sonnet-5"},
-		{"Gemini/gemini-2.5-flash", "openai", "gemini", "gemini-2.5-flash"},
-		{"gemini-2.5-flash-lite", "gemini", "gemini", "gemini-2.5-flash-lite"},
+		{"Gemini/gemini-3.8-flash", "openai", "gemini", "gemini-3.8-flash"},
+		{"gemini-3.5-flash-lite", "gemini", "gemini", "gemini-3.5-flash-lite"},
 		{"meta-llama/llama-4", "openai", "openai", "meta-llama/llama-4"},        // not a provider prefix
 		{"openai/anthropic/claude-3", "openai", "openai", "anthropic/claude-3"}, // OpenRouter, explicit
 		{"ollama/qwen2.5-coder:7b", "gemini", "ollama", "qwen2.5-coder:7b"},
@@ -235,7 +235,7 @@ func TestNewModelBuildsACrossProviderChain(t *testing.T) {
 }
 
 func TestEngineNoticesFallbackOnceAndRecovery(t *testing.T) {
-	primary, backup := &scripted{name: "gemini-2.5-flash", failing: true}, &scripted{name: "claude-sonnet-5"}
+	primary, backup := &scripted{name: "gemini-3.8-flash", failing: true}, &scripted{name: "claude-sonnet-5"}
 	var notices []string
 	f := newEngineWith(t, fixtureOpts{opts: []Option{WithNotice(func(s string) { notices = append(notices, s) })}})
 	chain, clk := chainOf(t, primary, backup)

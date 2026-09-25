@@ -102,7 +102,7 @@ const configTemplate = `
 puppy_name    = "Code Puppy"
 owner_name    = "Developer"
 default_agent = "code-puppy"
-# default_model = "gemini-2.5-flash"  # overrides llm.<provider>.model for every provider
+# default_model = "gemini-3.8-flash"  # overrides llm.<provider>.model for every provider
 agency_level  = "high"      # low | medium | high | extreme
 temperature   = 0.2
 max_tokens    = 8192
@@ -113,11 +113,11 @@ trust_workspace = false     # load ./agents and ./skills from the project
 provider = "gemini"         # gemini | anthropic | openai | ollama
 max_retries = 3             # retries for rate limits, overload, 5xx and dropped connections
 stall_timeout_seconds = 600 # fail a model request that sends nothing for this long
-# fallback_models = ["anthropic/claude-sonnet-5", "gemini-2.5-flash-lite"]  # tried in order if the model fails
+# fallback_models = ["anthropic/claude-sonnet-5", "gemini-3.5-flash-lite"]  # tried in order if the model fails
 
 [llm.gemini]
 # api_key = "..."           # or export GEMINI_API_KEY
-model = "gemini-2.5-flash"
+model = "gemini-3.8-flash"
 
 [llm.anthropic]
 # api_key   = "..."         # or ANTHROPIC_API_KEY, ANTHROPIC_AUTH_TOKEN, or an "ant auth login" profile
@@ -191,9 +191,9 @@ enabled = true
 # search_api_key  = "..."                 # or BRAVE_API_KEY / TAVILY_API_KEY
 # search_url      = "http://localhost:8888" # searxng instance
 
-# [pricing."gemini-2.5-flash"]
-# input_per_mtok = 0.30
-# output_per_mtok = 2.50
+# [pricing."gemini-3.8-flash"]
+# input_per_mtok = 0.75
+# output_per_mtok = 3.75
 # cached_input_per_mtok = 0.075
 
 # [[mcp.servers]]

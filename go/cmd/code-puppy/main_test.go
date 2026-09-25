@@ -209,7 +209,7 @@ func testEnvWith(t *testing.T, mutate func(*config.Config), responses ...*genai.
 	}
 	t.Cleanup(func() { e.Close() })
 	e.storage, _ = session.NewStorage(cfg.Session.StorageDir)
-	llm := runtime.NewMockLLM("gemini-2.5-flash", responses...)
+	llm := runtime.NewMockLLM("gemini-3.8-flash", responses...)
 	llm.Usage = &genai.GenerateContentResponseUsageMetadata{PromptTokenCount: 100, CandidatesTokenCount: 10}
 	if e.engine, err = runtime.NewEngine(context.Background(), cfg, e.agents, e.skills, e.tools, llm); err != nil {
 		t.Fatal(err)
