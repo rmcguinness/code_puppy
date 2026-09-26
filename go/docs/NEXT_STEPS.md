@@ -4,7 +4,7 @@ Written 2026-09-24 at commit `7e211697` on `main`; updated 2026-09-25. Read this
 
 ## State
 
-Roadmap items 1–21 are done and committed; each has its own commit:
+Roadmap items 1–22 are done and committed; each has its own commit:
 
 | Commit | Change |
 |---|---|
@@ -22,6 +22,7 @@ Roadmap items 1–21 are done and committed; each has its own commit:
 | `36c2758b` | Removed the committed editor swap file; `*.swp` ignored |
 | `957c08b9` | Named session snapshots (`/session save`, `/session load <name>`, `--resume=<name>`) |
 | `9eeab5e6` | Google search via Gemini grounding; `/search web`, `/search session` |
+| `155d595b`, `a5f34180`, (this commit) | Item 22: Castor skill definitions and `[skills.policy]`; the gVisor/OS script sandbox; environments, `run_skill_script`, `/envs` |
 | `1370b80f` | Side questions (`/btw`) |
 | (the commit adding `pkg/session/title_test.go`) | Session names from the first prompt, `/rename`, terminal title, resume hint on exit |
 
@@ -37,7 +38,13 @@ Roadmap items 1–21 are done and committed; each has its own commit:
 2. **After v0.1.0** (released 2026-09-26, verified; see MANUAL_VERIFICATION section 18): mention in the release notes that the macOS binaries aren't notarized (`xattr -d com.apple.quarantine code-puppy`), or notarize them (needs an Apple Developer account). Add Dependabot for `github-actions` to keep the pinned SHAs current. Tags are unsigned unless GPG signing works again: `~/.gnupg/gpg-agent.conf` points at an IntelliJ helper that no longer exists, and GPG Suite's `pinentry-mac` is the fix.
 3. **Linux sandbox startup cost.** Before every sandboxed command, `expandBlocked` (`pkg/tools/bwrap.go`) scans the writable roots, including the temp and cache directories (e.g. the Go build cache), for blocked names, up to 50,000 entries. Measured in a Linux container: about 0.1 s per command normally, 3.4 s under `-race`. Worth reducing (e.g. skip cache directories for name patterns, or reuse a recent scan), keeping in mind that a file created between scans could then escape masking. CI's parallel-cap test runs with the sandbox off because of this.
 4. **Upgrade the pinned actions' majors** soon: GitHub warns that checkout v4 and setup-go v5 target Node.js 20, which is deprecated and already forced onto Node.js 24.
-5. **Isolated Python environments with gVisor** (ROADMAP item 22). The spike is done: rootless `runsc run` with a generated OCI config and a skeleton root, not `runsc do`. The design direction is agreed: gVisor driven from Go (`sandboxexec`) with goroutine-owned cleanup; Castor `SkillDefinition` frontmatter; `[skills.policy]` host guardrails that cap what skills request. Steps 1 (frontmatter and `[skills.policy]`) and 2 (the `ScriptBox`: gVisor with cleanup and orphan sweep, OS-sandbox fallback) are done. **Resume here** with step 3: isolated Python environments (`uv`), `run_skill_script`, and `/envs`.
+5. **Skill scripts, follow-ups** (ROADMAP item 22 is done: Castor definitions, `[skills.policy]`, the gVisor/OS `ScriptBox`, environments, `run_skill_script`, `/envs`):
+   - TypeScript scripts;
+   - scripts that write the workspace directly, with snapshots;
+   - `requires-python` with uv-managed interpreters;
+   - `storage_uri` and resources;
+   - running the opt-in real-install tests in CI (`CODE_PUPPY_PYENV_TESTS=1`);
+   - adding a network field to Castor's proto, instead of `custom_hints.network`.
 6. **Optional: reasoning settings per model.** Python's `/model_settings` also sets `reasoning_effort`, extended thinking and budgets. The Go wrapper (`pkg/runtime/settings.go`) is where they'd go, mapped to genai `ThinkingConfig`, which each adapter translates differently.
 7. **Optional, from the Antigravity review (ROADMAP, "Antigravity CLI review"):** `/copy` (last reply to the clipboard, with OSC 52 over SSH), `--add-dir <path>` at startup, `/grill-me` (the agent interviews you before coding), and `/fork [n]` (branch a new session from an earlier turn).
 8. **Optional:** the `python/` tree still names `gemini-2.5-flash` in four files. They were left alone because only the Go implementation was in scope.

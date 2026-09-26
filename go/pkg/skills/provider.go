@@ -96,7 +96,7 @@ func (p *Provider) DiscoverExternal(dirs []string) error {
 			if skill.Name != "" {
 				// Discover any neighboring resource files
 				skillDir := filepath.Dir(path)
-				skill.fsys, skill.root = os.DirFS(skillDir), "."
+				skill.fsys, skill.root, skill.hostDir = os.DirFS(skillDir), ".", skillDir
 				resources := []string{}
 				entries, _ := os.ReadDir(skillDir)
 				for _, entry := range entries {

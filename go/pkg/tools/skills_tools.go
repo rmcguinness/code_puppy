@@ -2,7 +2,9 @@ package tools
 
 import (
 	"fmt"
+	"strings"
 
+	"github.com/retail-cortex/code_puppy/pkg/config"
 	"github.com/retail-cortex/code_puppy/pkg/skills"
 	"google.golang.org/adk/v2/agent"
 	"google.golang.org/adk/v2/tool"
@@ -76,11 +78,27 @@ type ActivateSkillOutput struct {
 	SkillName    string   `json:"skill_name"`
 	Instructions string   `json:"instructions"`
 	Resources    []string `json:"resources"`
-	Error        string   `json:"error,omitempty"`
+	// Scripts can be run with run_skill_script, when allowed.
+	Scripts []SkillScriptInfo `json:"scripts,omitempty"`
+	Error   string            `json:"error,omitempty"`
+}
+
+// SkillScriptInfo describes one of a skill's scripts for the model.
+type SkillScriptInfo struct {
+	Name        string `json:"name"`
+	Description string `json:"description,omitempty"`
+	Allowed     bool   `json:"allowed"`
+	// Why the host's skills policy doesn't allow it.
+	Blocked string `json:"blocked,omitempty"`
 }
 
 // NewActivateSkillTool creates an ADK tool for activating a skill.
-func NewActivateSkillTool(provider *skills.Provider) (tool.Tool, error) {
+// policy (nil: the defaults) decides which of its scripts may run.
+func NewActivateSkillTool(provider *skills.Provider, policy *config.SkillPolicy) (tool.Tool, error) {
+	if policy == nil {
+		p := config.DefaultConfig().Skills.Policy
+		policy = &p
+	}
 	return functiontool.New(
 		functiontool.Config{
 			Name:        "activate_skill",
@@ -99,11 +117,22 @@ func NewActivateSkillTool(provider *skills.Provider) (tool.Tool, error) {
 				}, nil
 			}
 
-			return ActivateSkillOutput{
+			out := ActivateSkillOutput{
 				SkillName:    skill.Name,
 				Instructions: skill.Content,
 				Resources:    skill.Resources,
-			}, nil
+			}
+			if len(skill.Scripts) > 0 {
+				ev := skills.Evaluate(skill, *policy)
+				for i, sc := range skill.Scripts {
+					info := SkillScriptInfo{Name: sc.Name, Description: sc.Description, Allowed: ev.Scripts[i].Allowed}
+					if !info.Allowed {
+						info.Blocked = strings.Join(ev.Scripts[i].Reasons, "; ")
+					}
+					out.Scripts = append(out.Scripts, info)
+				}
+			}
+			return out, nil
 		},
 	)
 }

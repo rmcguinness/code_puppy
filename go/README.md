@@ -69,6 +69,7 @@ Subcommands: `doctor [--online]`, `config init|show|path`, `completion bash|zsh|
 | `/memory [reload\|add <note>]` | Project instructions (`AGENTS.md`, `PUPPY.md`) |
 | `/approvals [revoke <n>\|clear]` | Remembered approval rules |
 | `/session list [--all]\|new\|load <id\|name>`, `/resume <id\|name>` | Saved sessions — scoped to the current workspace; `--all` shows every directory |
+| `/envs [prune\|remove <key>]` | Python environments of skill scripts: size, packages, which skills use them; `prune` removes the unused |
 | `/rename <name>` | Name this session. New sessions are named after their first prompt; the name shows in `/session list` and the terminal window title (`ui.terminal_title`, on by default). On exit, Code Puppy prints the `code-puppy --resume=<id>` command for the session |
 | `/session save <name> [--force]` | Save a snapshot of this session (📸 in `/session list`). Loading it by name starts a new session from that point and leaves the snapshot unchanged, so you can return to it again. `--continue` skips snapshots |
 | `/agents`, `/agent <name>`, `/model <name>` | Personas and models; `/model anthropic/claude-sonnet-5` can switch provider |
@@ -219,7 +220,20 @@ scripts:
 - **`os`**. Seatbelt or bubblewrap, as for shell commands: writes limited to the script's paths, blocked paths hidden, the network as allowed.
 - **`auto`** (default) uses gVisor when a test run works, otherwise the OS sandbox.
 
-Either way a script sees only the variables the policy passes, and it's stopped at its timeout or when you press Ctrl+C. If no sandbox is available (e.g. on Windows), scripts don't run. **Scripts aren't run yet:** isolated Python environments and `run_skill_script` come next (ROADMAP item 22).
+Either way a script sees only the variables the policy passes, and it's stopped at its timeout or when you press Ctrl+C. If no sandbox is available (e.g. on Windows), scripts don't run.
+
+**Running scripts.** `activate_skill` lists a skill's scripts and whether the policy lets each run; the agent runs them with `run_skill_script`. Python scripts only, for now.
+- **Dependencies** go into an isolated environment in `~/.code_puppy/envs`, one per distinct set of requirements. It's built inside the sandbox with the network on and writes allowed only to the environment and the package cache, using `uv` if it's installed (else `venv` and `pip`), from `packages.index`, wheels only by default. You approve each install once, with the package list shown; "always" remembers exactly that list. The system Python is never touched. `/envs` lists environments, `/envs prune` removes those no allowed script needs, and `/envs remove <key>` removes one.
+- **Scripts read the workspace but never write it.** At tier 2 or above, a script writes to its own `.code_puppy/skill-output/<skill>/<run>/` (`$SKILL_OUTPUT`). The agent reads the results there and makes any changes with the file tools, so diffs, approvals, checkpoints and `/undo` work as usual.
+
+| Tier | Approval | Can write |
+|---|---|---|
+| 1 | none (audited) | nothing but its private `/tmp` |
+| 2 (default) | none (audited) | its output directory |
+| 3 | asked every time; can't be remembered | its output directory |
+| 0 (bypass; both sides must allow it) | none | its output directory |
+
+The script gets `$SKILL_DIR`, only the environment variables the policy passes, and the network only if allowed, and it's stopped at its timeout. With `entry_point`, that function is called and its return value is the exit code.
 
 **Forged tools** — tools built by `universal_constructor` are saved with a manifest in `~/.code_puppy/uc_tools` and reloaded on start; `action: "delete"` removes one.
 
@@ -274,7 +288,7 @@ The key is the model name; a `provider/` prefix is ignored (for OpenRouter names
 | `agent-creator` | Creates custom agent specs and skills |
 | `model-judge` | Model comparisons |
 
-Tools: `read_file`, `list_files`, `grep`, `create_file`, `replace_in_file`/`edit`, `delete_snippet`, `apply_patch` (unified diff or `*** Begin Patch`, atomic, multi-file), `delete_file`, `run_shell_command`, `manage_background_process`, `web_fetch`, `web_search` (when configured), `ask_user_question`, skills, `list_agents`/`invoke_agent`, `universal_constructor`, and MCP tools.
+Tools: `read_file`, `list_files`, `grep`, `create_file`, `replace_in_file`/`edit`, `delete_snippet`, `apply_patch` (unified diff or `*** Begin Patch`, atomic, multi-file), `delete_file`, `run_shell_command`, `manage_background_process`, `web_fetch`, `web_search` (when configured), `ask_user_question`, skills (`list_or_search_skills`, `activate_skill`, `run_skill_script`), `list_agents`/`invoke_agent`, `universal_constructor`, and MCP tools.
 
 ---
 

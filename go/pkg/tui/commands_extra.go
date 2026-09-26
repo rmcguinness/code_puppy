@@ -56,6 +56,8 @@ func handleExtraCommand(ctx context.Context, cmd string, args []string, app *App
 		cmdPinModel(ctx, args, app)
 	case "unpin":
 		cmdUnpin(ctx, args, app)
+	case "envs":
+		cmdEnvs(args, app)
 	case "rename":
 		cmdRename(args, app)
 	case "model_settings":

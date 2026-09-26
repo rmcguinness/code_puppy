@@ -135,10 +135,21 @@ func (b *osBox) Run(ctx context.Context, req ScriptRequest) (ScriptResult, error
 	if c, err := canonicalDir(tmp); err == nil {
 		writable[0] = c
 	}
+	// Outside the writable paths everything is read-only already. A
+	// read-only path is only listed when it lies inside a writable one:
+	// the sandbox lets read-only win over nested writable paths, which would
+	// otherwise block e.g. an output directory inside the workspace.
 	var readOnly []string
 	for _, d := range req.ReadOnly {
-		if c, err := canonicalDir(d); err == nil {
-			readOnly = append(readOnly, c)
+		c, err := canonicalDir(d)
+		if err != nil {
+			continue
+		}
+		for _, w := range writable {
+			if c != w && strings.HasPrefix(c, w+string(os.PathSeparator)) {
+				readOnly = append(readOnly, c)
+				break
+			}
 		}
 	}
 	box, err := NewOSSandbox(OSSandboxSpec{

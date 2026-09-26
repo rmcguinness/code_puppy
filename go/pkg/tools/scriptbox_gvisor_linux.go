@@ -28,6 +28,8 @@ import (
 // request's paths are mounted in, and /tmp is a private tmpfs. Home
 // directories and anything else not mounted don't exist inside.
 type gvisorBox struct {
+	blocked  *PathMatcher // hidden inside mounted paths (e.g. the workspace's .env)
+	empty    string       // an empty read-only file, mounted over blocked files
 	runsc    string
 	stateDir string // runsc --root: container state, shared by this user's sandboxes
 	bundles  string // OCI bundles, one per sandbox, removed by Close
@@ -53,11 +55,14 @@ func newGVisorBox(cfg ScriptBoxConfig) (ScriptBox, error) {
 	if dir == "" {
 		dir = config.ExpandHome("~/.code_puppy/sandboxes")
 	}
-	b := &gvisorBox{runsc: runsc, stateDir: filepath.Join(dir, "state"), bundles: filepath.Join(dir, "bundles")}
+	b := &gvisorBox{blocked: cfg.Blocked, runsc: runsc, stateDir: filepath.Join(dir, "state"), bundles: filepath.Join(dir, "bundles"), empty: filepath.Join(dir, "empty")}
 	for _, d := range []string{b.stateDir, b.bundles} {
 		if err := os.MkdirAll(d, 0o700); err != nil {
 			return nil, err
 		}
+	}
+	if err := os.WriteFile(b.empty, nil, 0o400); err != nil && !os.IsPermission(err) {
+		return nil, err
 	}
 	b.sweep(context.Background())
 	gvisorProbeMu.Lock()
@@ -124,6 +129,15 @@ func (b *gvisorBox) Run(ctx context.Context, req ScriptRequest) (ScriptResult, e
 	}
 	for _, p := range req.Writable {
 		mounts = append(mounts, sandbox.Mount{Source: p, Destination: p, Type: sandbox.MountTypeBind, Recursive: true, NoSuid: true, NoDev: true})
+	}
+	// Blocked paths inside what's mounted (a .env in the workspace) are
+	// covered: files by an empty file, directories by an empty tmpfs.
+	files, dirs := expandBlocked(OSSandboxSpec{WritableDirs: req.Writable, ReadOnlyDirs: req.ReadOnly, Blocked: b.blocked})
+	for _, f := range files {
+		mounts = append(mounts, sandbox.Mount{Source: b.empty, Destination: f, Type: sandbox.MountTypeBind, ReadOnly: true})
+	}
+	for _, d := range dirs {
+		mounts = append(mounts, sandbox.Mount{Destination: d, Type: sandbox.MountTypeTmpfs, ReadOnly: true})
 	}
 	network := sandbox.NetworkModeNone
 	if req.Network {

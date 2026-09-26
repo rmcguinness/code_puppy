@@ -90,3 +90,26 @@ func TestGVisorSweepsOrphans(t *testing.T) {
 	exec.Command(b.runsc, "--root", b.stateDir, "kill", live, "SIGKILL").Run()
 	exec.Command(b.runsc, "--root", b.stateDir, "delete", "--force", live).Run()
 }
+
+// Blocked files and directories inside a mounted path are hidden.
+func TestGVisorHidesBlockedPaths(t *testing.T) {
+	if _, err := findRunsc(); err != nil {
+		t.Skipf("gVisor tests need runsc: %v", err)
+	}
+	m, err := NewPathMatcher([]string{".env", "secrets"}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	box, _, err := NewScriptBox(ScriptBoxConfig{Mode: "gvisor", StateDir: t.TempDir(), Blocked: m})
+	if err != nil {
+		t.Fatal(err)
+	}
+	d := newScriptDirs(t)
+	os.WriteFile(filepath.Join(d.readOnly, ".env"), []byte("API_KEY=topsecret"), 0o600)
+	os.MkdirAll(filepath.Join(d.readOnly, "secrets"), 0o700)
+	os.WriteFile(filepath.Join(d.readOnly, "secrets", "key.pem"), []byte("PRIVATE"), 0o600)
+	_, out, _ := runScript(t, box, d, "cat "+d.readOnly+"/.env; ls "+d.readOnly+"/secrets; cat "+d.readOnly+"/hello.txt", 0)
+	if strings.Contains(out, "topsecret") || strings.Contains(out, "key.pem") || !strings.Contains(out, "hello") {
+		t.Fatalf("blocked paths visible, or allowed file hidden:\n%s", out)
+	}
+}

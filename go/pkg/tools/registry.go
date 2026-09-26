@@ -17,20 +17,21 @@ import (
 // Registry manages initialized ADK tools and the resources they share.
 // Tools are registered once at construction and never mutated afterwards.
 type Registry struct {
-	tools       map[string]tool.Tool
-	workspace   *Workspace
-	hooks       *Hooks
-	processes   *ProcessManager
-	policy      *CommandPolicy
-	exec        *ExecEnv
-	checkpoints *Checkpoints
-	mcp         *MCPManager
-	scripts     *ScriptHooks
-	images      *images.Store
-	imageOpts   images.Options
-	searcher    *webSearcher // nil: no search provider configured
-	searchErr   error        // why the configured provider can't be used
-	fetch       bool         // web_fetch is available
+	tools        map[string]tool.Tool
+	workspace    *Workspace
+	hooks        *Hooks
+	processes    *ProcessManager
+	policy       *CommandPolicy
+	exec         *ExecEnv
+	checkpoints  *Checkpoints
+	mcp          *MCPManager
+	scripts      *ScriptHooks
+	images       *images.Store
+	imageOpts    images.Options
+	skillScripts *SkillScripts // nil: skills disabled
+	searcher     *webSearcher  // nil: no search provider configured
+	searchErr    error         // why the configured provider can't be used
+	fetch        bool          // web_fetch is available
 }
 
 // NewRegistry initializes all standard Code Puppy tools. Call Close when done
@@ -180,10 +181,16 @@ func NewRegistry(cfg *config.Config, agentReg *agents.Registry, skillProv *skill
 			return newWebSearchTool(r.searcher, r.hooks)
 		}})
 	}
+	if skillProv != nil && cfg.Skills.Enabled {
+		r.skillScripts = NewSkillScripts(skillProv, cfg.Skills.Policy, ws, r.hooks,
+			NewPyEnvs("", cfg.Skills.Policy.Packages),
+			ScriptBoxConfig{Mode: cfg.Skills.Policy.Sandbox, Blocked: ws.Blocked()})
+		entries = append(entries, entry{[]string{"run_skill_script"}, func() (tool.Tool, error) { return NewRunSkillScriptTool(r.skillScripts) }})
+	}
 	if skillProv != nil {
 		entries = append(entries,
 			entry{[]string{"list_or_search_skills"}, func() (tool.Tool, error) { return NewListSkillsTool(skillProv) }},
-			entry{[]string{"activate_skill"}, func() (tool.Tool, error) { return NewActivateSkillTool(skillProv) }},
+			entry{[]string{"activate_skill"}, func() (tool.Tool, error) { return NewActivateSkillTool(skillProv, &cfg.Skills.Policy) }},
 		)
 	}
 	if agentReg != nil {
@@ -304,3 +311,6 @@ func (r *Registry) GetAllTools() []tool.Tool {
 	}
 	return list
 }
+
+// SkillScripts runs skills' scripts; nil when skills are disabled.
+func (r *Registry) SkillScripts() *SkillScripts { return r.skillScripts }

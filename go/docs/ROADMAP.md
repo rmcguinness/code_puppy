@@ -274,7 +274,7 @@ Also from the Antigravity review. Every interactive session used to be titled "I
 
 ---
 
-## 22. Isolated Python environments, sandboxed by gVisor — 📋 planned (M–L); spike done
+## 22. Isolated Python environments, sandboxed by gVisor — ✅ done (M–L)
 
 **Goal.** Skills that ship Python scripts, and forged Python tools, get their own dependencies (`requirements.txt` / `pyproject.toml`) without touching the system Python. Where available, installs and runs happen inside gVisor, whose user-space kernel protects against kernel exploits, which bubblewrap and Seatbelt don't.
 
@@ -356,7 +356,42 @@ deny           = ["*-nightly"]
 *Order.*
 1. ✅ Frontmatter parsing, including the spec fields, and `[skills.policy]` with its merge rules, fully unit-tested (S–M). Done 2026-09-26; see "Step 1 outcome" below.
 2. ✅ The gVisor backend through the Go package, with the goroutine lifecycle and cleanup, plus the OS-sandbox fallback (M). Done 2026-09-26; see "Step 2 outcome" below.
-3. Environments, `run_skill_script`, `/envs` (M).
+3. ✅ Environments, `run_skill_script`, `/envs` (M). Done 2026-09-26; see "Step 3 outcome" below.
+
+*Step 3 outcome.*
+- **Scripts never write the workspace.** `Checkpoints` only records changes made through the file tools, so direct writes would bypass diffs, approvals and `/undo`. Instead a script reads the workspace (mounted read-only) and, from tier 2 up, writes to `.code_puppy/skill-output/<skill>/<script>-<time>/` (`$SKILL_OUTPUT`); the agent applies changes with the file tools. Tiers:
+  - **Tier 1:** runs automatically and is audited; no writable path.
+  - **Tier 2:** the same, plus the output directory.
+  - **Tier 3:** `Approve` with no key, so it asks every time.
+  - **Tier 0:** a granted bypass, audited as such.
+
+  A mode where scripts write the workspace directly would need workspace-wide snapshots; it's left for later.
+- **`PyEnvs`** (`pkg/tools/pyenv.go`). The key is a hash of the interpreter's real path, the sorted and deduplicated requirements, the index and wheels-only. The environment is built inside the `ScriptBox`: network on, writable only the environment and a shared cache.
+  - **With `uv`:** `uv venv` and `uv pip install --index-url … [--only-binary :all:] -- <deps>`, with `UV_NO_CONFIG=1` (the user's `uv.toml` can't redirect it) and `UV_PYTHON_DOWNLOADS=never`. Without `uv`: `venv` and `pip`.
+  - **Markers.** A marker file, written atomically and last, marks an environment usable; one without a marker is deleted and rebuilt. The marker also records the skills using the environment and when it was last used.
+  - **Mounts.** `MountsFor` adds the interpreter's prefix when it lives outside `/usr` (e.g. Homebrew, a uv-managed Python).
+- **`run_skill_script`** (`pkg/tools/skillscript.go`):
+  - **Order of checks:** the policy verdict, then the tier approval, then a separate install approval (`ActionNetwork`, key `pyenv:<key>`, showing the exact install command), then the run.
+  - **Where the script comes from.** A script on disk is located through `Skill.ScriptPath` (`os.Root`, so no `..` or symlink escapes) and its skill directory is mounted, so it can import its neighbours. Built-in and inline scripts are copied to a temporary directory.
+  - **Environment:** `PYTHONDONTWRITEBYTECODE=1`, `PYTHONNOUSERSITE=1`, `$SKILL_DIR`, `$SKILL_OUTPUT`, the passed host variables and the script's own variables. `entry_point` runs the module under `__skill__` through `runpy` and calls the function; its return value is the exit code.
+  - **Output:** stdout and stderr are capped at 64 KB each, and up to 50 output files are listed.
+  - **`activate_skill`** now lists the scripts, whether each is allowed, and why not.
+- **The gVisor backend now hides blocked paths** inside mounted directories: files are covered with an empty read-only file and directories with an empty tmpfs, reusing `expandBlocked`. Before, a workspace `.env` would have been readable by a script under gVisor. A test guards it and was confirmed to fail without the masking.
+- **The OS backend lists a read-only path only if it's inside a writable one.** Seatbelt lets read-only win over nested writable paths, which blocked the output directory inside the read-only workspace; the tests caught it.
+- **`/envs`** lists environments (size, packages, users, last use, incomplete ones), prunes those no allowed script needs, and removes one by key.
+- **Tests:**
+  - **Tier 2:** arguments, reading the workspace, and the environment (passed, withheld and host secrets); the workspace write is refused and the output file lands.
+  - **Tier 1 and entry points:** tier 1 has no output directory; an entry point's return value is the exit code; inline scripts run.
+  - **Refusals and tier 3:** tier 3 asks with no key; TypeScript, missing scripts and unknown skills are refused; the install approval asks separately; timeouts stop the script.
+  - **`/envs` and `ScriptPath`:** list, prune and remove; `ScriptPath` refuses a symlink escape.
+
+  Run on macOS (Seatbelt), in a Linux container (bubblewrap) and on an arm64 VM (gVisor). The opt-in tests (`CODE_PUPPY_PYENV_TESTS=1`, which need the network) build a real environment from PyPI and run a script that imports it, on Seatbelt and gVisor. They aren't in CI.
+- **Follow-ups:**
+  - TypeScript scripts;
+  - scripts that write the workspace, with snapshots;
+  - `requires-python` with uv-managed interpreters (the proto has no field for it);
+  - `storage_uri` and resources;
+  - running the opt-in tests in CI (they depend on PyPI).
 
 *Step 2 outcome.*
 - **`tools.ScriptBox`** runs one command in isolation from a `ScriptRequest`: read-only and writable host paths (mounted at the same path), network on/off, environment, timeout, stdio. `NewScriptBox` picks `gvisor`, `os` or `auto`; there's no unsandboxed fallback (`ErrNoScriptBox`).

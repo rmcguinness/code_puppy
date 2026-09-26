@@ -183,6 +183,7 @@ func printHelp() {
 		{"/search web|session <terms>", "help.search"},
 		{"/btw <question>", "help.btw"},
 		{"/rename <name>", "help.rename"},
+		{"/envs [prune|remove <key>]", "help.envs"},
 		{"!<command>", "help.shell"},
 		{"/sandbox", "help.sandbox"},
 		{"/attach [path|clear]", "help.attach"},

@@ -8,6 +8,8 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"os"
+	"path/filepath"
 	"strings"
 
 	"gopkg.in/yaml.v3"
@@ -52,8 +54,9 @@ type Skill struct {
 	// Problems are definition errors (see SkillMetadata.Validate).
 	Problems []string `json:"problems,omitempty"`
 
-	fsys fs.FS  // the skill's files, for ContentHash
-	root string // the skill's directory within fsys
+	fsys    fs.FS  // the skill's files, for ContentHash
+	root    string // the skill's directory within fsys
+	hostDir string // the skill's directory on disk; "" for built-in skills
 }
 
 // ParseSkillMD parses a SKILL.md document with YAML frontmatter.
@@ -149,4 +152,59 @@ func (s *Skill) ContentHash() (string, error) {
 		return "", err
 	}
 	return "sha256:" + hex.EncodeToString(h.Sum(nil)), nil
+}
+
+// HostDir is the skill's directory on disk, or "" for built-in skills.
+func (s *Skill) HostDir() string { return s.hostDir }
+
+// ScriptPath returns the host path of a script shipped in the skill's
+// directory (relative_path), checked through os.Root so neither ".." nor a
+// symbolic link can lead outside the directory. Built-in skills have no
+// host directory; use CopyTo.
+func (s *Skill) ScriptPath(rel string) (string, error) {
+	if s.hostDir == "" {
+		return "", errors.New("built-in skill: its files aren't on disk")
+	}
+	if !inBundle(rel) {
+		return "", fmt.Errorf("%q is outside the skill's directory", rel)
+	}
+	root, err := os.OpenRoot(s.hostDir)
+	if err != nil {
+		return "", err
+	}
+	defer root.Close()
+	info, err := root.Stat(rel)
+	if err != nil {
+		return "", err
+	}
+	if !info.Mode().IsRegular() {
+		return "", fmt.Errorf("%q isn't a regular file", rel)
+	}
+	return filepath.Join(s.hostDir, filepath.FromSlash(rel)), nil
+}
+
+// CopyTo writes the skill's files into dir (for built-in skills, whose
+// files are embedded). Symbolic links are skipped.
+func (s *Skill) CopyTo(dir string) error {
+	if s.fsys == nil {
+		return errors.New("skill has no files")
+	}
+	return fs.WalkDir(s.fsys, s.root, func(p string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		rel := strings.TrimPrefix(strings.TrimPrefix(p, s.root), "/")
+		target := filepath.Join(dir, filepath.FromSlash(rel))
+		switch {
+		case d.IsDir():
+			return os.MkdirAll(target, 0o700)
+		case !d.Type().IsRegular():
+			return nil
+		}
+		b, err := fs.ReadFile(s.fsys, p)
+		if err != nil {
+			return err
+		}
+		return os.WriteFile(target, b, 0o600)
+	})
 }

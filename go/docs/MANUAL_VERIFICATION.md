@@ -1,6 +1,6 @@
 # Manual Verification Checklist
 
-Everything here needs a person, a real terminal, real credentials, or GitHub. The automated suite (401 tests on macOS and Linux) covers the logic behind each item; this list checks the parts it can't. Each item has an **expected** result — if you see something else, note it next to the item.
+Everything here needs a person, a real terminal, real credentials, or GitHub. The automated suite (413 tests on macOS and Linux) covers the logic behind each item; this list checks the parts it can't. Each item has an **expected** result — if you see something else, note it next to the item.
 
 Setup for most items: `make build`, then use `./bin/code-puppy` (or put `bin/` on your `PATH`). Use a scratch Git repository as the workspace so edits are safe.
 
@@ -322,4 +322,14 @@ Set `fallback_models = ["anthropic/claude-sonnet-5"]` with a working Anthropic k
 - [ ] Linux without gVisor: `doctor`. **Expected:** `script sandbox   os (gVisor unavailable: runsc not found …)`.
 - [ ] Linux: unpack gVisor's release tarball into `~/.code_puppy/bin` (keep `gvisor-bin/` beside `runsc`). `doctor`. **Expected:** `script sandbox   gvisor`.
 - [ ] `skills.policy.sandbox = "gvisor"` on macOS. **Expected:** `doctor` warns that skill scripts won't run.
-- [ ] Linux with gVisor: kill Code Puppy with `kill -9` while a script runs (possible once step 3 lands), then start it again. **Expected:** `runsc --root ~/.code_puppy/sandboxes/state list` is empty after the restart.
+- [ ] Linux with gVisor: kill Code Puppy with `kill -9` while a script runs, then start it again. **Expected:** `runsc --root ~/.code_puppy/sandboxes/state list` is empty after the restart.
+
+## 35. Skill scripts and environments 💲
+
+- [ ] Put a skill with a Python script that has a dependency (e.g. `requests>=2.31`) in `~/.code_puppy/skills/<name>/`. Ask the agent to use the skill. **Expected:** `activate_skill` lists the script as allowed; running it asks once to install ("Install packages for skill … --only-binary :all: -- requests>=2.31"), then runs.
+- [ ] Ask again. **Expected:** no install prompt; `/envs` shows one environment with the package, "used by <name>".
+- [ ] A script that writes `$SKILL_OUTPUT/report.md` and tries to write a workspace file. **Expected:** the workspace write fails, `report.md` appears under `.code_puppy/skill-output/…`, and the agent can read it and apply changes with the file tools (diff and approval as usual).
+- [ ] `hitl_tier: TIER_3_MANDATORY_APPROVAL`. **Expected:** asked before every run, with no "always" option.
+- [ ] A script that needs the network, without `network_allow`. **Expected:** refused with the reason; allowed after `network = "allowlist"` plus `network_allow`.
+- [ ] Linux with gVisor: a script that runs `ls ~` and `cat .env` in the workspace. **Expected:** home doesn't exist and `.env` reads as empty.
+- [ ] Change the requirements and run again. **Expected:** a new environment and a new install prompt. `/envs prune` removes the old one.

@@ -263,6 +263,17 @@
     "rename.failed": "Could not rename the session: {error}",
     "rename.done": "Session renamed to {title}.",
     "session.untitled": "(untitled)",
-    "repl.resume_hint": "Resume with: {command}"
+    "repl.resume_hint": "Resume with: {command}",
+    "help.envs": "Python environments of skill scripts: list, prune the unused, or remove one",
+    "envs.none": "No script environments yet. They're created the first time a skill's script with dependencies runs.",
+    "envs.title": "Script environments ({count})",
+    "envs.incomplete": "(incomplete, rebuilt on next use)",
+    "envs.used_by": "used by {skills}",
+    "envs.never_used": "never used",
+    "envs.last_used": "last used {when}",
+    "envs.pruned": "Removed {count} environment(s), freeing {size}.",
+    "envs.removed": "Removed environment {key}.",
+    "envs.remove_failed": "Could not remove {key}: {error}",
+    "envs.usage": "Usage: /envs [prune | remove <key>]"
   }
 }

@@ -213,3 +213,37 @@ func TestDiscoveryReportsUnparseableSkills(t *testing.T) {
 		t.Fatal("an unparseable skill was loaded")
 	}
 }
+
+func TestScriptPathStaysInsideTheSkill(t *testing.T) {
+	dir := t.TempDir()
+	skill := filepath.Join(dir, "s")
+	os.MkdirAll(filepath.Join(skill, "scripts"), 0o755)
+	os.WriteFile(filepath.Join(skill, "SKILL.md"), []byte("---\nname: s\n---\n"), 0o644)
+	os.WriteFile(filepath.Join(skill, "scripts", "ok.py"), []byte("print(1)"), 0o644)
+	os.WriteFile(filepath.Join(dir, "outside.py"), []byte("print('escaped')"), 0o644)
+	os.Symlink(filepath.Join(dir, "outside.py"), filepath.Join(skill, "scripts", "link.py"))
+	p, _ := NewProvider()
+	if err := p.DiscoverExternal([]string{dir}); err != nil {
+		t.Fatal(err)
+	}
+	s, _ := p.Get("s")
+	if got, err := s.ScriptPath("scripts/ok.py"); err != nil || got != filepath.Join(skill, "scripts", "ok.py") {
+		t.Fatalf("ok: %q %v", got, err)
+	}
+	for _, bad := range []string{"scripts/link.py", "../outside.py", "scripts", "missing.py"} {
+		if got, err := s.ScriptPath(bad); err == nil {
+			t.Errorf("%s accepted: %s", bad, got)
+		}
+	}
+	b, _ := p.Get("code-review")
+	if _, err := b.ScriptPath("SKILL.md"); err == nil {
+		t.Error("built-in skill gave a host path")
+	}
+	out := t.TempDir()
+	if err := b.CopyTo(out); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(out, "SKILL.md")); err != nil {
+		t.Fatalf("CopyTo: %v", err)
+	}
+}

@@ -38,7 +38,7 @@ Go measurements were taken on 2026-09-24 on Apple Silicon (arm64), macOS, warm c
 | **Providers** | ✅ many (Gemini, OpenAI/Codex, Anthropic, Z.ai, Gemini Code Assist, round-robin, model catalogue) | ➖ Gemini, Anthropic, OpenAI-compatible, Ollama | No model picker/catalogue; fallback chain instead of round-robin |
 | **Agents** | ✅ Python classes + JSON | ✅ Markdown + YAML frontmatter, embedded | `./agents` only with `--trust-workspace`; built-ins can't be overridden |
 | **Sub-agent delegation** | ✅ | ✅ | Depth-limited `invoke_agent` |
-| **Skills** | ✅ | ✅ | |
+| **Skills** | ✅ | ✅ Agent Skills plus Castor definitions; sandboxed Python scripts with per-requirements environments | Scripts run in gVisor (Linux) or Seatbelt/bubblewrap, capped by `[skills.policy]`; they write only to an output directory |
 | **MCP servers** | ✅ | ✅ stdio + HTTP | Per-server approval, prefixes, per-agent scoping; stdio servers sandboxed |
 | **Hooks** | ✅ hook engine | ✅ pre/post tool, prompt submit | Exit-2 / JSON block protocol |
 | **Plugins** | ✅ plugin system | ❌ | MCP and hooks cover some of the same ground |
