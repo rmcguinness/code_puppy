@@ -1,6 +1,6 @@
 # Manual Verification Checklist
 
-Everything here needs a person, a real terminal, real credentials, or GitHub. The automated suite (399 tests on macOS and Linux) covers the logic behind each item; this list checks the parts it can't. Each item has an **expected** result — if you see something else, note it next to the item.
+Everything here needs a person, a real terminal, real credentials, or GitHub. The automated suite (401 tests on macOS and Linux) covers the logic behind each item; this list checks the parts it can't. Each item has an **expected** result — if you see something else, note it next to the item.
 
 Setup for most items: `make build`, then use `./bin/code-puppy` (or put `bin/` on your `PATH`). Use a scratch Git repository as the workspace so edits are safe.
 
@@ -315,3 +315,11 @@ Set `fallback_models = ["anthropic/claude-sonnet-5"]` with a working Anthropic k
 - [ ] Put the hash from `/skills show` in `trusted_hashes`, then edit the script. **Expected:** blocked ("isn't in skills.policy.trusted_hashes").
 - [ ] Break the frontmatter (`hitl_tier: TIER_9`). **Expected:** a startup warning naming the file; `doctor` shows it too.
 - [ ] `[skills.policy] sandbox = "docker"`. **Expected:** `doctor` warns: use auto, gvisor or os.
+
+## 34. Script sandbox (gVisor)
+
+- [ ] macOS: `code-puppy doctor`. **Expected:** `script sandbox   os (gVisor unavailable: gVisor runs only on Linux)`.
+- [ ] Linux without gVisor: `doctor`. **Expected:** `script sandbox   os (gVisor unavailable: runsc not found …)`.
+- [ ] Linux: unpack gVisor's release tarball into `~/.code_puppy/bin` (keep `gvisor-bin/` beside `runsc`). `doctor`. **Expected:** `script sandbox   gvisor`.
+- [ ] `skills.policy.sandbox = "gvisor"` on macOS. **Expected:** `doctor` warns that skill scripts won't run.
+- [ ] Linux with gVisor: kill Code Puppy with `kill -9` while a script runs (possible once step 3 lands), then start it again. **Expected:** `runsc --root ~/.code_puppy/sandboxes/state list` is empty after the restart.

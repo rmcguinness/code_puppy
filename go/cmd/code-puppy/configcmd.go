@@ -197,6 +197,7 @@ enabled = true
 # min_hitl_tier = 2                                # 1 auto + audit, 2 also checkpoint, 3 always ask
 # allow_hitl_bypass = false                        # honour a skill's TIER_0_BYPASS_ALL (e.g. in CI)
 # languages = ["python"]
+# sandbox = "auto"                                 # auto | gvisor (Linux, needs runsc) | os; scripts never run unsandboxed
 # network = "none"                                 # none | allowlist
 # network_allow = []                               # skills allowed the network (with network = "allowlist")
 # env_passthrough = []                             # host variables skills may receive, e.g. ["GITHUB_TOKEN"]

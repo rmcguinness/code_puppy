@@ -398,4 +398,13 @@ func checkSkills(cfg *config.Config, add func(name string, st checkStatus, forma
 		add("skill "+s.Name, statusWarn, "scripts blocked: %s (/skills show %s)", reason, s.Name)
 	}
 	add("skills", statusOK, "%d loaded, %d with scripts, %d blocked by skills.policy", len(all), withScripts, blocked)
+
+	switch box, note, err := tools.NewScriptBox(tools.ScriptBoxConfig{Mode: cfg.Skills.Policy.Sandbox}); {
+	case err != nil:
+		add("script sandbox", statusWarn, "%v; skill scripts won't run", err)
+	case note != "":
+		add("script sandbox", statusOK, "%s (%s)", box.Name(), note)
+	default:
+		add("script sandbox", statusOK, "%s", box.Name())
+	}
 }

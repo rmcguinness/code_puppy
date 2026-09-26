@@ -212,7 +212,14 @@ scripts:
 - `TIER_0_BYPASS_ALL` needs both the skill's `allow_hitl_bypass` and the policy's; otherwise it becomes tier 3.
 - Dependencies must be plain package requirements: URLs, paths and pip options are refused.
 
-`/skills show <name>` lists every decision and the skill's content hash, for `trusted_hashes`. `doctor` reports skills that don't parse and scripts the policy blocks. **Scripts aren't run yet:** isolated environments and the sandbox come next (ROADMAP item 22).
+`/skills show <name>` lists every decision and the skill's content hash, for `trusted_hashes`. `doctor` reports skills that don't parse and scripts the policy blocks.
+
+**Where scripts will run.** `skills.policy.sandbox` chooses the sandbox, and `doctor` shows which is in use:
+- **`gvisor`** (Linux). Each script gets its own gVisor sandbox, whose user-space kernel keeps a kernel exploit in a script or package away from the host. Only the host's binaries and libraries, `/etc`, and the script's own paths are mounted; home directories don't exist inside, `/tmp` is private, and the network is off unless allowed. Install gVisor's release tarball (`runsc` beside its `gvisor-bin/`) on your `PATH`, in `~/.code_puppy/bin`, or at `RUNSC_PATH`. It needs unprivileged user namespaces, as bubblewrap does.
+- **`os`**. Seatbelt or bubblewrap, as for shell commands: writes limited to the script's paths, blocked paths hidden, the network as allowed.
+- **`auto`** (default) uses gVisor when a test run works, otherwise the OS sandbox.
+
+Either way a script sees only the variables the policy passes, and it's stopped at its timeout or when you press Ctrl+C. If no sandbox is available (e.g. on Windows), scripts don't run. **Scripts aren't run yet:** isolated Python environments and `run_skill_script` come next (ROADMAP item 22).
 
 **Forged tools** — tools built by `universal_constructor` are saved with a manifest in `~/.code_puppy/uc_tools` and reloaded on start; `action: "delete"` removes one.
 
