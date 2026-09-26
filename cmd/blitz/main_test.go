@@ -375,3 +375,20 @@ func TestDoctorSkillsCheck(t *testing.T) {
 		t.Errorf("ok-skill reported: %+v", byName["skill ok-skill"])
 	}
 }
+
+// exec runs one prompt, like `blitz <prompt>`, and never the REPL.
+func TestExecCommand(t *testing.T) {
+	isolate(t) // no API key: the model can't be built
+	ws := t.TempDir()
+	if _, err := runCLIWithInput(t, "", "-d", ws, "exec"); exitCodeFor(err) != exitUsage || !strings.Contains(err.Error(), "no prompt") {
+		t.Errorf("exec without a prompt: %v", err)
+	}
+	// With a prompt it's a one-shot run in the -d workspace: here it fails
+	// on the missing model, which only a one-shot run reports as an error.
+	if _, err := runCLI(t, "-d", ws, "exec", "--output-format", "json", "hello"); exitCodeFor(err) != exitFailure || !strings.Contains(err.Error(), "model initialization failed") {
+		t.Errorf("exec with a prompt: %v", err)
+	}
+	if _, err := runCLI(t, "exec", "--interactive", "hi"); exitCodeFor(err) != exitUsage {
+		t.Errorf("exec has no --interactive: %v", err)
+	}
+}

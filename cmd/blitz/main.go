@@ -17,6 +17,7 @@ import (
 	"github.com/retail-cortex/blitz/internal/server"
 	"github.com/retail-cortex/blitz/internal/tui"
 	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
 )
 
 var version = "2.0.0-go"
@@ -34,6 +35,9 @@ type rootOptions struct {
 	plan         bool
 	images       []string
 	local        bool
+	// requirePrompt: a run without a prompt is a usage error (exec),
+	// rather than the interactive session.
+	requirePrompt bool
 }
 
 func main() {
@@ -78,13 +82,21 @@ Exit codes: 0 success, 1 error, 2 usage, 3 --max-turns reached,
 	pf.StringVarP(&o.global.dir, "dir", "d", "", "Workspace directory to start in (default: current directory)")
 
 	f := root.Flags()
-	f.StringVarP(&o.prompt, "prompt", "p", "", `One-shot prompt; "-" reads it from stdin`)
 	f.BoolVarP(&o.interactive, "interactive", "i", false, "Start the interactive REPL even when a prompt is given")
-	f.StringVarP(&o.global.agent, "agent", "a", "", "Agent persona to activate (blitz, helios, qa, ...)")
+	f.BoolVarP(&o.version, "version", "v", false, "Print Blitz version")
+	addRunFlags(f, o)
+
+	root.AddCommand(newExecCommand(o), newDoctorCommand(&o.global), newConfigCommand(&o.global), newServeCommand(&o.global), newWorkersCommand(&o.global), newServiceCommand())
+	return root
+}
+
+// addRunFlags adds the flags of a run, shared by the root command and exec.
+func addRunFlags(f *pflag.FlagSet, o *rootOptions) {
+	f.StringVarP(&o.prompt, "prompt", "p", "", `One-shot prompt; "-" reads it from stdin`)
+	f.StringVarP(&o.global.agent, "agent", "a", "", "Agent to activate (blitz, helios, qa, ...)")
 	f.StringVarP(&o.global.model, "model", "m", "", "Model identifier to use")
 	f.StringVar(&o.global.agency, "agency", "", "Agency level (low, medium, high, extreme)")
 	f.BoolVar(&o.global.trustWorkspace, "trust-workspace", false, "Load agents and skills from the workspace (./agents, ./skills, .agents/skills)")
-	f.BoolVarP(&o.version, "version", "v", false, "Print Blitz version")
 	f.StringVarP(&o.resume, "resume", "r", "", "Resume a saved session by ID (no ID: the most recent), or start a new one from a snapshot by name")
 	f.Lookup("resume").NoOptDefVal = "latest"
 	f.BoolVarP(&o.cont, "continue", "C", false, "Continue the most recent session")
@@ -93,9 +105,25 @@ Exit codes: 0 success, 1 error, 2 usage, 3 --max-turns reached,
 	f.BoolVar(&o.plan, "plan", false, "One-shot plan: the agent may read and search but not edit or run commands")
 	f.BoolVar(&o.local, "local", false, "Run the workspace in this process even when the Blitz service is running")
 	f.StringArrayVar(&o.images, "image", nil, "Attach an image to the first prompt (repeatable); @file.png in a prompt also works")
+}
 
-	root.AddCommand(newDoctorCommand(&o.global), newConfigCommand(&o.global), newServeCommand(&o.global), newWorkersCommand(&o.global), newServiceCommand())
-	return root
+// newExecCommand is `blitz exec <prompt>`: one run, then exit, as
+// `blitz <prompt>` does, but never the interactive session.
+func newExecCommand(root *rootOptions) *cobra.Command {
+	o := &rootOptions{requirePrompt: true}
+	cmd := &cobra.Command{
+		Use:   "exec [flags] <prompt...>",
+		Short: "Run one prompt and exit",
+		Example: `  blitz exec "add unit tests for user_service.go covering edge cases"
+  git diff | blitz exec -p - --output-format json`,
+		Args: cobra.ArbitraryArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			o.global.config, o.global.dir = root.global.config, root.global.dir // persistent flags
+			return runRoot(cmd, o, args)
+		},
+	}
+	addRunFlags(cmd.Flags(), o)
+	return cmd
 }
 
 func runRoot(cmd *cobra.Command, o *rootOptions, args []string) (err error) {
@@ -116,6 +144,9 @@ func runRoot(cmd *cobra.Command, o *rootOptions, args []string) (err error) {
 	prompt, stdinUsed, err := resolvePrompt(o.prompt, args, stdinTTY, o.interactive, os.Stdin)
 	if err != nil {
 		return err
+	}
+	if o.requirePrompt && prompt == "" {
+		return withCode(exitUsage, errors.New("no prompt: give one as arguments, with -p, or on stdin"))
 	}
 	oneShot := prompt != "" && !o.interactive
 	if !oneShot && o.plan {

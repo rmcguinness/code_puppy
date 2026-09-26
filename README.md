@@ -1,17 +1,44 @@
-# 🐶 Blitz Go (Google ADK Edition)
+# Blitz ⚡
 
-> An AI coding agent in a single static binary, built on the **Google Agent Development Kit (`google.golang.org/adk/v2`)**, with a sandbox, approvals, undo, and scriptable output.
+> **The zero-gimmick, high-performance Go coding agent.**
+
+Blitz is a native Go coding agent built for speed and focus. It reads your workspace, makes the change, checks it, and gets out of the way: no persona, no filler, no chatter.
 
 ---
 
-## 🚀 Quick Start
+## Why Blitz?
+
+Many AI coding assistants put personality ahead of the work: commentary, noisy output, and abstractions that keep you waiting. Blitz doesn't. Like a good working bird dog, it moves without waste, holds its position quietly, and stays on the task.
+
+* **Compiled Go.** The CLI is a single static binary: instant start, low memory, no runtime to install. It builds on the Google Agent Development Kit (`google.golang.org/adk/v2`) and runs Gemini, Claude, OpenAI or Ollama models.
+* **No antics.** Terse output, plain status marks, and a short summary when it's done.
+* **Safe by default.** Commands run in a sandbox; changes need your approval unless you've allowed them; every turn can be undone.
+* **Terminal first.** `blitz` (or `blz`) in any project. The same engine runs as a per-user service for the desktop app and scheduled workers.
+* **Works with Castor.** Skill definitions follow Castor's `SkillDefinition` schema, with host guardrails for what a skill may do.
+
+## Quick example
+
+```bash
+# One prompt, then exit
+blitz exec "add unit tests for user_service.go covering edge cases"
+
+# The same in another project, from anywhere
+blz -d ~/src/api exec "migrate session storage in ./pkg/auth to Redis"
+
+# An interactive session
+blitz
+```
+
+---
+
+## Quick Start
 
 ```bash
 make build                      # -> ./bin/blitz
-./bin/blitz config init    # writes a commented ~/.blitz/.env.toml (mode 600)
+./bin/blitz config init        # writes a commented ~/.blitz/.env.toml (mode 600)
 export GEMINI_API_KEY=...       # or ANTHROPIC_API_KEY / OPENAI_API_KEY; or set it in the config file
-./bin/blitz doctor         # checks config, credentials, sandbox, MCP, hooks
-./bin/blitz                # interactive session
+./bin/blitz doctor             # checks config, credentials, sandbox, MCP, hooks
+./bin/blitz                    # interactive session
 ```
 
 **Providers.** Set `llm.provider` to `gemini` (default), `anthropic`, `openai`, or `ollama`; the model comes from `llm.<provider>.model` unless `blitz.default_model` or `--model` overrides it. Anthropic defaults to `claude-opus-5` with streaming, prompt caching of the system prompt, thinking preserved across tool calls, and server-side refusal fallback (`llm.anthropic.fallbacks = "default"`, or `"off"`). Without `api_key` it uses `ANTHROPIC_API_KEY`, `ANTHROPIC_AUTH_TOKEN`, or an `ant auth login` profile.
@@ -20,7 +47,7 @@ Configuration is read only from `~/.blitz/.env.toml`, `$MODENV_PREFIX`, or `--co
 
 ---
 
-## 💻 Usage
+## Usage
 
 ```bash
 blitz                                   # interactive REPL in the current directory
@@ -51,7 +78,7 @@ Subcommands: `doctor [--online]`, `config init|show|path`, `completion bash|zsh|
 
 ---
 
-## ⌨️ Interactive Session
+## Interactive session
 
 - **Line editing** with history (`~/.blitz/history`, owner-only), Ctrl+R search, and **Tab completion** for `/commands`, their arguments, and `@path` file references.
 - **Multi-line input**: end a line with `\`, or put a block between two lines of `"""`.
@@ -127,7 +154,7 @@ Both are **read-only turns**: the agent can read files, fetch and search, but ed
 
 ---
 
-## 🛡️ Safety Model
+## Safety Model
 
 **Approvals.** File edits show a colored diff before you approve. Answers: `y` once, `s` for the rest of the session, `a` always (saved to `~/.blitz/approvals.json`), `n` no. Commands are remembered by exact text within a workspace; edits per workspace; web requests per host; MCP tools per server/tool. Ctrl+C at an approval prompt cancels the whole turn. With no terminal to ask, sensitive actions are denied unless auto-approved in config.
 
@@ -151,7 +178,7 @@ On Linux, install `bubblewrap` and allow unprivileged user namespaces. Ubuntu 24
 
 ---
 
-## 🔌 Extending
+## Extending
 
 **Project memory** — `AGENTS.md` / `BLITZ.md` from the repository root down to the workspace, plus `~/.blitz/BLITZ.md`, are added to the agents' instructions. They can't grant permissions.
 
@@ -276,7 +303,7 @@ The key is the model name; a `provider/` prefix is ignored (for OpenRouter names
 
 ---
 
-## 🤖 Built-In Agent Personas
+## Built-in agents
 
 | Agent | Role |
 |---|---|
@@ -292,7 +319,7 @@ Tools: `read_file`, `list_files`, `grep`, `create_file`, `replace_in_file`/`edit
 
 ---
 
-## 🔌 The service
+## The service
 
 `blitz serve` runs Blitz as a per-user service that holds every workspace a client opens, for the desktop app and other clients. It listens only on a Unix socket this user can open (`~/.blitz/run/blitz.sock`, or `--socket`) and speaks the API in `api/blitz/v1` over Connect: gRPC, gRPC-Web, or plain JSON:
 
@@ -317,7 +344,7 @@ Check for outdated Go modules and write reports/deps.md.
 
 `blitz workers` lists them; `blitz workers enable <name>` shows exactly what you're approving and enables that content (an edit disables it again); `workers run <name>` runs one now; `workers runs <name>` shows its history. A worker may only do what its `permissions` allow (`shell:`, `write:`, `delete:`, `web:`, `mcp:`), capped by `[workers.policy]`; anything else is refused and recorded, and it can't ask questions. Each run is a session of its own you can open with `/resume`. `blitz service install` starts the service at every login (a launchd agent on macOS, a systemd user unit on Linux), so workers keep their schedules; keep API keys in `~/.blitz/.env.toml`, since a login item doesn't see your shell's environment.
 
-## 📦 Build, Test, Release
+## Build, Test, Release
 
 ```bash
 make build          # bin/blitz (version from git describe)
