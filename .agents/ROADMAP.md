@@ -435,7 +435,7 @@ deny           = ["*-nightly"]
 **Goal.** A Wails desktop app with a tab per workspace, alongside the CLI, without a second copy of the program's logic.
 
 **Decisions (2026-09-26).**
-- **One engine service per user** (revised the same day; it replaces "a process per tab"). A single `code-puppy serve` daemon hosts every open workspace, because batch functions across workspaces are planned. Each workspace's state must therefore be per workspace, not per process (see phase 5b).
+- **One engine service per user** (revised the same day; it replaces "a process per tab"). A single `code-puppy serve` daemon hosts every open workspace, because scheduled workers across workspaces are planned (item 24). Each workspace's state must therefore be per workspace, not per process (see phase 5b).
 - **The CLI attaches when a service is available**, and otherwise runs the engine in-process as today. `tui` programs against a backend interface with two implementations: `*app.Workspace` (local) and a Connect client (remote). A workspace lock keeps a local CLI and the service from owning the same workspace at once.
 - **API: protos in `./api`, Connect + buf.** `connectrpc.com/connect` over `net/http` serves gRPC, gRPC-Web and JSON from one handler; `buf` lints and checks breaking changes in CI; Go and TypeScript (protobuf-es, for the Wails frontend) are generated and committed, with a CI check that they're current. A turn is a server-streaming call; approvals and questions arrive as stream events with an ID and are answered with a separate unary call, so no bidirectional streaming is needed. Typed errors map to Connect codes with details; clients localise.
 - **The service listens on a Unix socket** (`~/.code_puppy/run/`, mode 0600), no TCP by default: it can run shell commands.
@@ -463,7 +463,23 @@ deny           = ["*-nightly"]
 7. **`internal/server` and `code-puppy serve`:** Connect handlers over `app.Workspace`, workspaces opened on demand by directory, the Unix socket, a workspace lock, approvals and questions over the turn stream.
 8. **Attach:** a backend interface in `tui`, implemented by `*app.Workspace` and by a client adapter; the CLI attaches when the socket answers. Also moves the last accessor uses (the process list at exit, `!cmd`'s audit entry, the images flag, approval and question wiring in `cmd`) behind operations.
 9. **Desktop scaffold:** a thin Wails shell that talks to the service, one tab per workspace. Needs notarization on macOS.
-10. **Later: batch functions** across workspaces, run by the service.
+10. **Workers** (scheduled runs, ROADMAP item 24), run by the service. Their API is part of phase 6's protos.
+
+---
+
+## 24. Workers: scheduled runs defined in the workspace — 📋 planned (L)
+
+**Goal.** A workspace defines workflows the service runs on a schedule, unattended: dependency reports, nightly checks, triage.
+
+**Decisions (2026-09-26).**
+- **Files:** `workers/<name>/WORKER.md` in the workspace, a directory per worker so it can carry supporting files (like `SKILL.md`); search paths configurable like `[skills] paths`. A workspace can have several. The service registers workers by scanning, and rescans on change (`fsnotify`).
+- **Frontmatter:** `name`, `description`, `schedule`, optional `timezone` (default: the machine's), `agent`, `model`, `permissions`, `limits` (`max_turns`, `max_cost_usd`, `timeout`), `overlap` (default `skip`), `catch_up` (default none). The body is the workflow, sent as the prompt.
+- **Schedules:** a cron expression, a descriptor (`@daily`, `@every 2h`), or plain text ("Every two hours", "Daily at 6 AM", "Weekdays at 9:30") parsed by a small deterministic parser into cron. Never interpreted by a model; unparseable text is an error. Listings show the resolved cron and the next run. Cron via `robfig/cron/v3` (time zones, `@every`).
+- **Trust:** a worker runs only in a trusted workspace and only once enabled explicitly, pinned to the file's content hash (like `[skills.policy] trusted_hashes`). Any edit disables it until it is re-enabled; the service reports that. Cloning a repository never schedules anything.
+- **Unattended actions:** a worker gets what its `permissions` ask for, capped by a host `[workers.policy]`. Anything else is **refused and recorded**, never left waiting: the agent is told why, and the run's record lists what was refused.
+- **Runs:** each run is a new session named after the worker and its start time (visible, resumable, audited), with a run record: status, start, duration, cost, refusals, the session ID. Limits are required (or come from policy defaults), so a schedule can't spend without bound. A run still going when the next is due is skipped by default; missed runs (machine asleep, service down) are skipped unless `catch_up: once`; a global cap limits concurrent runs.
+- **Service:** workers run only while the per-user service runs, so it gets a launchd/systemd user unit to start at login, and a registry of workspaces with enabled workers to watch even when no client has them open.
+- **API** (in phase 6's protos): `WorkerService` with `ListWorkers` (schedule, next run, enabled, hash), `EnableWorker(hash)`, `DisableWorker`, `RunNow`, `ListRuns`, `GetRun`, and watching a run over the turn event stream.
 
 ---
 
