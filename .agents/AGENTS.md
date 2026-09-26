@@ -19,6 +19,8 @@ The layout follows [golang-standards/project-layout](https://github.com/golang-s
 | `internal/i18n` | Message catalogs (`en-US`, `es`, `fr-CA`) |
 | `internal/observability` | Diagnostic log and OpenTelemetry |
 | `api/codepuppy/v1` | The service API as protos (`buf.yaml`, `buf.gen.yaml` at the root): `SessionService` (sessions, turns, steering, approvals), `WorkspaceService` (everything else `internal/app` does), `WorkerService` (ROADMAP item 24) |
+| `cmd/code-puppy-desktop` | The desktop app (Wails v2): **its own Go module** (cgo, WebKit), forwarding the page's API calls to the service socket. `make desktop`, `make desktop-check` |
+| `web/desktop` | The desktop app's page: React + TypeScript (pnpm), the generated Connect client in `src/gen` |
 | `internal/server` | The service: Connect handlers over `app.Workspace` (translation only), the approval/question broker, the Unix socket. `code-puppy serve` runs it |
 | `internal/gen` | Generated Go and Connect code, committed. Never edit it: change the protos and run `make proto` |
 | `tools` | A separate module pinning build tools (`buf`, `protoc-gen-go`, `protoc-gen-connect-go`) as `tool` directives, run with `go tool -modfile=tools/go.mod` |
@@ -31,6 +33,8 @@ make build                      # ./bin/code-puppy
 make check                      # go vet + go test -race
 make proto                      # lint, format and regenerate the API (internal/gen)
 make proto-check                # fails if the protos aren't formatted or internal/gen is stale
+make desktop                    # build/desktop/bin/Code Puppy.app (needs pnpm; Linux also webkit2gtk)
+make desktop-check              # build the page, vet and test the desktop module
 ./bin/code-puppy doctor --online
 CODE_PUPPY_TELEMETRY=1 CODE_PUPPY_LOG_LEVEL=debug ./bin/code-puppy   # traces to http://localhost:4318; logs in ~/.code_puppy/logs
 CODE_PUPPY_PYENV_TESTS=1 go test ./internal/tools -run 'PyEnv|InstallsPackages'   # builds real Python environments (network)

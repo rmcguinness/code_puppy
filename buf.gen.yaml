@@ -1,6 +1,8 @@
-# Generated Go is committed (internal/gen), so `go install` and the
-# reproducible build need no generator. The plugins are pinned in
-# tools/go.mod and run through `go tool`.
+# Generated code is committed: Go in internal/gen, so `go install` and the
+# reproducible build need no generator, and TypeScript for the desktop app
+# in web/desktop/src/gen. The Go plugins are pinned in tools/go.mod and run
+# through `go tool`; protoc-gen-es is pinned in web/desktop's lockfile
+# (run `pnpm install` there first).
 version: v2
 managed:
   enabled: true
@@ -14,3 +16,6 @@ plugins:
   - local: ["go", "tool", "-modfile=tools/go.mod", "protoc-gen-connect-go"]
     out: internal/gen
     opt: paths=source_relative
+  - local: web/desktop/node_modules/.bin/protoc-gen-es
+    out: web/desktop/src/gen
+    opt: target=ts

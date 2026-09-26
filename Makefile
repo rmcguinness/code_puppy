@@ -4,7 +4,7 @@ VERSION ?= $(shell git describe --tags --match 'v*' --always --dirty 2>/dev/null
 LDFLAGS=-s -w -X main.version=$(VERSION)
 GOFLAGS_BUILD=-trimpath -buildvcs=false
 
-.PHONY: all build test test-race vet check clean cross-compile tidy snapshot release-check proto proto-check
+.PHONY: all build test test-race vet check clean cross-compile tidy snapshot release-check proto proto-check desktop desktop-check
 
 all: build
 
@@ -37,18 +37,23 @@ tidy:
 # pinned in tools/go.mod.
 BUF=go tool -modfile=tools/go.mod buf
 
-proto:
+# protoc-gen-es, for the desktop app's TypeScript, comes from web/desktop.
+web/desktop/node_modules: web/desktop/pnpm-lock.yaml
+	cd web/desktop && pnpm install --frozen-lockfile
+	touch $@
+
+proto: web/desktop/node_modules
 	$(BUF) lint
 	$(BUF) format -w
 	$(BUF) generate
 
 # Fails when the protos aren't formatted or internal/gen is out of date.
-proto-check:
+proto-check: web/desktop/node_modules
 	$(BUF) lint
 	$(BUF) format --exit-code -d
 	$(BUF) generate
-	git diff --exit-code -- internal/gen
-	test -z "$$(git ls-files --others --exclude-standard -- internal/gen)"
+	git diff --exit-code -- internal/gen web/desktop/src/gen
+	test -z "$$(git ls-files --others --exclude-standard -- internal/gen web/desktop/src/gen)"
 
 clean:
 	rm -rf $(BUILD_DIR)
@@ -66,3 +71,15 @@ cross-compile: clean
 	@echo "Building for Windows (amd64)..."
 	GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build $(GOFLAGS_BUILD) -ldflags="$(LDFLAGS)" -o $(BUILD_DIR)/$(BINARY_NAME)-windows-amd64.exe ./cmd/code-puppy
 	@echo "✅ All cross-compiled universal binaries created in $(BUILD_DIR)/"
+
+# The desktop app (cmd/code-puppy-desktop, its own module; the page is
+# web/desktop): build/desktop/bin. Needs cgo, pnpm, and on Linux
+# webkit2gtk. The Wails CLI is pinned in tools/go.mod.
+WAILS=go tool -modfile=../../tools/go.mod wails
+
+desktop: web/desktop/node_modules
+	cd cmd/code-puppy-desktop && CGO_CFLAGS=-mmacosx-version-min=13.0 CGO_LDFLAGS=-mmacosx-version-min=13.0 $(WAILS) build -clean
+
+desktop-check: web/desktop/node_modules
+	cd web/desktop && pnpm run build
+	cd cmd/code-puppy-desktop && go vet . && go test -race ./...

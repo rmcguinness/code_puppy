@@ -333,3 +333,19 @@ Set `fallback_models = ["anthropic/claude-sonnet-5"]` with a working Anthropic k
 - [ ] A script that needs the network, without `network_allow`. **Expected:** refused with the reason; allowed after `network = "allowlist"` plus `network_allow`.
 - [ ] Linux with gVisor: a script that runs `ls ~` and `cat .env` in the workspace. **Expected:** home doesn't exist and `.env` reads as empty.
 - [ ] Change the requirements and run again. **Expected:** a new environment and a new install prompt. `/envs prune` removes the old one.
+
+## 36. The service, attaching and workers
+
+- [ ] `code-puppy serve` in one terminal, `code-puppy` in a workspace in another. **Expected:** the REPL says it attached; a turn streams as usual; an approval prompt appears in the REPL and its answer is honoured; `/pin_model`, `/session save`, `/undo` work.
+- [ ] While attached, `code-puppy --local` in the same workspace. **Expected:** refused, naming the other owner (exit code 2).
+- [ ] Stop the service with Ctrl+C during a turn. **Expected:** the turn ends within about 10 s, the socket file is gone, and a new `code-puppy` in the workspace runs locally.
+- [ ] `code-puppy service install` on macOS, then log out and in. **Expected:** `code-puppy service status` says installed and answering; `~/.code_puppy/logs/service.log` shows it started. With a key only in the shell, install warns about it. `code-puppy service uninstall` removes it.
+- [ ] Same on Linux with systemd (`systemctl --user status code-puppy`).
+- [ ] 💲 A worker `workers/check/WORKER.md` with `schedule: every 5 minutes` and `permissions: ["write:reports/"]` whose workflow writes `reports/check.md` and also tries to edit `main.go`. `code-puppy workers enable check`, wait. **Expected:** it runs on schedule; `reports/check.md` exists, `main.go` is unchanged; `code-puppy workers runs check` lists the run with one refusal; `/resume <session>` shows the conversation. Edit `WORKER.md`: the listing says "changed" and it stops running until re-enabled.
+- [ ] 💲 A worker with `limits: {max_cost_usd: 0.001}`. **Expected:** stopped as "limited" with the cost limit as the reason.
+
+## 37. Desktop app
+
+- [ ] `make desktop`, open `build/desktop/bin/code-puppy-desktop.app` with no service running. **Expected:** it offers to install the service; accepting runs `code-puppy service install` and the app continues.
+- [ ] With the service running: open a workspace with "+". **Expected:** a tab named after the directory, showing the active agent and model (or why the model is unavailable).
+- [ ] 💲 Once turns are in the app (phase 9b): a turn's text appears as it streams, not only at the end. **This checks that WebKit streams responses through Wails's asset server**, which the tests can't: they exercise the proxy over plain HTTP.
