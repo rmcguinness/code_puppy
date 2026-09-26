@@ -32,7 +32,7 @@ Roadmap items 1–22 are done and committed, and item 23 (the desktop app) is in
 | `ef91966a` | Phase 4, sessions: `/session list/new/load/save`, `/resume`, `/rename` |
 | `8bbe0b94` | Phase 4, checkpoints and approvals: `/undo`, `/checkpoints`, `/diff`, `/approvals` |
 | `5bf56f4c` | Phase 4, skills, envs, MCP and tools: `/skills`, `/envs`, `/mcp`, `/tools` |
-| (the commit adding `internal/app/context.go`) | Phase 4, the rest: `/cost`, `/context`, `/compact`, `/memory`, `/locale`, `/sandbox`, `/attach`, `/paste`, `/search`; `tui.App` reduced to the workspace and terminal state |
+| `4ddbb783` | Phase 4, the rest: `/cost`, `/context`, `/compact`, `/memory`, `/locale`, `/sandbox`, `/attach`, `/paste`, `/search`; `tui.App` reduced to the workspace and terminal state |
 | (the commit adding `internal/session/title_test.go`) | Session names from the first prompt, `/rename`, terminal title, resume hint on exit |
 
 `go vet ./...` and `go test -race ./...` pass.
@@ -43,7 +43,7 @@ Roadmap items 1–22 are done and committed, and item 23 (the desktop app) is in
 
 ## Open work, in suggested order
 
-1. **Desktop app: ROADMAP item 23.** Phases 2–4 are done: `internal/app` is a UI-independent core with typed operations, and `tui` only parses and renders. Next: decide the service shape (the user wants the engine as a service used by both the CLI and the desktop app, with the API as protos in `./api`), which replaces phases 5–6 as planned. The phases and decisions are in the ROADMAP item.
+1. **Desktop app: ROADMAP item 23.** Phases 2–4 are done: `internal/app` is a UI-independent core with typed operations, and `tui` only parses and renders. Decided: one service per user, CLI attaches when available, Connect + buf. Next is phase 5 (`app.Event`), then 5b (per-workspace state), then the protos. The phases and decisions are in the ROADMAP item.
 2. **Manual verification (needs a person).** Nothing in `MANUAL_VERIFICATION.md` has been run yet. It covers real providers (💲 = paid calls), terminal behavior, the macOS and Linux sandboxes, MCP, steering, fallback and pinning. Record results in the file; any failure becomes the next task.
 3. **Optional: notarize the macOS binaries** (needs an Apple Developer account). Until then, the release notes (GoReleaser `release.footer`) and the README explain clearing the quarantine flag. Dependabot (`.github/dependabot.yml`) keeps the pinned action SHAs current. `~/.gnupg/gpg-agent.conf` now points at GPG Suite's `pinentry-mac`; the next tag will show whether signing works.
 4. **Linux sandbox startup cost.** Before every sandboxed command, `expandBlocked` (`internal/tools/bwrap.go`) scans the writable roots, including the temp and cache directories (e.g. the Go build cache), for blocked names, up to 50,000 entries. Measured in a Linux container: about 0.1 s per command normally, 3.4 s under `-race`. Worth reducing (e.g. skip cache directories for name patterns, or reuse a recent scan), keeping in mind that a file created between scans could then escape masking. CI's parallel-cap test runs with the sandbox off because of this.
@@ -73,7 +73,7 @@ Roadmap items 1–22 are done and committed, and item 23 (the desktop app) is in
 - **Telemetry and OTel need one provider per process:** the ADK binds its tracer to the first global provider.
 - **No Bazel** (2026-09-26). Go modules, `CGO_ENABLED=0` and GoReleaser already give reproducible CLI builds, and the planned Wails app needs host cgo libraries (WebKit, webkit2gtk) that Bazel can't make hermetic. Close the gaps by pinning tools instead; reconsider only for a multi-language monorepo or a need for remote caching. Make stays as a thin entry point.
 - **Layout follows golang-standards/project-layout** (2026-09-26): `cmd/code-puppy` (CLI/TUI, pure Go) and `cmd/code-puppy-desktop` (Wails, cgo, built on each OS); code in `internal/`, `pkg/` only for deliberately public APIs; frontend in `web/desktop`, packaging in `build/`. Slash-command logic moves from `tui` to a UI-agnostic `internal/app` shared by both UIs.
-- **Desktop tabs are separate `code-puppy` processes** (2026-09-26), one per directory, driven over a stdio protocol; not several workspaces in one process. See ROADMAP item 23.
+- **One engine service per user** (2026-09-26, replacing "a process per tab"): `code-puppy serve` hosts every workspace over Connect on a Unix socket; the CLI attaches when it's running, else runs in-process. Batch functions come later. See ROADMAP item 23.
 - **The module path stays `github.com/retail-cortex/code_puppy`** even though the repository is `rmcguinness/code_puppy`.
 
 Conventions, layout and commands: [AGENTS.md](AGENTS.md).
