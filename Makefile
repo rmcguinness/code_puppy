@@ -4,7 +4,7 @@ VERSION ?= $(shell git describe --tags --match 'v*' --always --dirty 2>/dev/null
 LDFLAGS=-s -w -X main.version=$(VERSION)
 GOFLAGS_BUILD=-trimpath -buildvcs=false
 
-.PHONY: all build test test-race vet check clean cross-compile tidy snapshot release-check
+.PHONY: all build test test-race vet check clean cross-compile tidy snapshot release-check proto proto-check
 
 all: build
 
@@ -32,6 +32,23 @@ release-check:
 
 tidy:
 	go mod tidy
+
+# The service API: api/codepuppy/v1/*.proto -> internal/gen. The tools are
+# pinned in tools/go.mod.
+BUF=go tool -modfile=tools/go.mod buf
+
+proto:
+	$(BUF) lint
+	$(BUF) format -w
+	$(BUF) generate
+
+# Fails when the protos aren't formatted or internal/gen is out of date.
+proto-check:
+	$(BUF) lint
+	$(BUF) format --exit-code -d
+	$(BUF) generate
+	git diff --exit-code -- internal/gen
+	test -z "$$(git ls-files --others --exclude-standard -- internal/gen)"
 
 clean:
 	rm -rf $(BUILD_DIR)

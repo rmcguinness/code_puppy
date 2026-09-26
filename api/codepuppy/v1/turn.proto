@@ -1,0 +1,185 @@
+syntax = "proto3";
+
+package codepuppy.v1;
+
+import "google/protobuf/struct.proto";
+
+// A turn: one prompt to the agent and everything that happens until it
+// answers. Mirrors internal/app's Turn, Event and TurnResult.
+
+// Turn is one prompt for the agent.
+message Turn {
+  // What the user typed. prompt_submit hooks see it and the transcript
+  // records it.
+  string text = 1;
+  // Sent to the agent instead of text, if set (e.g. search results); the
+  // transcript still records text.
+  string prompt = 2;
+  // text is a goal to plan for: tools that change anything are refused, and
+  // the transcript records "/plan <text>".
+  bool plan = 3;
+  // Names a mode that refuses the same tools as plan mode ("search").
+  string read_only = 4;
+  // A side question, answered in a throwaway copy of the session and
+  // recorded nowhere.
+  bool aside = 5;
+  // text already passed prompt_submit hooks and was recorded (a steer
+  // message that arrived after the agent's last tool call).
+  bool accepted = 6;
+  // Images to send with the prompt, by ID (from LoadImage or AddImage).
+  repeated string image_ids = 7;
+  // Limits the model calls in the turn (0: unlimited).
+  int32 max_turns = 8;
+  // URLs the agent may fetch in this turn without asking (the pages a web
+  // search handed it).
+  repeated string fetch_grants = 9;
+}
+
+// TurnEvent is something that happened during a turn. Events arrive in
+// order; the last one is always `finished`.
+message TurnEvent {
+  // The agent that produced the event (a sub-agent's name when one is
+  // working); empty for events from Code Puppy itself.
+  string author = 1;
+  oneof kind {
+    // The prompt passed prompt_submit hooks and was recorded; from here on
+    // the client may send steer messages.
+    Accepted accepted = 2;
+    Text text = 3;
+    ToolCall tool_call = 4;
+    ToolResult tool_result = 5;
+    // The agent wants to do something that needs permission. Answer with
+    // Approve; until then the agent waits.
+    ApprovalRequest approval_request = 6;
+    // The agent asks the user a question. Answer with Answer.
+    Question question = 7;
+    TurnFinished finished = 8;
+  }
+}
+
+// Accepted marks the prompt as recorded and about to be sent.
+message Accepted {}
+
+// Text is model output. With streaming, partial chunks arrive first and a
+// final event then repeats them in full (repeat); without streaming only
+// final text arrives. To show text once, show partial chunks and final text
+// that isn't a repeat.
+message Text {
+  string text = 1;
+  bool partial = 2;
+  // Final text whose partial chunks were already delivered.
+  bool repeat = 3;
+  // The model's reasoning rather than its answer.
+  bool thought = 4;
+}
+
+// ToolCall is the agent calling a tool.
+message ToolCall {
+  // Matches the ToolResult.
+  string id = 1;
+  string name = 2;
+  google.protobuf.Struct args = 3;
+  // Arrived in a streamed chunk; the final event repeats it.
+  bool partial = 4;
+}
+
+// ToolResult is what a tool returned.
+message ToolResult {
+  string id = 1;
+  string name = 2;
+  google.protobuf.Struct result = 3;
+}
+
+// ActionKind is the kind of action an approval covers.
+enum ActionKind {
+  ACTION_KIND_UNSPECIFIED = 0;
+  // A shell command or a forged tool.
+  ACTION_KIND_COMMAND = 1;
+  // Creating or editing a file.
+  ACTION_KIND_WRITE = 2;
+  ACTION_KIND_DELETE = 3;
+  // An outbound web request.
+  ACTION_KIND_NETWORK = 4;
+  // A tool served by an MCP server.
+  ACTION_KIND_MCP = 5;
+}
+
+// ApprovalRequest asks permission for one action.
+message ApprovalRequest {
+  // Identifies the request for Approve.
+  string request_id = 1;
+  string tool = 2;
+  ActionKind kind = 3;
+  // What will happen: the command, the path, the URL.
+  string detail = 4;
+  // For writes, the change as a unified diff.
+  string diff = 5;
+  // What "for this session" and "always" would cover, for people
+  // ("this exact command in this workspace").
+  string scope_label = 6;
+}
+
+// Decision answers an ApprovalRequest.
+enum Decision {
+  DECISION_UNSPECIFIED = 0;
+  DECISION_DENY = 1;
+  // Allow this one action.
+  DECISION_ONCE = 2;
+  // Allow actions with the same scope until the service restarts.
+  DECISION_SESSION = 3;
+  // Allow actions with the same scope, saved.
+  DECISION_ALWAYS = 4;
+}
+
+// Question is the agent asking the user something.
+message Question {
+  // Identifies the question for Answer.
+  string request_id = 1;
+  string question = 2;
+  // Suggested answers; the user may also answer freely.
+  repeated string options = 3;
+}
+
+// Usage is the token usage and estimated cost of a session.
+message Usage {
+  int32 calls = 1;
+  // Prompt tokens, including cached ones.
+  int64 input = 2;
+  int64 cached = 3;
+  // Prompt tokens written to the cache (part of input).
+  int64 cache_write = 4;
+  // Output and thinking tokens.
+  int64 output = 5;
+  // The latest prompt's size: the current context size.
+  int64 last_prompt = 6;
+  double cost_usd = 7;
+  // False if any call's model has no known price, so cost_usd is short.
+  bool priced = 8;
+}
+
+// TurnFinished ends a turn's events.
+message TurnFinished {
+  // The model's final answer text (partial and thought text excluded).
+  string output = 1;
+  // The session's usage before and after the turn.
+  Usage before = 2;
+  Usage after = 3;
+  // Steer messages sent after the agent's last tool call, so never read.
+  // Send them as the next turn (with accepted set), or drop them if the
+  // turn was interrupted.
+  repeated string leftover = 4;
+  // Why the turn failed, if it did; output holds what it produced first.
+  // A prompt refused by a hook fails with reason "PROMPT_BLOCKED".
+  ErrorInfo error = 5;
+}
+
+// ErrorInfo is a machine-readable error, also attached to failed calls as
+// a Connect error detail. Clients word and localise it from reason and
+// metadata; message is an English fallback.
+message ErrorInfo {
+  // e.g. "UNKNOWN_AGENT", "NO_ACTIVE_SESSION", "PROMPT_BLOCKED".
+  string reason = 1;
+  // Values for the reason, e.g. {"name": "reviewer"}.
+  map<string, string> metadata = 2;
+  string message = 3;
+}

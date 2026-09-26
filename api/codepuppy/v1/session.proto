@@ -1,0 +1,227 @@
+syntax = "proto3";
+
+package codepuppy.v1;
+
+import "codepuppy/v1/turn.proto";
+import "google/protobuf/timestamp.proto";
+
+// SessionService runs conversations in a workspace: saved sessions, turns,
+// steering, and the answers the agent waits for.
+//
+// Every request names its workspace by absolute directory; the service opens
+// it on first use. Errors carry an ErrorInfo detail.
+service SessionService {
+  // Returns the workspace's sessions (or with all, every saved session),
+  // newest first, without their messages.
+  rpc ListSessions(ListSessionsRequest) returns (ListSessionsResponse);
+  // Returns the session prompts go to, with its messages.
+  rpc GetActiveSession(GetActiveSessionRequest) returns (GetActiveSessionResponse);
+  // Starts a new session for the active agent and makes it active. It is
+  // named after its first prompt.
+  rpc NewSession(NewSessionRequest) returns (NewSessionResponse);
+  // Opens the session to use at startup: the one resume names (an ID, or a
+  // snapshot to start a new session from), the latest in the workspace, or
+  // a new one. Fails with RESUME_FAILED when there is nothing to resume.
+  rpc OpenSession(OpenSessionRequest) returns (OpenSessionResponse);
+  // Makes a session active: by ID, or a new session copied from the
+  // snapshot a name refers to (branched).
+  rpc LoadSession(LoadSessionRequest) returns (LoadSessionResponse);
+  // Saves a copy of the active session under a name (SNAPSHOT_NAME_TAKEN
+  // unless force).
+  rpc SaveSnapshot(SaveSnapshotRequest) returns (SaveSnapshotResponse);
+  // Sets the active session's title.
+  rpc RenameSession(RenameSessionRequest) returns (RenameSessionResponse);
+
+  // Runs one turn in a session and streams its events, ending with
+  // TurnFinished. Cancelling the call interrupts the turn. While it runs,
+  // answer approval requests and questions with Approve and Answer, and
+  // send steer messages with Steer.
+  rpc RunTurn(RunTurnRequest) returns (stream RunTurnResponse);
+  // Queues a message for the agent while a turn runs; it reads it with its
+  // next tool result. Fails with PROMPT_BLOCKED if a hook refuses it.
+  rpc Steer(SteerRequest) returns (SteerResponse);
+  // Answers an approval request from a running turn.
+  rpc Approve(ApproveRequest) returns (ApproveResponse);
+  // Answers a question from a running turn.
+  rpc Answer(AnswerRequest) returns (AnswerResponse);
+
+  // Returns the active session's usage and context size.
+  rpc GetUsage(GetUsageRequest) returns (GetUsageResponse);
+  // Summarises the active session's older turns to shrink the model's
+  // context (NOTHING_TO_COMPACT when it is too short).
+  rpc Compact(CompactRequest) returns (CompactResponse);
+  // Looks for terms in the active session's transcript and returns the
+  // prompt that asks the agent about the matches (run it as a turn).
+  rpc SearchSession(SearchSessionRequest) returns (SearchSessionResponse);
+}
+
+// SessionInfo describes a saved session.
+message SessionInfo {
+  string id = 1;
+  // Empty until the first prompt names it.
+  string title = 2;
+  string agent = 3;
+  // The workspace directory it belongs to (empty for old sessions).
+  string workspace = 4;
+  // The snapshot name, for a snapshot.
+  string snapshot = 5;
+  // The session this one was copied from.
+  string from = 6;
+  int32 message_count = 7;
+  google.protobuf.Timestamp created = 8;
+  google.protobuf.Timestamp updated = 9;
+  // Filled in only where noted.
+  repeated Message messages = 10;
+}
+
+// Message is one message in a transcript.
+message Message {
+  // "user" or "model".
+  string role = 1;
+  string text = 2;
+  google.protobuf.Timestamp time = 3;
+}
+
+message ListSessionsRequest {
+  string workspace = 1;
+  // Every saved session, not only this workspace's.
+  bool all = 2;
+}
+
+message ListSessionsResponse {
+  repeated SessionInfo sessions = 1;
+}
+
+message GetActiveSessionRequest {
+  string workspace = 1;
+}
+
+message GetActiveSessionResponse {
+  // Unset when no session is active.
+  SessionInfo session = 1;
+}
+
+message NewSessionRequest {
+  string workspace = 1;
+}
+
+message NewSessionResponse {
+  SessionInfo session = 1;
+}
+
+message OpenSessionRequest {
+  string workspace = 1;
+  // A session ID, a snapshot name, or "latest"; empty for a new session
+  // unless continue_latest.
+  string resume = 2;
+  bool continue_latest = 3;
+}
+
+message OpenSessionResponse {
+  SessionInfo session = 1;
+  // An existing session was resumed.
+  bool resumed = 2;
+}
+
+message LoadSessionRequest {
+  string workspace = 1;
+  // A session ID or snapshot name.
+  string ref = 2;
+}
+
+message LoadSessionResponse {
+  // With its messages.
+  SessionInfo session = 1;
+  // A new session started from a snapshot.
+  bool branched = 2;
+}
+
+message SaveSnapshotRequest {
+  string workspace = 1;
+  string name = 2;
+  bool force = 3;
+}
+
+message SaveSnapshotResponse {
+  SessionInfo snapshot = 1;
+}
+
+message RenameSessionRequest {
+  string workspace = 1;
+  string title = 2;
+}
+
+message RenameSessionResponse {
+  SessionInfo session = 1;
+}
+
+message RunTurnRequest {
+  string workspace = 1;
+  string session_id = 2;
+  Turn turn = 3;
+}
+
+message RunTurnResponse {
+  TurnEvent event = 1;
+}
+
+message SteerRequest {
+  string workspace = 1;
+  string session_id = 2;
+  string text = 3;
+}
+
+message SteerResponse {}
+
+message ApproveRequest {
+  string workspace = 1;
+  string request_id = 2;
+  Decision decision = 3;
+}
+
+message ApproveResponse {}
+
+message AnswerRequest {
+  string workspace = 1;
+  string request_id = 2;
+  string answer = 3;
+}
+
+message AnswerResponse {}
+
+message GetUsageRequest {
+  string workspace = 1;
+}
+
+message GetUsageResponse {
+  Usage usage = 1;
+  // The context is compacted when it passes threshold tokens, keeping the
+  // last keep events.
+  bool auto_compact = 2;
+  int32 threshold = 3;
+  int32 keep = 4;
+}
+
+message CompactRequest {
+  string workspace = 1;
+  // What the summary should keep.
+  string focus = 2;
+}
+
+message CompactResponse {
+  int32 events_compacted = 1;
+  int32 summary_chars = 2;
+  Usage before = 3;
+  Usage after = 4;
+}
+
+message SearchSessionRequest {
+  string workspace = 1;
+  string terms = 2;
+}
+
+message SearchSessionResponse {
+  // How many passages matched.
+  int32 found = 1;
+  string prompt = 2;
+}

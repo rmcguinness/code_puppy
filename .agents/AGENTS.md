@@ -18,6 +18,9 @@ The layout follows [golang-standards/project-layout](https://github.com/golang-s
 | `internal/skills`, `internal/agents` | Skill and agent definitions (built-ins embedded) |
 | `internal/i18n` | Message catalogs (`en-US`, `es`, `fr-CA`) |
 | `internal/observability` | Diagnostic log and OpenTelemetry |
+| `api/codepuppy/v1` | The service API as protos (`buf.yaml`, `buf.gen.yaml` at the root): `SessionService` (sessions, turns, steering, approvals), `WorkspaceService` (everything else `internal/app` does), `WorkerService` (ROADMAP item 24) |
+| `internal/gen` | Generated Go and Connect code, committed. Never edit it: change the protos and run `make proto` |
+| `tools` | A separate module pinning build tools (`buf`, `protoc-gen-go`, `protoc-gen-connect-go`) as `tool` directives, run with `go tool -modfile=tools/go.mod` |
 | `.github/workflows` | `ci.yml` (vet, race tests, sandbox and gVisor checks on macOS and Linux; cross-compiled binaries must be identical on both), `release.yml` (GoReleaser, SBOMs, cosign) |
 
 ## Commands
@@ -25,6 +28,8 @@ The layout follows [golang-standards/project-layout](https://github.com/golang-s
 ```bash
 make build                      # ./bin/code-puppy
 make check                      # go vet + go test -race
+make proto                      # lint, format and regenerate the API (internal/gen)
+make proto-check                # fails if the protos aren't formatted or internal/gen is stale
 ./bin/code-puppy doctor --online
 CODE_PUPPY_TELEMETRY=1 CODE_PUPPY_LOG_LEVEL=debug ./bin/code-puppy   # traces to http://localhost:4318; logs in ~/.code_puppy/logs
 CODE_PUPPY_PYENV_TESTS=1 go test ./internal/tools -run 'PyEnv|InstallsPackages'   # builds real Python environments (network)

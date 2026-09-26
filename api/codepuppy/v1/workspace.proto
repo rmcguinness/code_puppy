@@ -1,0 +1,610 @@
+syntax = "proto3";
+
+package codepuppy.v1;
+
+import "codepuppy/v1/turn.proto";
+import "google/protobuf/duration.proto";
+import "google/protobuf/timestamp.proto";
+
+// WorkspaceService covers everything about a workspace except its
+// conversations (SessionService) and workers (WorkerService): agents and
+// models, settings, skills and their environments, MCP servers and tools,
+// project memory, the reply language, checkpoints, approvals, images and web
+// search. Mirrors internal/app's operations.
+//
+// Every request names its workspace by absolute directory; the service opens
+// it on first use. Errors carry an ErrorInfo detail.
+service WorkspaceService {
+  // Returns the workspaces the service has open.
+  rpc ListWorkspaces(ListWorkspacesRequest) returns (ListWorkspacesResponse);
+  // Closes a workspace: kills its background processes and MCP servers.
+  rpc CloseWorkspace(CloseWorkspaceRequest) returns (CloseWorkspaceResponse);
+  // Describes the sandbox commands run in, one line each.
+  rpc GetSandbox(GetSandboxRequest) returns (GetSandboxResponse);
+
+  // Returns every agent and which is active.
+  rpc ListAgents(ListAgentsRequest) returns (ListAgentsResponse);
+  // Makes an agent the active one.
+  rpc SetAgent(SetAgentRequest) returns (SetAgentResponse);
+  // Returns the model the active agent runs on.
+  rpc GetModel(GetModelRequest) returns (GetModelResponse);
+  // Switches every unpinned agent to a model.
+  rpc SetModel(SetModelRequest) returns (SetModelResponse);
+  // Pins an agent to a model and saves the pin (UNKNOWN_AGENT).
+  rpc PinModel(PinModelRequest) returns (PinModelResponse);
+  // Returns an agent to the configured model, or its own default.
+  rpc UnpinModel(UnpinModelRequest) returns (UnpinModelResponse);
+  // Returns every model's generation settings, or one model's.
+  rpc GetModelSettings(GetModelSettingsRequest) returns (GetModelSettingsResponse);
+  // Changes a model's generation settings and saves them (BAD_MODEL_REF,
+  // INVALID_SETTING; nothing changes on error).
+  rpc UpdateModelSettings(UpdateModelSettingsRequest) returns (UpdateModelSettingsResponse);
+  // Returns the settings /set changes, plus model, agent and reply language.
+  rpc GetSettings(GetSettingsRequest) returns (GetSettingsResponse);
+  // Changes a setting for the workspace (UNKNOWN_SETTING, INVALID_AGENCY).
+  rpc SetSetting(SetSettingRequest) returns (SetSettingResponse);
+
+  // Returns the skills found, or those matching a query.
+  rpc ListSkills(ListSkillsRequest) returns (ListSkillsResponse);
+  // Returns one skill (SKILL_NOT_FOUND).
+  rpc GetSkill(GetSkillRequest) returns (GetSkillResponse);
+  // Returns skill scripts' environments (SCRIPTS_DISABLED).
+  rpc ListEnvs(ListEnvsRequest) returns (ListEnvsResponse);
+  // Removes one environment.
+  rpc RemoveEnv(RemoveEnvRequest) returns (RemoveEnvResponse);
+  // Removes environments no allowed script needs, and incomplete ones.
+  rpc PruneEnvs(PruneEnvsRequest) returns (PruneEnvsResponse);
+  // Returns the configured MCP servers.
+  rpc ListMCPServers(ListMCPServersRequest) returns (ListMCPServersResponse);
+  // Returns what the active agent can use.
+  rpc ListTools(ListToolsRequest) returns (ListToolsResponse);
+
+  // Re-reads project instruction files and returns their paths.
+  rpc ReloadMemory(ReloadMemoryRequest) returns (ReloadMemoryResponse);
+  // Appends a note to the project instruction file.
+  rpc AddMemory(AddMemoryRequest) returns (AddMemoryResponse);
+  // Returns the languages with an interface catalog.
+  rpc ListLocales(ListLocalesRequest) returns (ListLocalesResponse);
+  // Sets the language the model replies in and saves it (UNKNOWN_LOCALE).
+  // The client switches its own interface language to the returned tag.
+  rpc SetLocale(SetLocaleRequest) returns (SetLocaleResponse);
+
+  // Returns the turns that changed files, newest first.
+  rpc ListCheckpoints(ListCheckpointsRequest) returns (ListCheckpointsResponse);
+  // Restores the files the latest turn with changes modified
+  // (UNDO_CONFLICT unless force).
+  rpc Undo(UndoRequest) returns (UndoResponse);
+  // Returns a diff of the agent's changes this session, or git's.
+  rpc GetDiff(GetDiffRequest) returns (GetDiffResponse);
+  // Returns standing approvals.
+  rpc ListApprovals(ListApprovalsRequest) returns (ListApprovalsResponse);
+  // Revokes approvals by key, or all of them.
+  rpc RevokeApprovals(RevokeApprovalsRequest) returns (RevokeApprovalsResponse);
+
+  // Reads an image from the workspace for a prompt (IMAGES_DISABLED).
+  rpc LoadImage(LoadImageRequest) returns (LoadImageResponse);
+  // Stores image data (e.g. pasted) for a prompt (IMAGES_DISABLED).
+  rpc AddImage(AddImageRequest) returns (AddImageResponse);
+  // Searches the web and prepares the prompt that hands the readable results
+  // to the agent (NO_FETCH, NO_SEARCH): run it as a turn with fetch_grants
+  // set to the links' URLs.
+  rpc SearchWeb(SearchWebRequest) returns (SearchWebResponse);
+}
+
+// Saved reports where a change was written in the config file. The change
+// applies even when saving fails.
+message Saved {
+  string path = 1;
+  // Why it wasn't saved; empty on success.
+  string error = 2;
+}
+
+message ListWorkspacesRequest {}
+
+message ListWorkspacesResponse {
+  // Absolute directories.
+  repeated string workspaces = 1;
+}
+
+message CloseWorkspaceRequest {
+  string workspace = 1;
+}
+
+message CloseWorkspaceResponse {}
+
+message GetSandboxRequest {
+  string workspace = 1;
+}
+
+message GetSandboxResponse {
+  repeated string summary = 1;
+}
+
+// AgentInfo describes an agent.
+message AgentInfo {
+  string name = 1;
+  string display_name = 2;
+  string description = 3;
+  bool active = 4;
+  // The model it is pinned to; empty when it runs on the configured model.
+  string pinned_model = 5;
+}
+
+message ListAgentsRequest {
+  string workspace = 1;
+}
+
+message ListAgentsResponse {
+  repeated AgentInfo agents = 1;
+}
+
+message SetAgentRequest {
+  string workspace = 1;
+  string name = 2;
+}
+
+message SetAgentResponse {
+  AgentInfo agent = 1;
+}
+
+message GetModelRequest {
+  string workspace = 1;
+}
+
+message GetModelResponse {
+  string name = 1;
+  // The configured provider.
+  string provider = 2;
+}
+
+message SetModelRequest {
+  string workspace = 1;
+  // A name or "provider/model".
+  string ref = 2;
+}
+
+message SetModelResponse {
+  // The model the active agent is pinned to, which still applies to it;
+  // empty if it isn't pinned.
+  string active_pin = 1;
+}
+
+message PinModelRequest {
+  string workspace = 1;
+  string agent = 2;
+  string ref = 3;
+}
+
+message PinModelResponse {
+  string agent = 1;
+  // The model the agent now runs on.
+  string model = 2;
+  Saved saved = 3;
+}
+
+message UnpinModelRequest {
+  string workspace = 1;
+  string agent = 2;
+}
+
+message UnpinModelResponse {
+  string agent = 1;
+  string model = 2;
+  Saved saved = 3;
+}
+
+// ModelSettings are a model's generation settings; unset fields use the
+// global value or the provider's default.
+message ModelSettings {
+  optional double temperature = 1;
+  optional int32 max_tokens = 2;
+  optional double top_p = 3;
+  optional int32 seed = 4;
+}
+
+// ModelSettingsInfo is one model's settings and what applies otherwise.
+message ModelSettingsInfo {
+  // Without a provider prefix.
+  string model = 1;
+  string provider = 2;
+  ModelSettings settings = 3;
+  // Apply when settings leaves them unset (0: the provider's default).
+  double global_temperature = 4;
+  int32 global_max_tokens = 5;
+}
+
+message GetModelSettingsRequest {
+  string workspace = 1;
+  // One model ("provider/" optional); empty for every model with settings.
+  string ref = 2;
+}
+
+message GetModelSettingsResponse {
+  // Every model with settings, by name (when ref is empty).
+  map<string, ModelSettings> all = 1;
+  // The requested model (when ref is set).
+  ModelSettingsInfo model = 2;
+}
+
+// Setting is one key=value change; an empty value clears the key.
+message Setting {
+  string key = 1;
+  string value = 2;
+}
+
+message UpdateModelSettingsRequest {
+  string workspace = 1;
+  string ref = 2;
+  // Clear every setting before applying changes.
+  bool reset = 3;
+  repeated Setting changes = 4;
+}
+
+message UpdateModelSettingsResponse {
+  ModelSettingsInfo model = 1;
+  // Keys set that the provider or model ignores.
+  repeated string unsupported = 2;
+  Saved saved = 3;
+}
+
+message GetSettingsRequest {
+  string workspace = 1;
+}
+
+message GetSettingsResponse {
+  string puppy_name = 1;
+  string owner_name = 2;
+  string agency = 3;
+  string model = 4;
+  string provider = 5;
+  string agent = 6;
+  // The language the model replies in.
+  string locale = 7;
+}
+
+message SetSettingRequest {
+  string workspace = 1;
+  // "agency", "puppy_name" or "owner_name".
+  string key = 2;
+  string value = 3;
+}
+
+message SetSettingResponse {
+  // The key in canonical form.
+  string key = 1;
+}
+
+// SkillInfo describes a skill and what the skills policy lets it do.
+message SkillInfo {
+  string name = 1;
+  string description = 2;
+  string version = 3;
+  string license = 4;
+  string category = 5;
+  string compatibility = 6;
+  repeated string tags = 7;
+  // Identifies the content, for pinning it in the policy.
+  string hash = 8;
+  repeated SkillTool tools = 9;
+  repeated SkillScript scripts = 10;
+  // The approval tier the scripts run at; empty without scripts.
+  string tier = 11;
+  // The skill may skip approvals and the policy allows it.
+  bool bypass = 12;
+  // The scripts may use the network.
+  bool network = 13;
+  // The skill asks for the network (granted or not).
+  bool needs_network = 14;
+  // Host environment variables passed to the scripts, and those withheld.
+  repeated string env = 15;
+  repeated string withheld = 16;
+  // Why none of the scripts may run.
+  repeated string blocked = 17;
+}
+
+// SkillTool is a tool a skill needs.
+message SkillTool {
+  string name = 1;
+  repeated string scopes = 2;
+  string why = 3;
+}
+
+// SkillScript is one of a skill's scripts and the policy's verdict.
+message SkillScript {
+  string name = 1;
+  string language = 2;
+  // Its path in the skill, or "inline".
+  string source = 3;
+  google.protobuf.Duration timeout = 4;
+  repeated string deps = 5;
+  bool allowed = 6;
+  repeated string reasons = 7;
+}
+
+message ListSkillsRequest {
+  string workspace = 1;
+  // Only skills matching; empty for all.
+  string query = 2;
+}
+
+message ListSkillsResponse {
+  repeated SkillInfo skills = 1;
+}
+
+message GetSkillRequest {
+  string workspace = 1;
+  string name = 2;
+}
+
+message GetSkillResponse {
+  SkillInfo skill = 1;
+}
+
+// Env is an isolated Python environment built for skill scripts.
+message Env {
+  string key = 1;
+  repeated string deps = 2;
+  // The skills that used it.
+  repeated string skills = 3;
+  // Bytes on disk.
+  int64 size = 4;
+  google.protobuf.Timestamp last_used = 5;
+  // Built completely.
+  bool ready = 6;
+}
+
+message ListEnvsRequest {
+  string workspace = 1;
+}
+
+message ListEnvsResponse {
+  repeated Env envs = 1;
+}
+
+message RemoveEnvRequest {
+  string workspace = 1;
+  string key = 2;
+}
+
+message RemoveEnvResponse {}
+
+message PruneEnvsRequest {
+  string workspace = 1;
+}
+
+// EnvError is an environment that couldn't be removed.
+message EnvError {
+  string key = 1;
+  string error = 2;
+}
+
+message PruneEnvsResponse {
+  int32 removed = 1;
+  // Bytes freed.
+  int64 freed = 2;
+  repeated EnvError failed = 3;
+}
+
+// MCPServer is a configured MCP server.
+message MCPServer {
+  string name = 1;
+  // Its URL, or the command that starts it.
+  string target = 2;
+  bool auto_approve = 3;
+}
+
+message ListMCPServersRequest {
+  string workspace = 1;
+}
+
+message ListMCPServersResponse {
+  repeated MCPServer servers = 1;
+}
+
+// ToolInfo is a tool an agent can call.
+message ToolInfo {
+  string name = 1;
+  string description = 2;
+  // Stays available in plan mode.
+  bool plan_allowed = 3;
+}
+
+// MCPOffer is an MCP server offered to an agent.
+message MCPOffer {
+  string server = 1;
+  // The tools offered; empty means all.
+  repeated string tools = 2;
+  // Prepended to tool names.
+  string prefix = 3;
+}
+
+message ListToolsRequest {
+  string workspace = 1;
+}
+
+message ListToolsResponse {
+  string agent = 1;
+  repeated ToolInfo tools = 2;
+  repeated MCPOffer mcp = 3;
+}
+
+message ReloadMemoryRequest {
+  string workspace = 1;
+}
+
+message ReloadMemoryResponse {
+  repeated string paths = 1;
+  // The file names looked for, in order.
+  repeated string files = 2;
+}
+
+message AddMemoryRequest {
+  string workspace = 1;
+  string text = 2;
+}
+
+message AddMemoryResponse {
+  string path = 1;
+}
+
+// LocaleInfo names a language with an interface catalog.
+message LocaleInfo {
+  string tag = 1;
+  string name = 2;
+}
+
+message ListLocalesRequest {
+  string workspace = 1;
+}
+
+message ListLocalesResponse {
+  repeated LocaleInfo locales = 1;
+  // Where custom catalogs are read from; empty if none is configured.
+  string custom_dir = 2;
+}
+
+message SetLocaleRequest {
+  string workspace = 1;
+  // A language tag or name.
+  string input = 2;
+}
+
+message SetLocaleResponse {
+  string tag = 1;
+  // e.g. "Español".
+  string native_name = 2;
+  // In the new language's terms, e.g. "español".
+  string language_name = 3;
+  // The interface is translated; otherwise only replies are.
+  bool has_catalog = 4;
+  Saved saved = 5;
+}
+
+// Checkpoint is the files one turn changed.
+message Checkpoint {
+  int32 id = 1;
+  string label = 2;
+  google.protobuf.Timestamp time = 3;
+  repeated string files = 4;
+}
+
+message ListCheckpointsRequest {
+  string workspace = 1;
+}
+
+message ListCheckpointsResponse {
+  repeated Checkpoint checkpoints = 1;
+}
+
+message UndoRequest {
+  string workspace = 1;
+  // Restore even files changed since the agent's edit.
+  bool force = 2;
+}
+
+message UndoResponse {
+  string label = 1;
+  repeated string restored = 2;
+  // Why the rest wasn't restored, after a partial restore.
+  ErrorInfo error = 3;
+}
+
+message GetDiffRequest {
+  string workspace = 1;
+  // git's diff (stat and patch) instead of the agent's changes.
+  bool git = 2;
+  // Keep git's terminal colours.
+  bool color = 3;
+}
+
+message GetDiffResponse {
+  // A unified diff; empty when nothing changed.
+  string diff = 1;
+}
+
+// Approval is a standing permission.
+message Approval {
+  // Identifies it for RevokeApprovals.
+  string key = 1;
+  // "cmd", "write", "delete", "web", "mcp", "uc-run", or a newer kind.
+  string kind = 2;
+  // The command, path, host or tool.
+  string subject = 3;
+  // The workspace a command approval is limited to.
+  string dir = 4;
+  // Saved for future sessions; otherwise it lasts until the service stops.
+  bool always = 5;
+  google.protobuf.Timestamp added = 6;
+}
+
+message ListApprovalsRequest {
+  string workspace = 1;
+}
+
+message ListApprovalsResponse {
+  repeated Approval approvals = 1;
+}
+
+message RevokeApprovalsRequest {
+  string workspace = 1;
+  repeated string keys = 2;
+  // Revoke every approval; keys is ignored.
+  bool all = 3;
+}
+
+message RevokeApprovalsResponse {
+  int32 revoked = 1;
+}
+
+// Image is an image stored for a prompt.
+message Image {
+  // For Turn.image_ids: the SHA-256 of the data.
+  string id = 1;
+  string name = 2;
+  string mime_type = 3;
+  int32 width = 4;
+  int32 height = 5;
+  // Bytes, after any resizing.
+  int64 size = 6;
+  // Scaled down to fit the model's limits.
+  bool resized = 7;
+}
+
+message LoadImageRequest {
+  string workspace = 1;
+  // Relative to the workspace.
+  string path = 2;
+}
+
+message LoadImageResponse {
+  Image image = 1;
+}
+
+message AddImageRequest {
+  string workspace = 1;
+  string name = 2;
+  bytes data = 3;
+}
+
+message AddImageResponse {
+  Image image = 1;
+}
+
+// Link is a search result handed to the agent.
+message Link {
+  string title = 1;
+  string url = 2;
+}
+
+message SearchWebRequest {
+  string workspace = 1;
+  string terms = 2;
+}
+
+message SearchWebResponse {
+  // The provider searched.
+  string provider = 1;
+  // None: nothing worth handing over.
+  repeated Link links = 2;
+  string prompt = 3;
+}

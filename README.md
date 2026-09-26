@@ -313,7 +313,7 @@ sha256sum --ignore-missing -c checksums.txt
 
 The macOS binaries aren't Apple-notarized, so a copy downloaded in a browser is quarantined and Gatekeeper won't run it. Clear the flag with `xattr -d com.apple.quarantine code-puppy`, or open it once through Finder's context menu. Each release's notes say this too.
 
-CI (`ci.yml`) runs vet and race tests on macOS and Linux. The Linux job installs bubblewrap and a pinned gVisor, and fails if the sandbox enforcement or gVisor tests are skipped.
+CI (`ci.yml`) runs vet and race tests on macOS and Linux, and checks the API protos in `api/` (lint, formatting, generated code current, no breaking changes; `make proto` regenerates). The Linux job installs bubblewrap and a pinned gVisor, and fails if the sandbox enforcement or gVisor tests are skipped.
 
 **Project docs:** [.agents/ROADMAP.md](.agents/ROADMAP.md) (what was built and why), [.agents/MANUAL_VERIFICATION.md](.agents/MANUAL_VERIFICATION.md) (checks that need a person), [.agents/NEXT_STEPS.md](.agents/NEXT_STEPS.md) (where to pick up), [.agents/AGENTS.md](.agents/AGENTS.md) (conventions for working on the code), [docs/TRANSLATING.md](docs/TRANSLATING.md), [docs/HISTORY.md](docs/HISTORY.md) (the port from Python).
 

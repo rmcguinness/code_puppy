@@ -3,6 +3,7 @@ module github.com/retail-cortex/code_puppy
 go 1.27.1
 
 require (
+	connectrpc.com/connect v1.21.0
 	github.com/BurntSushi/toml v1.6.0
 	github.com/anthropics/anthropic-sdk-go v1.75.0
 	github.com/aymanbagabas/go-udiff v0.4.1
@@ -28,6 +29,7 @@ require (
 	golang.org/x/text v0.42.0
 	google.golang.org/adk/v2 v2.4.0
 	google.golang.org/genai v1.70.0
+	google.golang.org/protobuf v1.36.12
 	gopkg.in/yaml.v3 v3.0.1
 	gvisor.dev/gvisor v0.0.0-20260926034703-66ed76bcb72f
 	mvdan.cc/sh/v3 v3.14.1
@@ -106,7 +108,6 @@ require (
 	google.golang.org/genproto/googleapis/api v0.0.0-20260819154853-08b0e4226688 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20260819154853-08b0e4226688 // indirect
 	google.golang.org/grpc v1.83.2 // indirect
-	google.golang.org/protobuf v1.36.12 // indirect
 	rsc.io/omap v1.2.0 // indirect
 	rsc.io/ordered v1.1.1 // indirect
 )

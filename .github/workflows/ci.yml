@@ -24,10 +24,14 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0 # buf breaking compares with the previous commit
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
-          cache-dependency-path: go.sum
+          cache-dependency-path: |
+            go.sum
+            tools/go.sum
       # Linux runs the real bubblewrap sandbox tests.
       - name: Install bubblewrap
         if: runner.os == 'Linux'
@@ -52,6 +56,17 @@ jobs:
       # bash 3.2 with -e even when nothing is listed.)
       - run: test -z "$(gofmt -l cmd internal | tee /dev/stderr)"
       - run: go vet ./...
+      # The API protos: lint, formatting, generated code current, and no
+      # breaking change against the previous commit (once it had protos).
+      - name: Protos
+        if: runner.os == 'Linux'
+        env:
+          BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          make proto-check
+          if git cat-file -e "$BASE:buf.yaml" 2>/dev/null; then
+            go tool -modfile=tools/go.mod buf breaking --against ".git#ref=$BASE"
+          fi
       - run: go test -race ./...
       - name: Sandbox enforcement must not be skipped
         run: go test -count=1 -v -run TestOSSandboxEnforcement ./internal/tools/ | tee out.txt && ! grep -q -- '--- SKIP' out.txt

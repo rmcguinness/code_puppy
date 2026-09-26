@@ -35,7 +35,9 @@ Roadmap items 1–22 are done and committed, and item 23 (the desktop app) is in
 | `4ddbb783` | Phase 4, the rest: `/cost`, `/context`, `/compact`, `/memory`, `/locale`, `/sandbox`, `/attach`, `/paste`, `/search`; `tui.App` reduced to the workspace and terminal state |
 | `900c1b96` | ROADMAP item 23 replanned: one service per user, CLI attaches, Connect + buf |
 | `3fb181cd`, `af7cad97` | Phase 5: `app.Event` instead of ADK events for every client; the prompt is recorded before steering can start |
-| (the commit adding `internal/app/multi_test.go`) | Phase 5b: per-workspace state, no dependence on the working directory |
+| `42aaf41b` | Phase 5b: per-workspace state, no dependence on the working directory |
+| `f9a6e7bf` | ROADMAP item 24 planned: workers |
+| (the commit adding `api/codepuppy/v1`) | Phase 6: the service API as protos, buf, generated Go and Connect code |
 | (the commit adding `internal/session/title_test.go`) | Session names from the first prompt, `/rename`, terminal title, resume hint on exit |
 
 `go vet ./...` and `go test -race ./...` pass.
@@ -46,7 +48,7 @@ Roadmap items 1–22 are done and committed, and item 23 (the desktop app) is in
 
 ## Open work, in suggested order
 
-1. **Desktop app: ROADMAP item 23.** Phases 2–4 are done: `internal/app` is a UI-independent core with typed operations, and `tui` only parses and renders. Decided: one service per user, CLI attaches when available, Connect + buf. Phases 5 (`app.Event`) and 5b (per-workspace state) are done. Next is phase 6: the `api/codepuppy/v1` protos with buf. The workers design (ROADMAP item 24: `workers/<name>/WORKER.md`, cron or plain-text schedules, hash-pinned enabling, refuse-and-record) is settled, so `WorkerService` goes into the protos from the start. The phases and decisions are in the ROADMAP item.
+1. **Desktop app: ROADMAP item 23.** Phases 2–4 are done: `internal/app` is a UI-independent core with typed operations, and `tui` only parses and renders. Decided: one service per user, CLI attaches when available, Connect + buf. Phases 5 (`app.Event`) and 5b (per-workspace state) are done. Phase 6 (the protos in `api/codepuppy/v1`, `make proto`, CI checks) is done. Next is phase 7: `internal/server` and `code-puppy serve` (Connect handlers over `app.Workspace`, the Unix socket, the workspace lock, approvals and questions over the turn stream). Workers (item 24) follow once the service runs. The phases and decisions are in the ROADMAP item.
 2. **Manual verification (needs a person).** Nothing in `MANUAL_VERIFICATION.md` has been run yet. It covers real providers (💲 = paid calls), terminal behavior, the macOS and Linux sandboxes, MCP, steering, fallback and pinning. Record results in the file; any failure becomes the next task.
 3. **Optional: notarize the macOS binaries** (needs an Apple Developer account). Until then, the release notes (GoReleaser `release.footer`) and the README explain clearing the quarantine flag. Dependabot (`.github/dependabot.yml`) keeps the pinned action SHAs current. `~/.gnupg/gpg-agent.conf` now points at GPG Suite's `pinentry-mac`; the next tag will show whether signing works.
 4. **Linux sandbox startup cost.** Before every sandboxed command, `expandBlocked` (`internal/tools/bwrap.go`) scans the writable roots, including the temp and cache directories (e.g. the Go build cache), for blocked names, up to 50,000 entries. Measured in a Linux container: about 0.1 s per command normally, 3.4 s under `-race`. Worth reducing (e.g. skip cache directories for name patterns, or reuse a recent scan), keeping in mind that a file created between scans could then escape masking. CI's parallel-cap test runs with the sandbox off because of this.

@@ -1,0 +1,181 @@
+syntax = "proto3";
+
+package codepuppy.v1;
+
+import "codepuppy/v1/turn.proto";
+import "google/protobuf/duration.proto";
+import "google/protobuf/timestamp.proto";
+
+// WorkerService manages workers: scheduled workflows a workspace defines in
+// workers/<name>/WORKER.md (ROADMAP item 24). The service finds them by
+// scanning trusted workspaces; a worker runs only once enabled against its
+// content hash, and editing it disables it again. Actions outside a worker's
+// permissions are refused and recorded, never left waiting.
+service WorkerService {
+  // Returns a workspace's workers, or every registered workspace's.
+  rpc ListWorkers(ListWorkersRequest) returns (ListWorkersResponse);
+  // Enables a worker at the content hash the caller reviewed
+  // (HASH_MISMATCH if the file changed since).
+  rpc EnableWorker(EnableWorkerRequest) returns (EnableWorkerResponse);
+  // Disables a worker.
+  rpc DisableWorker(DisableWorkerRequest) returns (DisableWorkerResponse);
+  // Starts a run now, outside the schedule (WORKER_DISABLED, RUN_IN_PROGRESS).
+  rpc RunWorker(RunWorkerRequest) returns (RunWorkerResponse);
+  // Returns a worker's runs, newest first.
+  rpc ListWorkerRuns(ListWorkerRunsRequest) returns (ListWorkerRunsResponse);
+  // Returns one run.
+  rpc GetWorkerRun(GetWorkerRunRequest) returns (GetWorkerRunResponse);
+  // Streams a run's events: those already produced, then live ones until
+  // it finishes.
+  rpc WatchWorkerRun(WatchWorkerRunRequest) returns (stream WatchWorkerRunResponse);
+}
+
+// WorkerState is whether a worker may run.
+enum WorkerState {
+  WORKER_STATE_UNSPECIFIED = 0;
+  // Found but never enabled.
+  WORKER_STATE_NEW = 1;
+  WORKER_STATE_ENABLED = 2;
+  WORKER_STATE_DISABLED = 3;
+  // Enabled at an older hash; the file has changed since.
+  WORKER_STATE_CHANGED = 4;
+  // WORKER.md can't be used; problems says why.
+  WORKER_STATE_INVALID = 5;
+}
+
+// WorkerLimits bound one run.
+message WorkerLimits {
+  int32 max_turns = 1;
+  double max_cost_usd = 2;
+  google.protobuf.Duration timeout = 3;
+}
+
+// Worker describes a worker.
+message Worker {
+  string workspace = 1;
+  string name = 2;
+  string description = 3;
+  // WORKER.md, absolute.
+  string path = 4;
+  // Of WORKER.md and the worker's other files.
+  string hash = 5;
+  WorkerState state = 6;
+  // As written ("Daily at 6 AM"), and as understood.
+  string schedule = 7;
+  string cron = 8;
+  string timezone = 9;
+  google.protobuf.Timestamp next_run = 10;
+  string agent = 11;
+  string model = 12;
+  // What the worker may do without asking, as its frontmatter asks,
+  // after the host policy's cap.
+  repeated string permissions = 13;
+  WorkerLimits limits = 14;
+  // Why the worker is invalid, or what the policy removed.
+  repeated string problems = 15;
+}
+
+message ListWorkersRequest {
+  // Empty for every registered workspace.
+  string workspace = 1;
+}
+
+message ListWorkersResponse {
+  repeated Worker workers = 1;
+}
+
+message EnableWorkerRequest {
+  string workspace = 1;
+  string name = 2;
+  // The hash the caller reviewed.
+  string hash = 3;
+}
+
+message EnableWorkerResponse {
+  Worker worker = 1;
+}
+
+message DisableWorkerRequest {
+  string workspace = 1;
+  string name = 2;
+}
+
+message DisableWorkerResponse {
+  Worker worker = 1;
+}
+
+// RunStatus is where a run stands.
+enum RunStatus {
+  RUN_STATUS_UNSPECIFIED = 0;
+  RUN_STATUS_RUNNING = 1;
+  RUN_STATUS_SUCCEEDED = 2;
+  RUN_STATUS_FAILED = 3;
+  // Stopped at a limit (turns, cost, time).
+  RUN_STATUS_LIMITED = 4;
+  // Not started: the previous run was still going (overlap: skip).
+  RUN_STATUS_SKIPPED = 5;
+}
+
+// Refusal is an action a run wasn't permitted.
+message Refusal {
+  string tool = 1;
+  ActionKind kind = 2;
+  string detail = 3;
+  google.protobuf.Timestamp time = 4;
+}
+
+// WorkerRun is one run of a worker.
+message WorkerRun {
+  string id = 1;
+  string workspace = 2;
+  string worker = 3;
+  // The hash the run used.
+  string hash = 4;
+  RunStatus status = 5;
+  // Scheduled, or started by RunWorker.
+  bool manual = 6;
+  google.protobuf.Timestamp started = 7;
+  google.protobuf.Duration duration = 8;
+  Usage usage = 9;
+  // The session holding the run's conversation.
+  string session_id = 10;
+  repeated Refusal refusals = 11;
+  // Why the run failed or stopped.
+  ErrorInfo error = 12;
+}
+
+message RunWorkerRequest {
+  string workspace = 1;
+  string name = 2;
+}
+
+message RunWorkerResponse {
+  WorkerRun run = 1;
+}
+
+message ListWorkerRunsRequest {
+  string workspace = 1;
+  string name = 2;
+  // At most this many (0: a default).
+  int32 limit = 3;
+}
+
+message ListWorkerRunsResponse {
+  repeated WorkerRun runs = 1;
+}
+
+message GetWorkerRunRequest {
+  string run_id = 1;
+}
+
+message GetWorkerRunResponse {
+  WorkerRun run = 1;
+}
+
+message WatchWorkerRunRequest {
+  string run_id = 1;
+}
+
+message WatchWorkerRunResponse {
+  TurnEvent event = 1;
+}

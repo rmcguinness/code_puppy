@@ -1,0 +1,10 @@
+# Protos for Code Puppy's service API. `make proto` lints and generates.
+version: v2
+modules:
+  - path: api
+lint:
+  use:
+    - STANDARD
+breaking:
+  use:
+    - FILE
