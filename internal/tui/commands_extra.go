@@ -4,19 +4,16 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os/exec"
 	"slices"
 	"sort"
 	"strconv"
 	"strings"
 
 	core "github.com/retail-cortex/code_puppy/internal/app"
-	"github.com/retail-cortex/code_puppy/internal/audit"
 	"github.com/retail-cortex/code_puppy/internal/i18n"
 	"github.com/retail-cortex/code_puppy/internal/memory"
 	"github.com/retail-cortex/code_puppy/internal/runtime"
 	"github.com/retail-cortex/code_puppy/internal/textutil"
-	"github.com/retail-cortex/code_puppy/internal/tools"
 )
 
 // handleExtraCommand processes commands added for checkpoints, cost,
@@ -76,18 +73,14 @@ func needTools(app *App) bool {
 }
 
 func cmdUndo(args []string, app *App) {
-	if !needTools(app) {
-		return
-	}
 	force := len(args) > 0 && (args[0] == "--force" || args[0] == "-f")
-	res, err := app.Tools.Checkpoints().Undo(force)
-	if errors.Is(err, tools.ErrUndoConflict) {
+	res, err := app.Workspace.Undo(force)
+	if errors.Is(err, core.ErrUndoConflict) {
 		fmt.Printf("%s⚠️  %v%s\n", Yellow, err, Reset)
 		return
 	}
 	if len(res.Restored) > 0 {
-		fmt.Printf("%s↩️  %s%s\n", Green, i18n.T("undo.done", "label", strconv.Quote(safe(res.Turn.Label)), "files", safe(strings.Join(res.Restored, ", "))), Reset)
-		app.Tools.Hooks().Audit().Log(audit.Entry{Kind: audit.KindUndo, Detail: strings.Join(res.Restored, ", ")})
+		fmt.Printf("%s↩️  %s%s\n", Green, i18n.T("undo.done", "label", strconv.Quote(safe(res.Label)), "files", safe(strings.Join(res.Restored, ", "))), Reset)
 	}
 	if err != nil {
 		fmt.Printf("%s❌ %v%s\n", Red, err, Reset)
@@ -95,10 +88,7 @@ func cmdUndo(args []string, app *App) {
 }
 
 func cmdCheckpoints(app *App) {
-	if !needTools(app) {
-		return
-	}
-	list := app.Tools.Checkpoints().List()
+	list := app.Workspace.ListCheckpoints()
 	if len(list) == 0 {
 		fmt.Println(i18n.T("checkpoints.none"))
 		return
@@ -111,24 +101,19 @@ func cmdCheckpoints(app *App) {
 }
 
 func cmdDiff(ctx context.Context, args []string, app *App) {
-	if !needTools(app) {
-		return
-	}
 	if len(args) > 0 && args[0] == "git" {
-		cmd := exec.CommandContext(ctx, "git", "-c", "color.ui=always", "diff", "--stat", "--patch")
-		cmd.Dir = app.Tools.Workspace().Dir()
-		out, err := cmd.CombinedOutput()
+		out, err := app.Workspace.GitDiff(ctx, true)
 		if err != nil {
-			fmt.Printf("%s❌ %s%s\n%s", Red, i18n.T("diff.git_failed", "error", err), Reset, safe(string(out)))
+			fmt.Printf("%s❌ %s%s\n%s", Red, i18n.T("diff.git_failed", "error", err), Reset, safe(out))
 			return
 		}
-		if len(out) == 0 {
+		if out == "" {
 			fmt.Println(i18n.T("diff.git_clean"))
 		}
-		fmt.Print(string(out))
+		fmt.Print(out)
 		return
 	}
-	d := app.Tools.Checkpoints().SessionDiff()
+	d := app.Workspace.SessionDiff()
 	if strings.TrimSpace(d) == "" {
 		fmt.Println(i18n.T("diff.none"))
 		return
@@ -245,86 +230,56 @@ func cmdMemory(ctx context.Context, args []string, app *App) {
 }
 
 func cmdApprovals(args []string, app *App) {
-	if !needTools(app) {
+	list := app.Workspace.ListApprovals()
+	if len(args) >= 1 && args[0] == "clear" {
+		fmt.Printf("%s✅ %s%s\n", Green, i18n.N("approvals.revoked", app.Workspace.ClearApprovals()), Reset)
 		return
 	}
-	hooks := app.Tools.Hooks()
-	store := hooks.Store()
-	session := hooks.SessionRules()
-	saved := store.Rules()
-
-	if len(args) >= 1 && (args[0] == "revoke" || args[0] == "clear") {
-		var targets []string
-		if args[0] == "clear" {
-			targets = append(targets, session...)
-			for _, r := range saved {
-				targets = append(targets, r.Key)
-			}
-		} else {
-			n, err := strconv.Atoi(strings.TrimPrefix(strings.Join(args[1:], ""), "#"))
-			all := append(append([]string{}, session...), keysOf(saved)...)
-			if err != nil || n < 1 || n > len(all) {
-				fmt.Println(i18n.T("approvals.revoke_usage"))
-				return
-			}
-			targets = []string{all[n-1]}
+	if len(args) >= 1 && args[0] == "revoke" {
+		n, err := strconv.Atoi(strings.TrimPrefix(strings.Join(args[1:], ""), "#"))
+		if err != nil || n < 1 || n > len(list) {
+			fmt.Println(i18n.T("approvals.revoke_usage"))
+			return
 		}
-		for _, k := range targets {
-			hooks.RevokeSession(k)
-			if store != nil {
-				store.Remove(k)
-			}
-		}
-		fmt.Printf("%s✅ %s%s\n", Green, i18n.N("approvals.revoked", len(targets)), Reset)
+		fmt.Printf("%s✅ %s%s\n", Green, i18n.N("approvals.revoked", app.Workspace.RevokeApprovals(list[n-1].Key)), Reset)
 		return
 	}
 
-	if len(session)+len(saved) == 0 {
+	if len(list) == 0 {
 		fmt.Println(i18n.T("approvals.none"))
 		return
 	}
 	fmt.Printf("\n%s🔑 %s%s\n", Bold, i18n.T("approvals.title"), Reset)
-	n := 0
-	for _, k := range session {
-		n++
-		fmt.Printf("  %d. %s %s(%s)%s\n", n, safe(describeKey(k)), Dim, i18n.T("approvals.scope_session"), Reset)
-	}
-	for _, r := range saved {
-		n++
-		fmt.Printf("  %d. %s %s(%s)%s\n", n, safe(describeKey(r.Key)), Dim, i18n.T("approvals.scope_always", "date", r.Added.Format("2006-01-02")), Reset)
+	for i, a := range list {
+		scope := i18n.T("approvals.scope_session")
+		if a.Always {
+			scope = i18n.T("approvals.scope_always", "date", a.Added.Format("2006-01-02"))
+		}
+		fmt.Printf("  %d. %s %s(%s)%s\n", i+1, safe(describeApproval(a)), Dim, scope, Reset)
 	}
 	fmt.Printf("  %s%s%s\n\n", Dim, i18n.T("approvals.revoke_hint"), Reset)
 }
 
-func keysOf(rules []tools.ApprovalRule) []string {
-	out := make([]string, len(rules))
-	for i, r := range rules {
-		out[i] = r.Key
-	}
-	return out
-}
-
-// describeKey renders an approval key for people.
-func describeKey(k string) string {
-	kind, rest, _ := strings.Cut(k, ":")
-	switch kind {
+// describeApproval says what an approval allows, for people.
+func describeApproval(a core.Approval) string {
+	switch a.Kind {
 	case "cmd":
-		if dir, cmd, ok := strings.Cut(rest, "\x00"); ok {
-			return i18n.T("approval_key.command_in", "dir", dir, "command", cmd)
+		if a.Dir != "" {
+			return i18n.T("approval_key.command_in", "dir", a.Dir, "command", a.Subject)
 		}
-		return i18n.T("approval_key.command", "command", rest)
+		return i18n.T("approval_key.command", "command", a.Subject)
 	case "write":
-		return i18n.T("approval_key.write", "path", rest)
+		return i18n.T("approval_key.write", "path", a.Subject)
 	case "delete":
-		return i18n.T("approval_key.delete", "path", rest)
+		return i18n.T("approval_key.delete", "path", a.Subject)
 	case "web":
-		return i18n.T("approval_key.web", "host", rest)
+		return i18n.T("approval_key.web", "host", a.Subject)
 	case "mcp":
-		return i18n.T("approval_key.mcp", "tool", rest)
+		return i18n.T("approval_key.mcp", "tool", a.Subject)
 	case "uc-run":
-		return i18n.T("approval_key.uc", "tool", strings.ReplaceAll(rest, "\x00", " "))
+		return i18n.T("approval_key.uc", "tool", a.Subject)
 	default:
-		return k
+		return a.Key
 	}
 }
 
