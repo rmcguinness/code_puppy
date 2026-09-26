@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { workspaces } from "./api";
 import { Conversation } from "./Conversation";
+import { Workers } from "./Workers";
 import { chooseWorkspace, installService, serviceStatus, type ServiceStatus } from "./desktop";
 
 // One tab per workspace directory; the service holds each workspace.
@@ -73,6 +74,7 @@ export function App() {
 
 function Workspace({ dir }: { dir: string }) {
   const [info, setInfo] = useState("");
+  const [view, setView] = useState<"conversation" | "workers">("conversation");
   useEffect(() => {
     (async () => {
       try {
@@ -92,8 +94,16 @@ function Workspace({ dir }: { dir: string }) {
       <header>
         <strong>{dir}</strong>
         <span>{info}</span>
+        <span className="buttons">
+          <button className={view === "conversation" ? "tab active" : "tab"} onClick={() => setView("conversation")}>
+            Conversation
+          </button>
+          <button className={view === "workers" ? "tab active" : "tab"} onClick={() => setView("workers")}>
+            Workers
+          </button>
+        </span>
       </header>
-      <Conversation dir={dir} />
+      {view === "conversation" ? <Conversation dir={dir} /> : <Workers dir={dir} />}
     </section>
   );
 }

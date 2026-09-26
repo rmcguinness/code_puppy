@@ -77,8 +77,20 @@ cross-compile: clean
 # webkit2gtk. The Wails CLI is pinned in tools/go.mod.
 WAILS=go tool -modfile=../../tools/go.mod wails
 
+DESKTOP_APP=build/desktop/bin/code-puppy-desktop.app
+
+# The CLI is bundled next to the app's binary, where the app looks for it
+# to install the service; on macOS the app is then signed again (ad hoc),
+# since adding a file breaks Wails's signature.
 desktop: web/desktop/node_modules
 	cd cmd/code-puppy-desktop && CGO_CFLAGS=-mmacosx-version-min=13.0 CGO_LDFLAGS=-mmacosx-version-min=13.0 $(WAILS) build -clean
+	@if [ -d "$(DESKTOP_APP)" ]; then \
+		CGO_ENABLED=0 go build $(GOFLAGS_BUILD) -ldflags="$(LDFLAGS)" -o "$(DESKTOP_APP)/Contents/MacOS/code-puppy" ./cmd/code-puppy && \
+		codesign --force --deep --sign - "$(DESKTOP_APP)"; \
+	else \
+		CGO_ENABLED=0 go build $(GOFLAGS_BUILD) -ldflags="$(LDFLAGS)" -o build/desktop/bin/code-puppy ./cmd/code-puppy; \
+	fi
+	@echo "✅ Built build/desktop/bin (with the code-puppy CLI bundled)"
 
 desktop-check: web/desktop/node_modules
 	cd web/desktop && pnpm test && pnpm run build
