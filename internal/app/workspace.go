@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/retail-cortex/code_puppy/internal/agents"
@@ -61,6 +62,9 @@ type Workspace struct {
 	lock  *workspaceLock
 	// workerStore records which workers are enabled.
 	workerStore *workers.Store
+	runLog      *workers.RunLog
+	runsMu      sync.Mutex
+	running     map[string]bool // workers running now, by name
 	newModel    func(ctx context.Context, cfg *config.Config, name string) (model.LLM, error)
 }
 
@@ -77,6 +81,8 @@ func Open(ctx context.Context, cfg *config.Config, o Options) (*Workspace, error
 	if w.newModel = o.NewModel; w.newModel == nil {
 		w.newModel = runtime.NewModel
 	}
+	w.runLog = workers.OpenRunLog(config.ExpandHome("~/.code_puppy/worker-runs"))
+	w.running = map[string]bool{}
 	if w.workerStore = o.Workers; w.workerStore == nil {
 		var err error
 		if w.workerStore, err = defaultWorkerStore(); err != nil {

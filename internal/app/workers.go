@@ -1,14 +1,21 @@
 package app
 
 import (
+	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"maps"
 	"path/filepath"
 	"slices"
+	"sync"
 	"time"
 
 	"github.com/retail-cortex/code_puppy/internal/config"
+	"github.com/retail-cortex/code_puppy/internal/runtime"
+	"github.com/retail-cortex/code_puppy/internal/session"
+	"github.com/retail-cortex/code_puppy/internal/tools"
 	"github.com/retail-cortex/code_puppy/internal/workers"
 )
 
@@ -103,6 +110,9 @@ func (w *Workspace) workerInfo(wk *workers.Worker, loadErr error, now time.Time)
 		}
 		info.Limits = eff.Limits
 		info.Problems = append(info.Problems, eff.Notes...)
+		if wk.Agent != "" || wk.Model != "" {
+			info.Problems = append(info.Problems, "agent and model in WORKER.md aren't applied yet: runs use the workspace's active agent and model")
+		}
 		if info.State == workers.StateEnabled {
 			info.Next = wk.Schedule.Next(now)
 		}
@@ -166,4 +176,123 @@ func (w *Workspace) DisableWorker(name string) (WorkerInfo, error) {
 		return WorkerInfo{}, err
 	}
 	return w.workerInfo(wk, loadErr, time.Now()), nil
+}
+
+// ErrWorkerNotEnabled reports running a worker that isn't enabled at its
+// current hash.
+var ErrWorkerNotEnabled = errors.New("the worker isn't enabled")
+
+// ErrRunInProgress reports a run of a worker that is already running.
+var ErrRunInProgress = errors.New("the worker is already running")
+
+// errOverBudget stops a run that spent its max_cost_usd.
+var errOverBudget = errors.New("the run reached its cost limit")
+
+// unattendedPreamble tells the agent how a worker run differs from a
+// conversation.
+const unattendedPreamble = "You are running unattended as the scheduled worker %q: nobody is watching or can answer questions. " +
+	"You may only do what the worker is permitted; anything else is refused, and you should carry on without it or stop. " +
+	"End with a short summary of what you did and anything you couldn't do.\n\n"
+
+// RunWorker runs the named worker once, now, and records the run. The
+// worker must be enabled at its current hash. The run has a session of its
+// own (not the workspace's active one), gets exactly the worker's
+// permissions after the host policy (anything else is refused and
+// recorded), and stops at its limits. on receives the turn's events.
+// A run of the same worker still going makes this ErrRunInProgress.
+func (w *Workspace) RunWorker(ctx context.Context, name string, manual bool, on func(Event)) (workers.Run, error) {
+	wk, loadErr, err := w.worker(name)
+	if err != nil {
+		return workers.Run{}, err
+	}
+	if state := w.workerStore.State(w.Dir(), wk, loadErr); state != workers.StateEnabled {
+		return workers.Run{}, fmt.Errorf("%w (it is %s)", ErrWorkerNotEnabled, state)
+	}
+	w.runsMu.Lock()
+	if w.running[name] {
+		w.runsMu.Unlock()
+		return workers.Run{}, ErrRunInProgress
+	}
+	w.running[name] = true
+	w.runsMu.Unlock()
+	defer func() {
+		w.runsMu.Lock()
+		delete(w.running, name)
+		w.runsMu.Unlock()
+	}()
+
+	eff := workers.Apply(wk, w.cfg.Workers.Policy)
+	run := workers.Run{ID: newRunID(), Workspace: w.Dir(), Worker: name, Hash: wk.Hash, Status: workers.RunRunning, Manual: manual, Started: time.Now()}
+
+	st, err := session.NewStorage(w.cfg.Session.StorageDir)
+	if err != nil {
+		return run, err
+	}
+	st.SetWorkspace(w.Dir())
+	rec, err := st.CreateSession(session.NewSessionID(), fmt.Sprintf("⏰ %s %s", name, run.Started.Format("2006-01-02 15:04")), w.engine.ActiveAgent())
+	if err != nil {
+		return run, err
+	}
+	run.SessionID = rec.ID
+
+	var refusalsMu sync.Mutex
+	decide := func(_ context.Context, req tools.ApprovalRequest) (tools.Decision, error) {
+		if workers.Allows(eff.Permissions, req) {
+			return tools.DecisionOnce, nil
+		}
+		refusalsMu.Lock()
+		run.Refusals = append(run.Refusals, workers.Refusal{Tool: req.Tool, Kind: req.Kind, Detail: req.Detail, Time: time.Now()})
+		refusalsMu.Unlock()
+		return tools.DecisionDeny, nil
+	}
+	runCtx, cancel := context.WithCancelCause(tools.Unattended(ctx, decide))
+	defer cancel(nil)
+	if eff.Limits.Timeout > 0 {
+		var stop context.CancelFunc
+		runCtx, stop = context.WithTimeoutCause(runCtx, eff.Limits.Timeout, fmt.Errorf("the run reached its time limit (%s)", eff.Limits.Timeout))
+		defer stop()
+	}
+	if on == nil {
+		on = func(Event) {}
+	}
+	_, runErr := w.run(runCtx, rec.ID, Turn{
+		Text: wk.Prompt, Prompt: fmt.Sprintf(unattendedPreamble, name) + wk.Prompt, MaxTurns: eff.Limits.MaxTurns,
+	}, func(e Event) {
+		on(e)
+		if eff.Limits.MaxCostUSD > 0 && w.engine.Usage(rec.ID).CostUSD > eff.Limits.MaxCostUSD {
+			cancel(errOverBudget)
+		}
+	}, st)
+
+	u := w.engine.Usage(rec.ID)
+	run.Duration, run.CostUSD, run.Calls = time.Since(run.Started), u.CostUSD, u.Calls
+	cause := context.Cause(runCtx)
+	switch {
+	case runErr == nil:
+		run.Status = workers.RunSucceeded
+	case errors.Is(runErr, runtime.ErrMaxTurns) || errors.Is(cause, errOverBudget) || errors.Is(runCtx.Err(), context.DeadlineExceeded):
+		run.Status = workers.RunLimited
+		run.Error = runErr.Error()
+		if cause != nil && !errors.Is(cause, context.Canceled) {
+			run.Error = cause.Error()
+		}
+	default:
+		run.Status = workers.RunFailed
+		run.Error = runErr.Error()
+	}
+	if err := w.runLog.Append(run); err != nil {
+		w.warn("recording the worker run: " + err.Error())
+	}
+	return run, nil
+}
+
+// WorkerRuns returns a worker's recorded runs, newest first.
+func (w *Workspace) WorkerRuns(name string, limit int) ([]workers.Run, error) {
+	return w.runLog.List(w.Dir(), name, limit)
+}
+
+func newRunID() string {
+	b := make([]byte, 8)
+	rand.Read(b)
+	return time.Now().UTC().Format("20060102T150405") + "-" + hex.EncodeToString(b)
 }

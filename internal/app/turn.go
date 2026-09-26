@@ -9,6 +9,7 @@ import (
 	"github.com/retail-cortex/code_puppy/internal/i18n"
 	"github.com/retail-cortex/code_puppy/internal/images"
 	"github.com/retail-cortex/code_puppy/internal/runtime"
+	"github.com/retail-cortex/code_puppy/internal/session"
 	"github.com/retail-cortex/code_puppy/internal/textutil"
 	"github.com/retail-cortex/code_puppy/internal/tools"
 	adksession "google.golang.org/adk/v2/session"
@@ -76,6 +77,12 @@ func (e *BlockedError) Error() string { return "prompt blocked by hook: " + e.Re
 // refused prompt is a *BlockedError. A turn that fails part way still
 // returns what it produced.
 func (w *Workspace) Run(ctx context.Context, sessionID string, t Turn, on func(Event)) (TurnResult, error) {
+	return w.run(ctx, sessionID, t, on, w.storage)
+}
+
+// run is Run recording the transcript in st, which holds the session as
+// its active one (a worker run has its own).
+func (w *Workspace) run(ctx context.Context, sessionID string, t Turn, on func(Event), st *session.Storage) (TurnResult, error) {
 	if !t.Accepted {
 		if err := w.accept(ctx, sessionID, t.Text); err != nil {
 			return TurnResult{}, err
@@ -92,7 +99,7 @@ func (w *Workspace) Run(ctx context.Context, sessionID string, t Turn, on func(E
 	if !t.Aside {
 		w.tools.Checkpoints().Begin(textutil.Ellipsize(strings.Join(strings.Fields(recorded), " "), 60))
 		if !t.Accepted {
-			w.record("user", recorded+AttachmentNote(t.Images))
+			w.recordIn(st, "user", recorded+AttachmentNote(t.Images))
 		}
 	}
 	// After recording: a front end may take steer messages from here on,
@@ -135,7 +142,7 @@ func (w *Workspace) Run(ctx context.Context, sessionID string, t Turn, on func(E
 
 	if !t.Aside {
 		if res.Output != "" {
-			w.record("model", res.Output)
+			w.recordIn(st, "model", res.Output)
 		}
 		res.Leftover = w.engine.TakeSteers(sessionID)
 	}
@@ -165,8 +172,11 @@ func (w *Workspace) accept(ctx context.Context, sessionID, text string) error {
 
 // record adds a message to the active session's transcript. A failure is
 // reported, not returned: the conversation goes on without it.
-func (w *Workspace) record(role, text string) {
-	if err := w.storage.AddMessage(role, text); err != nil {
+func (w *Workspace) record(role, text string) { w.recordIn(w.storage, role, text) }
+
+// recordIn adds a message to st's active session.
+func (w *Workspace) recordIn(st *session.Storage, role, text string) {
+	if err := st.AddMessage(role, text); err != nil {
 		slog.Warn("session save failed", "error", err)
 		w.warn(i18n.T("session.save_failed", "error", err))
 	}

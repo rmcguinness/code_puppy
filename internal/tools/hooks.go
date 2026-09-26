@@ -186,9 +186,39 @@ func (h *Hooks) RevokeSession(key string) bool {
 // Approve returns nil when the action may proceed. It fails closed: with no
 // approver configured and no auto-approve policy or remembered rule covering
 // the action, the action is denied.
+// unattendedKey carries an unattended run's decision function.
+type unattendedKey struct{}
+
+// Unattended marks ctx as an unattended run (a worker): approvals in it go
+// only to decide, bypassing auto-approval, remembered and saved rules and
+// the interactive approver, and nothing decided is remembered; questions to
+// the user are refused. The run gets exactly what decide permits.
+func Unattended(ctx context.Context, decide Approver) context.Context {
+	return context.WithValue(ctx, unattendedKey{}, decide)
+}
+
+// isUnattended reports whether ctx is an unattended run.
+func isUnattended(ctx context.Context) bool {
+	_, ok := ctx.Value(unattendedKey{}).(Approver)
+	return ok
+}
+
 func (h *Hooks) Approve(ctx context.Context, req ApprovalRequest) error {
 	if h == nil {
 		return fmt.Errorf("%w: no approval hooks configured", ErrNotApproved)
+	}
+	if decide, ok := ctx.Value(unattendedKey{}).(Approver); ok {
+		decision, err := decide(ctx, req)
+		allowed := err == nil && decision != DecisionDeny
+		h.mu.RLock()
+		log := h.audit
+		h.mu.RUnlock()
+		if allowed {
+			log.Log(audit.Entry{Kind: audit.KindApproval, Tool: req.Tool, Detail: req.Detail, Decision: "unattended-permitted"})
+			return nil
+		}
+		log.Log(audit.Entry{Kind: audit.KindDenial, Tool: req.Tool, Detail: req.Detail, Decision: "unattended-refused"})
+		return fmt.Errorf("%w: %s isn't among this unattended run's permissions", ErrNotApproved, req.Detail)
 	}
 	h.mu.RLock()
 	policy, approver, store, log := h.policy, h.approver, h.store, h.audit

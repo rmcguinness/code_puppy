@@ -33,6 +33,9 @@ func NewAskUserQuestionTool(hooks *Hooks) (tool.Tool, error) {
 			if input.Question == "" {
 				return AskUserQuestionOutput{Error: "question cannot be empty"}, nil
 			}
+			if isUnattended(ctx) {
+				return AskUserQuestionOutput{Error: "this run is unattended: no one can answer; decide yourself and say what you assumed"}, nil
+			}
 			prompter := hooks.userPrompter()
 			if prompter == nil {
 				return AskUserQuestionOutput{Error: "interactive input is not available; proceed with your best judgement"}, nil
