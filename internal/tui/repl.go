@@ -6,21 +6,19 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log/slog"
 	"os"
 	"os/signal"
 	"strings"
 	"sync"
 
 	"github.com/retail-cortex/code_puppy/internal/agents"
-	"github.com/retail-cortex/code_puppy/internal/audit"
+	core "github.com/retail-cortex/code_puppy/internal/app"
 	"github.com/retail-cortex/code_puppy/internal/config"
 	"github.com/retail-cortex/code_puppy/internal/i18n"
 	"github.com/retail-cortex/code_puppy/internal/images"
 	"github.com/retail-cortex/code_puppy/internal/runtime"
 	"github.com/retail-cortex/code_puppy/internal/session"
 	"github.com/retail-cortex/code_puppy/internal/skills"
-	"github.com/retail-cortex/code_puppy/internal/textutil"
 	"github.com/retail-cortex/code_puppy/internal/tools"
 	"google.golang.org/adk/v2/model"
 	sessionsdk "google.golang.org/adk/v2/session"
@@ -31,14 +29,16 @@ type ModelFactory func(ctx context.Context, cfg *config.Config, modelName string
 
 // App bundles the dependencies the REPL and slash commands operate on.
 type App struct {
-	Version  string
-	Cfg      *config.Config
-	Engine   *runtime.Engine
-	Agents   *agents.Registry
-	Skills   *skills.Provider
-	Storage  *session.Storage
-	Input    Input
-	NewModel ModelFactory
+	// Workspace runs turns and steering; the fields below are its parts.
+	Workspace *core.Workspace
+	Version   string
+	Cfg       *config.Config
+	Engine    *runtime.Engine
+	Agents    *agents.Registry
+	Skills    *skills.Provider
+	Storage   *session.Storage
+	Input     Input
+	NewModel  ModelFactory
 	// Tools gives commands access to checkpoints, approvals, MCP and hooks.
 	Tools *tools.Registry
 	// Processes are the background processes to account for on exit.
@@ -74,23 +74,21 @@ type App struct {
 // Printer renders agent events: model text (optionally as Markdown), tool
 // activity, and a spinner while waiting.
 type Printer struct {
-	out        io.Writer
-	pause      *pausableWriter
-	respin     bool // Resume restarts the spinner (it was showing at Pause)
-	md         *markdownStream
-	spin       *Spinner
-	transcript *strings.Builder
-	streamed   bool // partial text was printed since the last final event
+	out      io.Writer
+	pause    *pausableWriter
+	respin   bool // Resume restarts the spinner (it was showing at Pause)
+	md       *markdownStream
+	spin     *Spinner
+	streamed bool // partial text was printed since the last final event
 }
 
 // PrinterOptions configure a Printer.
 type PrinterOptions struct {
-	Out        io.Writer
-	Markdown   bool // render Markdown (requires a terminal)
-	Theme      string
-	Width      int
-	Spinner    bool
-	Transcript *strings.Builder // collects final model text
+	Out      io.Writer
+	Markdown bool // render Markdown (requires a terminal)
+	Theme    string
+	Width    int
+	Spinner  bool
 }
 
 // NewPrinter creates a Printer; Markdown falls back to plain text on error.
@@ -99,19 +97,13 @@ func NewPrinter(o PrinterOptions) *Printer {
 		o.Out = os.Stdout
 	}
 	pw := &pausableWriter{w: o.Out}
-	p := &Printer{out: pw, pause: pw, transcript: o.Transcript, spin: NewSpinner(pw, o.Spinner)}
+	p := &Printer{out: pw, pause: pw, spin: NewSpinner(pw, o.Spinner)}
 	if o.Markdown {
 		if md, err := newMarkdownStream(pw, o.Theme, o.Width); err == nil {
 			p.md = md
 		}
 	}
 	return p
-}
-
-// NewEventPrinter returns a plain-text event handler that accumulates model
-// text into transcript when non-nil.
-func NewEventPrinter(transcript *strings.Builder) runtime.EventHandler {
-	return NewPrinter(PrinterOptions{Transcript: transcript}).Handle
 }
 
 // Begin marks the start of a turn.
@@ -208,9 +200,6 @@ func (p *Printer) Handle(ev *sessionsdk.Event) error {
 				// Final event repeating text already streamed.
 			default:
 				p.text(part.Text)
-			}
-			if !ev.Partial && p.transcript != nil {
-				p.transcript.WriteString(part.Text)
 			}
 		}
 		if part.FunctionCall != nil {
@@ -383,64 +372,51 @@ type turnOptions struct {
 
 // runTurn sends one prompt to the agent and renders the result.
 func runTurn(ctx context.Context, app *App, sessionID, line string, interrupts <-chan os.Signal, o turnOptions) {
-	if !o.accepted && !acceptPrompt(ctx, app, sessionID, line) {
-		return
-	}
 	var attached []*images.Image
 	if !o.aside { // attachments wait for the next real prompt
 		var ok bool
-		if attached, ok = takeAttachments(app, line); !ok {
+		if attached, ok = collectAttachments(app, line); !ok {
 			return
 		}
 	}
-	prompt, recorded := line, line
-	if o.prompt != "" {
-		prompt = o.prompt
-	}
-	if o.plan {
-		prompt, recorded = runtime.PlanPrompt(line), "/plan "+line
-		fmt.Printf("%s📝 %s%s\n", Dim, i18n.T("plan.mode"), Reset)
-	}
-	if o.aside {
-		fmt.Printf("%s💬 %s%s\n", Dim, i18n.T("btw.mode"), Reset)
-	}
-	if app.Tools != nil && !o.aside {
-		app.Tools.Checkpoints().Begin(textutil.Ellipsize(strings.Join(strings.Fields(recorded), " "), 60))
-	}
-	if !o.accepted && !o.aside {
-		warnOnErr(app.Storage.AddMessage("user", recorded+AttachmentNote(attached)))
-	}
 
-	fmt.Println()
-	var modelOutput strings.Builder
-	opts := app.Printer
-	opts.Transcript = &modelOutput
-	printer := NewPrinter(opts)
-	before := app.Engine.Usage(sessionID)
-
+	printer := NewPrinter(app.Printer)
 	turnCtx, stopTurn := cancelOnSignal(ctx, interrupts)
 	if ih, ok := app.Input.(interface{ SetInterruptHandler(func()) }); ok {
 		ih.SetInterruptHandler(stopTurn)
 		defer ih.SetInterruptHandler(nil)
 	}
-	printer.Begin()
-	var execOpts []runtime.ExecOption
-	for _, img := range attached {
-		execOpts = append(execOpts, runtime.WithAttachments(images.Part(img)))
-	}
-	if o.plan {
-		execOpts = append(execOpts, runtime.WithPlanOnly())
-	}
-	if o.readOnly != "" {
-		execOpts = append(execOpts, runtime.WithReadOnly(o.readOnly))
-	}
-	var streamErr error
-	if o.aside {
-		streamErr = app.Engine.Aside(turnCtx, sessionID, prompt, printer.Handle)
-	} else {
-		stopSteering := watchSteering(turnCtx, app, sessionID, printer)
-		streamErr = app.Engine.Execute(turnCtx, sessionID, prompt, printer.Handle, execOpts...)
-		stopSteering() // waits for a message being typed, so it isn't lost
+	stopSteering := func() {}
+	res, streamErr := app.Workspace.Run(turnCtx, sessionID, core.Turn{
+		Text: line, Prompt: o.prompt, Plan: o.plan, ReadOnly: o.readOnly, Aside: o.aside, Accepted: o.accepted,
+		Images: attached,
+		OnAccepted: func() {
+			if len(attached) > 0 {
+				for _, img := range attached {
+					fmt.Printf("%s📎 %s%s\n", Dim, safe(img.Summary()), Reset)
+				}
+				app.Attachments = nil
+			}
+			if o.plan {
+				fmt.Printf("%s📝 %s%s\n", Dim, i18n.T("plan.mode"), Reset)
+			}
+			if o.aside {
+				fmt.Printf("%s💬 %s%s\n", Dim, i18n.T("btw.mode"), Reset)
+			}
+			fmt.Println()
+			printer.Begin()
+			if !o.aside {
+				stopSteering = watchSteering(turnCtx, app, sessionID, printer)
+			}
+		},
+		// Waits for a message being typed, so it is sent rather than lost.
+		OnFinished: func() { stopSteering() },
+	}, printer.Handle)
+	var blocked *core.BlockedError
+	if errors.As(streamErr, &blocked) {
+		fmt.Printf("%s⛔ %s%s\n", Red, i18n.T("repl.prompt_blocked", "reason", safe(blocked.Reason)), Reset)
+		stopTurn()
+		return
 	}
 	printer.End()
 	turnInterrupted := turnCtx.Err() != nil
@@ -453,21 +429,14 @@ func runTurn(ctx context.Context, app *App, sessionID, line string, interrupts <
 	default:
 		fmt.Println()
 	}
-	if line := UsageLine(before, app.Engine.Usage(sessionID)); line != "" {
+	if line := UsageLine(res.Before, res.After); line != "" {
 		fmt.Printf("%s%s%s\n", Dim, line, Reset)
 	}
-
-	if modelOutput.Len() > 0 && !o.aside {
-		warnOnErr(app.Storage.AddMessage("model", modelOutput.String()))
-	}
 	fmt.Println()
-	if o.aside {
-		return
-	}
 
 	// Messages sent after the model's last tool call were never read.
-	if left := app.Engine.TakeSteers(sessionID); len(left) > 0 {
-		text := strings.Join(left, "\n\n")
+	if len(res.Leftover) > 0 {
+		text := strings.Join(res.Leftover, "\n\n")
 		if turnInterrupted {
 			fmt.Printf("%s%s%s\n\n", Yellow, i18n.T("steer.dropped", "text", safe(text)), Reset)
 			return
@@ -477,19 +446,6 @@ func runTurn(ctx context.Context, app *App, sessionID, line string, interrupts <
 	}
 }
 
-// acceptPrompt runs prompt_submit hooks and audits the prompt.
-func acceptPrompt(ctx context.Context, app *App, sessionID, text string) bool {
-	if app.Tools == nil {
-		return true
-	}
-	if reason := app.Tools.ScriptHooks().PromptSubmit(ctx, sessionID, text); reason != "" {
-		fmt.Printf("%s⛔ %s%s\n", Red, i18n.T("repl.prompt_blocked", "reason", safe(reason)), Reset)
-		return false
-	}
-	app.Tools.Hooks().Audit().Log(audit.Entry{Kind: audit.KindPrompt, Session: sessionID, Detail: text})
-	return true
-}
-
 // steerInput is an Input that can watch the keyboard during a turn.
 type steerInput interface {
 	WatchKeys(onKey func(prefill string)) (stop func())
@@ -497,9 +453,8 @@ type steerInput interface {
 }
 
 // watchSteering lets the user type a message while the turn runs. Output
-// is held back while they type. An accepted message (prompt_submit hooks
-// apply, as to any prompt) is queued for the agent, which reads it with its
-// next tool result.
+// is held back while they type. An accepted message is queued for the
+// agent, which reads it with its next tool result (see app.Workspace.Steer).
 func watchSteering(ctx context.Context, app *App, sessionID string, printer *Printer) (stop func()) {
 	in, ok := app.Input.(steerInput)
 	if !ok {
@@ -516,11 +471,12 @@ func watchSteering(ctx context.Context, app *App, sessionID string, printer *Pri
 		case text == "":
 			fmt.Printf("%s%s%s\n", Dim, i18n.T("steer.cancelled"), Reset)
 			return
-		case !acceptPrompt(ctx, app, sessionID, text):
+		}
+		var blocked *core.BlockedError
+		if err := app.Workspace.Steer(ctx, sessionID, text); errors.As(err, &blocked) {
+			fmt.Printf("%s⛔ %s%s\n", Red, i18n.T("repl.prompt_blocked", "reason", safe(blocked.Reason)), Reset)
 			return
 		}
-		warnOnErr(app.Storage.AddMessage("user", text))
-		app.Engine.Steer(sessionID, text)
 		fmt.Printf("%s%s%s\n", Dim, i18n.T("steer.queued"), Reset)
 	})
 }
@@ -567,12 +523,5 @@ func cancelOnSignal(parent context.Context, sigs <-chan os.Signal) (context.Cont
 	return ctx, func() {
 		once.Do(func() { close(done) })
 		cancel()
-	}
-}
-
-func warnOnErr(err error) {
-	if err != nil {
-		slog.Warn("session save failed", "error", err)
-		fmt.Printf("%s⚠️  %s%s\n", Yellow, i18n.T("session.save_failed", "error", err), Reset)
 	}
 }

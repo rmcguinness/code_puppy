@@ -10,12 +10,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/retail-cortex/code_puppy/internal/agents"
 	"github.com/retail-cortex/code_puppy/internal/config"
 	"github.com/retail-cortex/code_puppy/internal/runtime"
-	"github.com/retail-cortex/code_puppy/internal/session"
-	"github.com/retail-cortex/code_puppy/internal/skills"
-	"github.com/retail-cortex/code_puppy/internal/tools"
 	"google.golang.org/adk/v2/model"
 	sessionsdk "google.golang.org/adk/v2/session"
 	"google.golang.org/genai"
@@ -64,17 +60,13 @@ func textEvent(text string, partial bool) *sessionsdk.Event {
 
 func TestPrinterStreamingDedup(t *testing.T) {
 	var out bytes.Buffer
-	var transcript strings.Builder
-	p := NewPrinter(PrinterOptions{Out: &out, Transcript: &transcript})
+	p := NewPrinter(PrinterOptions{Out: &out})
 	p.Handle(textEvent("Hel", true))
 	p.Handle(textEvent("lo", true))
 	p.Handle(textEvent("Hello", false)) // final aggregate repeats streamed text
 	p.Handle(textEvent(" again", false))
 	if out.String() != "Hello again" {
 		t.Errorf("printed %q, want streamed text once", out.String())
-	}
-	if transcript.String() != "Hello again" {
-		t.Errorf("transcript %q", transcript.String())
 	}
 	// Control sequences in model text are neutralised.
 	out.Reset()
@@ -173,29 +165,18 @@ func TestUsageLine(t *testing.T) {
 
 func newFullApp(t *testing.T) *App {
 	t.Helper()
+	isolateHome(t)
 	cfg := config.DefaultConfig()
 	cfg.Tools.WorkspaceDir = t.TempDir()
 	cfg.Tools.ApprovalsFile = filepath.Join(t.TempDir(), "approvals.json")
 	cfg.Images.Dir = t.TempDir()
 	cfg.CodePuppy.AutoApprove = true
-	agentReg, _ := agents.NewRegistry()
-	skillProv, _ := skills.NewProvider()
-	reg, err := tools.NewRegistry(cfg, agentReg, skillProv)
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { reg.Close() })
 	llm := runtime.NewMockLLM("gemini-3.8-flash",
 		&genai.Content{Role: genai.RoleModel, Parts: []*genai.Part{{FunctionCall: &genai.FunctionCall{Name: "create_file", Args: map[string]any{"path": "made.txt", "content": "by tool\n"}}}}},
 		genai.NewContentFromText("created", genai.RoleModel))
 	llm.Usage = &genai.GenerateContentResponseUsageMetadata{PromptTokenCount: 500, CandidatesTokenCount: 50}
-	eng, err := runtime.NewEngine(context.Background(), cfg, agentReg, skillProv, reg, llm)
-	if err != nil {
-		t.Fatal(err)
-	}
-	st, _ := session.NewStorage(t.TempDir())
-	return &App{Cfg: cfg, Engine: eng, Agents: agentReg, Skills: skillProv, Storage: st, Tools: reg, Processes: reg.Processes(),
-		Printer: PrinterOptions{Out: io.Discard}}
+	app := openApp(t, cfg, llm)
+	return app
 }
 
 // captureStdout runs f and returns what it printed.
@@ -317,22 +298,17 @@ func (c *ctrlCInput) ReadInput(ctx context.Context, prompt string) (string, erro
 }
 
 func TestCtrlCAtApprovalCancelsTurn(t *testing.T) {
-	app := newFullApp(t)
-	app.Cfg.CodePuppy.AutoApprove = false
-	// Rebuild tools with approvals required.
-	reg, err := tools.NewRegistry(app.Cfg, app.Agents, app.Skills)
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { reg.Close() })
+	isolateHome(t)
+	cfg := config.DefaultConfig()
+	cfg.Tools.WorkspaceDir = t.TempDir()
+	cfg.Tools.ApprovalsFile = filepath.Join(t.TempDir(), "approvals.json")
+	cfg.Images.Dir = t.TempDir()
+	cfg.CodePuppy.AutoApprove = false // approvals required
 	llm := runtime.NewMockLLM("m",
 		&genai.Content{Role: genai.RoleModel, Parts: []*genai.Part{{FunctionCall: &genai.FunctionCall{Name: "create_file", Args: map[string]any{"path": "x.txt", "content": "x"}}}}},
 		genai.NewContentFromText("should never be reached", genai.RoleModel))
-	eng, err := runtime.NewEngine(context.Background(), app.Cfg, app.Agents, app.Skills, reg, llm)
-	if err != nil {
-		t.Fatal(err)
-	}
-	app.Engine, app.Tools, app.Processes = eng, reg, reg.Processes()
+	app := openApp(t, cfg, llm)
+	reg := app.Tools
 	in := &ctrlCInput{lines: []string{"make x"}}
 	app.Input = in
 	reg.Hooks().SetApprover(NewApprover(in, 0))

@@ -9,38 +9,23 @@ import (
 	"testing"
 	"time"
 
-	"github.com/retail-cortex/code_puppy/internal/agents"
 	"github.com/retail-cortex/code_puppy/internal/config"
 	"github.com/retail-cortex/code_puppy/internal/runtime"
-	"github.com/retail-cortex/code_puppy/internal/session"
-	"github.com/retail-cortex/code_puppy/internal/skills"
-	"github.com/retail-cortex/code_puppy/internal/tools"
 	"google.golang.org/genai"
 )
 
 func newCommandApp(t *testing.T, input string, replies ...*genai.Content) (*App, *runtime.MockLLM) {
 	t.Helper()
+	isolateHome(t)
 	cfg := config.DefaultConfig()
 	cfg.Tools.WorkspaceDir = t.TempDir()
 	cfg.Images.Dir = t.TempDir()
 	cfg.Audit.Enabled = false
 	cfg.CodePuppy.AutoApprove = true
-	agentReg, _ := agents.NewRegistry()
-	skillProv, _ := skills.NewProvider()
-	reg, err := tools.NewRegistry(cfg, agentReg, skillProv)
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { reg.Close() })
 	llm := runtime.NewMockLLM("gemini-3.8-flash", replies...)
-	eng, err := runtime.NewEngine(context.Background(), cfg, agentReg, skillProv, reg, llm)
-	if err != nil {
-		t.Fatal(err)
-	}
-	st, _ := session.NewStorage(t.TempDir())
-	return &App{Cfg: cfg, Engine: eng, Agents: agentReg, Skills: skillProv, Storage: st, Tools: reg,
-		Processes: reg.Processes(), Printer: PrinterOptions{Out: io.Discard},
-		Input: NewLineReader(strings.NewReader(input), io.Discard)}, llm
+	app := openApp(t, cfg, llm)
+	app.Input = NewLineReader(strings.NewReader(input), io.Discard)
+	return app, llm
 }
 
 func toolCallContent(name string, args map[string]any) *genai.Content {

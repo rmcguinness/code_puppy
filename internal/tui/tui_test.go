@@ -7,18 +7,15 @@ import (
 	"io"
 	"iter"
 	"os"
-	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
 	"time"
 	"unicode/utf8"
 
-	"github.com/retail-cortex/code_puppy/internal/agents"
+	core "github.com/retail-cortex/code_puppy/internal/app"
 	"github.com/retail-cortex/code_puppy/internal/config"
 	"github.com/retail-cortex/code_puppy/internal/runtime"
-	"github.com/retail-cortex/code_puppy/internal/session"
-	"github.com/retail-cortex/code_puppy/internal/skills"
 	"github.com/retail-cortex/code_puppy/internal/tools"
 	"google.golang.org/adk/v2/model"
 )
@@ -206,27 +203,39 @@ func TestSummarizeToolResponse(t *testing.T) {
 	}
 }
 
+// isolateHome points HOME at a temporary directory, so opening a workspace
+// never reads or writes the real ~/.code_puppy. Call it before
+// config.DefaultConfig, which resolves paths under HOME.
+func isolateHome(t *testing.T) {
+	t.Helper()
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("MODENV_PREFIX", "")
+}
+
+// openApp opens a workspace for cfg around llm and builds the App from it,
+// as main does.
+func openApp(t *testing.T, cfg *config.Config, llm model.LLM) *App {
+	t.Helper()
+	cfg.Session.StorageDir = t.TempDir()
+	w, err := core.Open(context.Background(), cfg, core.Options{Model: llm})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { w.Close() })
+	return &App{Workspace: w, Cfg: cfg, Engine: w.Engine(), Agents: w.Agents(), Skills: w.Skills(), Storage: w.Storage(),
+		Tools: w.Tools(), Processes: w.Tools().Processes(), Printer: PrinterOptions{Out: io.Discard}}
+}
+
 func newTestApp(t *testing.T, factory ModelFactory) *App {
 	t.Helper()
+	isolateHome(t)
 	cfg := config.DefaultConfig()
 	cfg.Tools.WorkspaceDir = t.TempDir()
 	cfg.Images.Dir = t.TempDir()
-	agentReg, _ := agents.NewRegistry()
-	skillProv, _ := skills.NewProvider()
-	toolReg, err := tools.NewRegistry(cfg, agentReg, skillProv)
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { toolReg.Close() })
-	eng, err := runtime.NewEngine(context.Background(), cfg, agentReg, skillProv, toolReg, runtime.NewMockLLM("mock-a"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	storage, err := session.NewStorage(filepath.Join(t.TempDir(), "sessions"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	return &App{Cfg: cfg, Engine: eng, Agents: agentReg, Skills: skillProv, Storage: storage, NewModel: factory}
+	app := openApp(t, cfg, runtime.NewMockLLM("mock-a"))
+	app.NewModel = factory
+	app.Printer = PrinterOptions{}
+	return app
 }
 
 func TestHandleCommandModel(t *testing.T) {

@@ -12,11 +12,11 @@ import (
 	"github.com/retail-cortex/code_puppy/internal/tools"
 )
 
-// takeAttachments collects the images for this prompt: those queued with
+// collectAttachments gathers the images for this prompt: those queued with
 // /attach, /paste or --image, plus @image mentions in the text. If a
 // mentioned image can't be loaded the turn is not sent (so the user can fix
-// it) and the queue is kept. On success the queue is emptied.
-func takeAttachments(app *App, line string) ([]*images.Image, bool) {
+// it). The queue is emptied only once the prompt is accepted (runTurn).
+func collectAttachments(app *App, line string) ([]*images.Image, bool) {
 	mentions := images.Mentions(line)
 	if len(mentions) == 0 && len(app.Attachments) == 0 {
 		return nil, true
@@ -38,10 +38,6 @@ func takeAttachments(app *App, line string) ([]*images.Image, bool) {
 			out = append(out, img)
 		}
 	}
-	for _, img := range out {
-		fmt.Printf("%s📎 %s%s\n", Dim, safe(img.Summary()), Reset)
-	}
-	app.Attachments = nil
 	return out, true
 }
 
@@ -50,18 +46,6 @@ func loadImage(app *App, path string) (*images.Image, error) {
 		return nil, tools.ErrImagesDisabled
 	}
 	return app.Tools.LoadImage(path)
-}
-
-// AttachmentNote records attachments in the saved transcript.
-func AttachmentNote(imgs []*images.Image) string {
-	if len(imgs) == 0 {
-		return ""
-	}
-	names := make([]string, len(imgs))
-	for i, img := range imgs {
-		names[i] = img.Name
-	}
-	return "\n[images: " + strings.Join(names, ", ") + "]"
 }
 
 func cmdAttach(args []string, app *App) {

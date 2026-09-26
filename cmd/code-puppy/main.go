@@ -239,6 +239,7 @@ func runRoot(cmd *cobra.Command, o *rootOptions, args []string) (err error) {
 		fmt.Println()
 	}
 	return tui.RunREPL(ctx, &tui.App{
+		Workspace:         w,
 		Version:           version,
 		Cfg:               cfg,
 		Engine:            w.Engine(),

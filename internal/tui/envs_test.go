@@ -13,9 +13,8 @@ import (
 )
 
 func TestEnvsListPruneRemove(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
-	app, _ := newCommandApp(t, "")
+	app, _ := newCommandApp(t, "") // sets HOME to a temporary directory
+	home := os.Getenv("HOME")
 	python, err := tools.SystemPython()
 	if err != nil {
 		t.Skip(err)

@@ -17,11 +17,18 @@ import (
 	"github.com/retail-cortex/code_puppy/internal/i18n"
 	"github.com/retail-cortex/code_puppy/internal/runtime"
 	"github.com/retail-cortex/code_puppy/internal/session"
+	"google.golang.org/genai"
 )
 
 // openTest opens a workspace around a mock model, isolated from the real
 // home directory.
 func openTest(t *testing.T) *Workspace {
+	w, _ := openTestWith(t, nil)
+	return w
+}
+
+// openTestWith is openTest with configuration changes and model replies.
+func openTestWith(t *testing.T, mutate func(*config.Config), replies ...*genai.Content) (*Workspace, *runtime.MockLLM) {
 	t.Helper()
 	t.Setenv("HOME", t.TempDir())
 	t.Setenv("MODENV_PREFIX", "")
@@ -30,12 +37,16 @@ func openTest(t *testing.T) *Workspace {
 	cfg.Tools.WorkspaceDir = t.TempDir()
 	cfg.Session.StorageDir = t.TempDir()
 	cfg.Tools.ApprovalsFile = filepath.Join(t.TempDir(), "a.json")
-	w, err := Open(context.Background(), cfg, Options{Model: runtime.NewMockLLM("gemini-3.8-flash")})
+	if mutate != nil {
+		mutate(cfg)
+	}
+	llm := runtime.NewMockLLM("gemini-3.8-flash", replies...)
+	w, err := Open(context.Background(), cfg, Options{Model: llm})
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { w.Close() })
-	return w
+	return w, llm
 }
 
 func isResumeError(err error) bool {

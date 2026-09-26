@@ -12,12 +12,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/retail-cortex/code_puppy/internal/agents"
 	"github.com/retail-cortex/code_puppy/internal/config"
 	"github.com/retail-cortex/code_puppy/internal/runtime"
 	"github.com/retail-cortex/code_puppy/internal/session"
-	"github.com/retail-cortex/code_puppy/internal/skills"
-	"github.com/retail-cortex/code_puppy/internal/tools"
 	"google.golang.org/adk/v2/model"
 	"google.golang.org/genai"
 )
@@ -223,6 +220,7 @@ func (g *gatedLLM) GenerateContent(ctx context.Context, req *model.LLMRequest, s
 
 func newSteerApp(t *testing.T, message string, cfgFn func(*config.Config), replies ...*genai.Content) (*App, *runtime.MockLLM) {
 	t.Helper()
+	isolateHome(t)
 	cfg := config.DefaultConfig()
 	cfg.Tools.WorkspaceDir = t.TempDir()
 	cfg.Images.Dir = t.TempDir()
@@ -231,23 +229,12 @@ func newSteerApp(t *testing.T, message string, cfgFn func(*config.Config), repli
 	if cfgFn != nil {
 		cfgFn(cfg)
 	}
-	agentReg, _ := agents.NewRegistry()
-	skillProv, _ := skills.NewProvider()
-	reg, err := tools.NewRegistry(cfg, agentReg, skillProv)
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { reg.Close() })
 	in := &fakeSteerInput{LineReader: NewLineReader(strings.NewReader(""), io.Discard), message: message, typed: make(chan struct{})}
 	llm := runtime.NewMockLLM("gemini-3.8-flash", replies...)
-	eng, err := runtime.NewEngine(context.Background(), cfg, agentReg, skillProv, reg, &gatedLLM{MockLLM: llm, gate: in.typed})
-	if err != nil {
-		t.Fatal(err)
-	}
-	st, _ := session.NewStorage(t.TempDir())
-	st.CreateSession("", "t", "code-puppy")
-	return &App{Cfg: cfg, Engine: eng, Agents: agentReg, Skills: skillProv, Storage: st, Tools: reg, Input: in,
-		Processes: reg.Processes(), Printer: PrinterOptions{Out: io.Discard}}, llm
+	app := openApp(t, cfg, &gatedLLM{MockLLM: llm, gate: in.typed})
+	app.Storage.CreateSession("", "t", "code-puppy")
+	app.Input = in
+	return app, llm
 }
 
 func listFilesCall() *genai.Content {

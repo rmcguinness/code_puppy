@@ -6,19 +6,14 @@ import (
 	"errors"
 	"image"
 	"image/png"
-	"io"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
-	"github.com/retail-cortex/code_puppy/internal/agents"
 	"github.com/retail-cortex/code_puppy/internal/config"
 	"github.com/retail-cortex/code_puppy/internal/images"
 	"github.com/retail-cortex/code_puppy/internal/runtime"
-	"github.com/retail-cortex/code_puppy/internal/session"
-	"github.com/retail-cortex/code_puppy/internal/skills"
-	"github.com/retail-cortex/code_puppy/internal/tools"
 	"google.golang.org/genai"
 )
 
@@ -31,30 +26,19 @@ func pngOf(t *testing.T, w, h int) []byte {
 
 func newImageApp(t *testing.T, replies ...string) (*App, *runtime.MockLLM) {
 	t.Helper()
+	isolateHome(t)
 	cfg := config.DefaultConfig()
 	cfg.Tools.WorkspaceDir = t.TempDir()
 	cfg.Images.Dir = t.TempDir()
 	cfg.Audit.Enabled = false
-	agentReg, _ := agents.NewRegistry()
-	skillProv, _ := skills.NewProvider()
-	reg, err := tools.NewRegistry(cfg, agentReg, skillProv)
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { reg.Close() })
 	var contents []*genai.Content
 	for _, r := range replies {
 		contents = append(contents, genai.NewContentFromText(r, genai.RoleModel))
 	}
 	llm := runtime.NewMockLLM("gemini-3.8-flash", contents...)
-	eng, err := runtime.NewEngine(context.Background(), cfg, agentReg, skillProv, reg, llm)
-	if err != nil {
-		t.Fatal(err)
-	}
-	st, _ := session.NewStorage(t.TempDir())
-	st.CreateSession("", "t", "code-puppy")
-	return &App{Cfg: cfg, Engine: eng, Agents: agentReg, Skills: skillProv, Storage: st, Tools: reg,
-		Processes: reg.Processes(), Printer: PrinterOptions{Out: io.Discard}}, llm
+	app := openApp(t, cfg, llm)
+	app.Storage.CreateSession("", "t", "code-puppy")
+	return app, llm
 }
 
 func sentImages(llm *runtime.MockLLM) int {
@@ -168,7 +152,11 @@ func TestPaste(t *testing.T) {
 }
 
 func TestAttachDisabled(t *testing.T) {
-	app := newTestApp(t, nil) // no Tools
+	isolateHome(t)
+	cfg := config.DefaultConfig()
+	cfg.Tools.WorkspaceDir = t.TempDir()
+	cfg.Images.Enabled = false
+	app := openApp(t, cfg, runtime.NewMockLLM("m"))
 	out := captureStdout(t, func() {
 		HandleCommand(context.Background(), "/paste", app)
 		HandleCommand(context.Background(), "/attach x.png", app)

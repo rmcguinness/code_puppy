@@ -48,6 +48,7 @@ type Workspace struct {
 	memory   []memory.Doc
 	locales  *i18n.Bundle
 	modelErr error // set when the configured model failed to initialise
+	warn     func(string)
 }
 
 // Open wires registries, tools, the model and the engine for cfg. It also
@@ -56,7 +57,7 @@ func Open(ctx context.Context, cfg *config.Config, o Options) (*Workspace, error
 	if o.Warn == nil {
 		o.Warn = func(string) {}
 	}
-	w := &Workspace{cfg: cfg, locales: SetupLocale(cfg, o.Warn)}
+	w := &Workspace{cfg: cfg, locales: SetupLocale(cfg, o.Warn), warn: o.Warn}
 	var err error
 
 	if w.agents, err = agents.NewRegistry(); err != nil {

@@ -5,15 +5,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/retail-cortex/code_puppy/internal/app"
-	"github.com/retail-cortex/code_puppy/internal/images"
 	"io"
 	"os"
 	"os/signal"
-	"strings"
 	"time"
 
-	"github.com/retail-cortex/code_puppy/internal/audit"
+	"github.com/retail-cortex/code_puppy/internal/app"
+	"github.com/retail-cortex/code_puppy/internal/images"
 	"github.com/retail-cortex/code_puppy/internal/runtime"
 	"github.com/retail-cortex/code_puppy/internal/tui"
 	"golang.org/x/term"
@@ -78,52 +76,37 @@ func runOneShot(ctx context.Context, w *app.Workspace, o oneShotOptions) error {
 	out := o.stdout
 	sid := o.sessionID
 
-	var runErr error
-	if reason := w.Tools().ScriptHooks().PromptSubmit(ctx, sid, o.prompt); reason != "" {
-		runErr = withCode(exitBlocked, fmt.Errorf("prompt blocked by hook: %s", reason))
-	}
-
-	var transcript strings.Builder
+	var handler runtime.EventHandler
+	var printer *tui.Printer
 	var calls []toolCallJSON
-	if runErr == nil {
-		w.Tools().Checkpoints().Begin(o.prompt)
-		w.Audit().Log(audit.Entry{Kind: audit.KindPrompt, Session: sid, Detail: o.prompt})
-		recorded, modelPrompt := o.prompt, o.prompt
-		if o.plan {
-			recorded, modelPrompt = "/plan "+o.prompt, runtime.PlanPrompt(o.prompt)
-		}
-		_ = w.Storage().AddMessage("user", recorded+tui.AttachmentNote(o.images))
-
-		var handler runtime.EventHandler
-		var printer *tui.Printer
-		switch o.format {
-		case formatText:
-			printer = tui.NewPrinter(tui.PrinterOptions{Out: out, Markdown: o.markdown, Theme: w.Config().UI.Theme, Width: o.width, Spinner: o.spinner, Transcript: &transcript})
-			handler = printer.Handle
-			printer.Begin()
-		case formatStreamJSON:
-			enc := json.NewEncoder(out)
-			_ = enc.Encode(map[string]any{"type": "session", "session_id": sid, "model": w.Engine().ModelName(), "agent": w.Engine().ActiveAgent()})
-			handler = streamJSONHandler(enc, &transcript)
-		default:
-			handler = collectHandler(&transcript, &calls)
-		}
-
-		execOpts := []runtime.ExecOption{runtime.WithMaxTurns(o.maxTurns)}
-		for _, img := range o.images {
-			execOpts = append(execOpts, runtime.WithAttachments(images.Part(img)))
-		}
-		if o.plan {
-			execOpts = append(execOpts, runtime.WithPlanOnly())
-		}
-		runErr = w.Engine().Execute(ctx, sid, modelPrompt, handler, execOpts...)
-		if printer != nil {
-			printer.End()
-			fmt.Fprintln(out)
-		}
-		if transcript.Len() > 0 {
-			_ = w.Storage().AddMessage("model", transcript.String())
-		}
+	var enc *json.Encoder
+	switch o.format {
+	case formatText:
+		printer = tui.NewPrinter(tui.PrinterOptions{Out: out, Markdown: o.markdown, Theme: w.Config().UI.Theme, Width: o.width, Spinner: o.spinner})
+		handler = printer.Handle
+	case formatStreamJSON:
+		enc = json.NewEncoder(out)
+		handler = streamJSONHandler(enc)
+	default:
+		handler = collectHandler(&calls)
+	}
+	turn, runErr := w.Run(ctx, sid, app.Turn{
+		Text: o.prompt, Plan: o.plan, Images: o.images, MaxTurns: o.maxTurns,
+		OnAccepted: func() {
+			if printer != nil {
+				printer.Begin()
+			}
+			if enc != nil {
+				_ = enc.Encode(map[string]any{"type": "session", "session_id": sid, "model": w.Engine().ModelName(), "agent": w.Engine().ActiveAgent()})
+			}
+		},
+	}, handler)
+	var blocked *app.BlockedError
+	if errors.As(runErr, &blocked) {
+		runErr = withCode(exitBlocked, runErr)
+	} else if printer != nil {
+		printer.End()
+		fmt.Fprintln(out)
 	}
 	if ctx.Err() != nil && runErr != nil && !errors.Is(runErr, runtime.ErrMaxTurns) {
 		runErr = withCode(exitInterrupted, runErr)
@@ -138,7 +121,7 @@ func runOneShot(ctx context.Context, w *app.Workspace, o oneShotOptions) error {
 		}
 	} else {
 		res := runResult{
-			Type: "result", SessionID: sid, Result: transcript.String(),
+			Type: "result", SessionID: sid, Result: turn.Output,
 			DurationMs: time.Since(start).Milliseconds(),
 			Usage:      usageJSON{InputTokens: usage.Input, CachedTokens: usage.Cached, OutputTokens: usage.Output, ModelCalls: usage.Calls},
 			ToolCalls:  calls,
@@ -164,7 +147,7 @@ func runOneShot(ctx context.Context, w *app.Workspace, o oneShotOptions) error {
 }
 
 // streamJSONHandler writes one JSON line per event.
-func streamJSONHandler(enc *json.Encoder, transcript *strings.Builder) runtime.EventHandler {
+func streamJSONHandler(enc *json.Encoder) runtime.EventHandler {
 	return func(ev *adksession.Event) error {
 		if ev.Content == nil {
 			return nil
@@ -172,9 +155,6 @@ func streamJSONHandler(enc *json.Encoder, transcript *strings.Builder) runtime.E
 		for _, p := range ev.Content.Parts {
 			switch {
 			case p.Text != "" && !p.Thought:
-				if !ev.Partial {
-					transcript.WriteString(p.Text)
-				}
 				_ = enc.Encode(map[string]any{"type": "text", "text": p.Text, "partial": ev.Partial, "author": ev.Author})
 			case p.FunctionCall != nil:
 				_ = enc.Encode(map[string]any{"type": "tool_call", "name": p.FunctionCall.Name, "args": p.FunctionCall.Args})
@@ -186,8 +166,8 @@ func streamJSONHandler(enc *json.Encoder, transcript *strings.Builder) runtime.E
 	}
 }
 
-// collectHandler gathers final text and tool calls for json output.
-func collectHandler(transcript *strings.Builder, calls *[]toolCallJSON) runtime.EventHandler {
+// collectHandler gathers tool calls for json output.
+func collectHandler(calls *[]toolCallJSON) runtime.EventHandler {
 	pending := map[string]int{}
 	return func(ev *adksession.Event) error {
 		if ev.Content == nil || ev.Partial {
@@ -195,8 +175,6 @@ func collectHandler(transcript *strings.Builder, calls *[]toolCallJSON) runtime.
 		}
 		for _, p := range ev.Content.Parts {
 			switch {
-			case p.Text != "" && !p.Thought:
-				transcript.WriteString(p.Text)
 			case p.FunctionCall != nil:
 				pending[p.FunctionCall.ID+p.FunctionCall.Name] = len(*calls)
 				*calls = append(*calls, toolCallJSON{Name: p.FunctionCall.Name, Args: p.FunctionCall.Args})
