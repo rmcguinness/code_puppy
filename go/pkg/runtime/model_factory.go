@@ -92,8 +92,29 @@ func openAICompatEndpoint(c config.OpenAIConfig, provider string) (apiKey, baseU
 	return apiKey, baseURL
 }
 
-// newProviderModel builds one model of the given provider.
+// newProviderModel builds one model of the given provider, applying its
+// [model_settings] on each call.
 func newProviderModel(ctx context.Context, cfg *config.Config, provider, modelName string) (model.LLM, error) {
+	m, err := buildProviderModel(ctx, cfg, provider, modelName)
+	if err != nil {
+		return nil, err
+	}
+	return withModelSettings(m, providerOf(m)), nil
+}
+
+// providerOf names the API a built model talks to; with provider "" the
+// choice was made from the credentials present.
+func providerOf(m model.LLM) string {
+	switch m.(type) {
+	case *anthropicModel:
+		return "anthropic"
+	case *toolCallParsingModel:
+		return "openai"
+	}
+	return "gemini"
+}
+
+func buildProviderModel(ctx context.Context, cfg *config.Config, provider, modelName string) (model.LLM, error) {
 	pol := policyFrom(cfg.LLM)
 	switch provider {
 	case "gemini":

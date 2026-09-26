@@ -213,6 +213,17 @@
     "pin.saved": "Enregistré dans {path}",
     "pin.save_failed": "Changé pour cette session, mais non enregistré : {error}",
     "pin.active_pinned": "Note : {agent} est assigné à {model}; faites /unpin {agent} pour qu’il utilise le nouveau modèle.",
-    "pin.load_failed": "{agent} est assigné à {model}, qui n’a pas pu être préparé ({error}); il utilise le modèle configuré."
+    "pin.load_failed": "{agent} est assigné à {model}, qui n’a pas pu être préparé ({error}); il utilise le modèle configuré.",
+    "help.model_settings": "Afficher ou changer les réglages de génération propres à un modèle (temperature, max_tokens, top_p, seed)",
+    "msettings.title": "Réglages par modèle",
+    "msettings.none": "Aucun modèle n’a de réglages propres. Utilisez /model_settings <modèle> clé=valeur, p. ex. /model_settings gpt-5 temperature=0.3",
+    "msettings.usage": "Utilisation : /model_settings [<modèle> [clé=valeur ... | reset]]   clés : temperature, max_tokens, top_p, seed; clé= en efface une",
+    "msettings.bad_pair": "clé=valeur attendu, reçu {arg}",
+    "msettings.invalid": "Rien n’a changé : {error}",
+    "msettings.updated": "{model} utilise maintenant {settings}.",
+    "msettings.cleared": "{model} utilise maintenant les réglages globaux.",
+    "msettings.unsupported": "{provider} n’accepte pas {keys} pour {model}; ces réglages ne seront pas envoyés.",
+    "msettings.global": "(global : {value})",
+    "msettings.provider_default": "(valeur du fournisseur)"
   }
 }

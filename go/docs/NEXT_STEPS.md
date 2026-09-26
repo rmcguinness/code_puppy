@@ -4,7 +4,7 @@ Written 2026-09-24, at commit `7e211697` on `main`. Read this first when resumin
 
 ## State
 
-Roadmap items 1–16 are done and committed; each has its own commit:
+Roadmap items 1–17 are done and committed; each has its own commit:
 
 | Commit | Change |
 |---|---|
@@ -18,6 +18,7 @@ Roadmap items 1–16 are done and committed; each has its own commit:
 | `042263dd` | Ordered model fallback across providers; Ollama base-URL fix |
 | `7a06b7a6` | Default Gemini model → `gemini-3.8-flash` |
 | `7e211697` | Per-agent models (`[agent_models]`, `/pin_model`, `/unpin`) |
+| the commit adding `pkg/runtime/settings.go` | Per-model settings (`[model_settings]`, `/model_settings`) |
 
 `go vet ./...` and `go test -race ./...` pass. The one uncommitted file is `docs/.MANUAL_VERIFICATION.md.swp`, an editor swap file; don't commit it.
 
@@ -28,10 +29,10 @@ Roadmap items 1–16 are done and committed; each has its own commit:
 ## Open work, in suggested order
 
 1. **Manual verification (needs a person).** Nothing in `MANUAL_VERIFICATION.md` has been run yet. It covers real providers (💲 = paid calls), terminal behavior, the macOS and Linux sandboxes, MCP, steering, fallback and pinning. Record results in the file; any failure becomes the next task.
-2. **Per-model settings** (Python's `/model_settings`). Generation settings are global today (`code_puppy.temperature`, `max_tokens`, built in `Engine.generateConfig`). Suggested shape: a `[model_settings."<model>"]` table (temperature, max_tokens, top_p, seed), applied in `newLLMAgent` using the agent's model name (`modelForLocked(spec.Name).Name()`), plus a `/model_settings [<model> key=value]` command saved with `config.editConfigFile`. Note: current Anthropic models reject `temperature`, and the adapter already drops unsupported sampling parameters.
-3. **Named session snapshots** (Python's `/dump_context` and `/load_context`). Suggested: `/session save <name>` copies the event log (`<id>.events.jsonl`) and metadata under a new ID labelled with the name; `/session load <name>` resolves names as well as IDs.
-4. **Anthropic server-side web search** (ROADMAP item 6, option a). It needs server-tool result blocks carried through the adapter in `pkg/runtime/anthropic.go`. The Brave/Tavily/SearXNG search already works with every provider.
-5. **Release tasks** from MANUAL_VERIFICATION section 18: pin the GitHub Actions in `.github/workflows/go-*.yml` to commit SHAs, cut `v0.1.0`, and verify the cosign signature and SBOMs.
+2. **Named session snapshots** (Python's `/dump_context` and `/load_context`). Suggested: `/session save <name>` copies the event log (`<id>.events.jsonl`) and metadata under a new ID labelled with the name; `/session load <name>` resolves names as well as IDs.
+3. **Anthropic server-side web search** (ROADMAP item 6, option a). It needs server-tool result blocks carried through the adapter in `pkg/runtime/anthropic.go`. The Brave/Tavily/SearXNG search already works with every provider.
+4. **Release tasks** from MANUAL_VERIFICATION section 18: pin the GitHub Actions in `.github/workflows/go-*.yml` to commit SHAs, cut `v0.1.0`, and verify the cosign signature and SBOMs.
+5. **Optional: reasoning settings per model.** Python's `/model_settings` also sets `reasoning_effort`, extended thinking and budgets. The Go wrapper (`pkg/runtime/settings.go`) is where they'd go, mapped to genai `ThinkingConfig`, which each adapter translates differently.
 6. **Optional:** the `python/` tree still names `gemini-2.5-flash` in four files. They were left alone because only the Go implementation was in scope.
 
 ## Decisions already made (don't redo without a reason)
@@ -42,6 +43,7 @@ Roadmap items 1–16 are done and committed; each has its own commit:
 - **Content is never exported by default.** The ADK puts tool arguments and results on every `execute_tool` span, so `pkg/observability` filters them before export. OTel providers are built here, not with `adk/telemetry.New`, which adds its own unfiltered exporter.
 - **Not ported from Python:** `/cd` (the workspace is the sandbox root; use `-d`), `/truncate` (use `/compact`) and `/tutorial`. Reasons are in ROADMAP item 14.
 - **`fallback_models` switches only before any output** and never on cancellation. Breakers are asked just before each attempt (regression tests guard this).
+- **Model settings are applied per built model, not per agent.** `newProviderModel` wraps every model, so each member of a fallback chain uses its own `[model_settings]`. Applying them in `newLLMAgent` would give fallbacks the primary's settings.
 - **Telemetry and OTel need one provider per process:** the ADK binds its tracer to the first global provider.
 
 ## Conventions used in this work

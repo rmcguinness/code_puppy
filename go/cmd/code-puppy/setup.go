@@ -237,6 +237,11 @@ func (e *env) saveAgentModel(agent, ref string) (string, error) {
 	return config.SaveAgentModel(config.ConfigDir(""), agent, ref)
 }
 
+// saveModelSettings records a model's settings (zero: removed) in the config file.
+func (e *env) saveModelSettings(model string, s config.ModelSettings) (string, error) {
+	return config.SaveModelSettings(config.ConfigDir(""), model, s)
+}
+
 // reloadMemory re-reads instruction files into the engine.
 func (e *env) reloadMemory(ctx context.Context) ([]string, error) {
 	e.memory = memory.Load(e.tools.Workspace().Dir(), e.cfg.Memory)

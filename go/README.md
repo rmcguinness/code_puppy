@@ -70,6 +70,7 @@ Subcommands: `doctor [--online]`, `config init|show|path`, `completion bash|zsh|
 | `/session list [--all]\|new\|load <id>`, `/resume <id>` | Saved sessions — scoped to the current workspace; `--all` shows every directory |
 | `/agents`, `/agent <name>`, `/model <name>` | Personas and models; `/model anthropic/claude-sonnet-5` can switch provider |
 | `/pin_model [<agent> <model>]`, `/unpin <agent>` | Run an agent on its own model (e.g. qa-kitten on a cheaper one); saved under `[agent_models]` |
+| `/model_settings [<model> [key=value…\|reset]]` | Show or set one model's temperature, max_tokens, top_p or seed (`key=` clears one); saved under `[model_settings."<model>"]` |
 | `/sandbox`, `/mcp`, `/tools` | Active policy; MCP servers; the tools the active agent can use |
 | `/plan <goal>` | Ask for a plan without changing anything. The agent can read, search and delegate, but edits, commands and MCP tools are refused for that turn |
 | `!<command>` | Run a command yourself, like in your own terminal: in the workspace, with your environment, outside the agent's sandbox and approvals. The agent doesn't see it; the audit log records it |
@@ -175,6 +176,16 @@ Each provider uses its own credentials section. A failed model is skipped for 15
 qa-kitten = "anthropic/claude-haiku-4-5"
 ```
 A pin wins over an agent's own `default_model` (agent frontmatter), and both win over the configured model. Pinned agents keep the `fallback_models` chain, and each agent's tokens are priced by its own model. `/pin_model` and `/unpin` change pins in the session and in the config file, keeping its comments. `doctor` checks each pinned model.
+
+**Per-model settings** — generation settings for one model, which win over the global `code_puppy.temperature` and `max_tokens`:
+```toml
+[model_settings."gpt-5"]
+temperature = 0.3
+top_p = 0.9
+max_tokens = 4096
+seed = 7
+```
+The key is the model name; a `provider/` prefix is ignored (for OpenRouter names that contain a slash, write the provider first, as in `fallback_models`). Every model uses its own settings: the main model, pinned agents, and each model in `fallback_models`. `/model_settings gpt-5 temperature=0.3` changes them from the next model call and saves them, keeping the file's comments. A setting the provider doesn't accept is left out of the request (and `/model_settings` warns): OpenAI and Ollama have no `seed`; Anthropic takes only `max_tokens`, plus `temperature` on older models.
 
 **Context & cost** — history is compacted automatically once a prompt reaches `context.token_threshold` tokens, or on demand with `/compact`. Estimated list prices for the default models are built in; override or add them under `[pricing."model-name"]` (`input_per_mtok`, `output_per_mtok`, `cached_input_per_mtok`, `cache_write_per_mtok`). Costs use the model that actually answered, so refusal fallbacks are priced correctly; `doctor` warns when the active model has no price.
 

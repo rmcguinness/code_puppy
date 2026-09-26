@@ -213,6 +213,17 @@
     "pin.saved": "Saved in {path}",
     "pin.save_failed": "Changed for this session, but not saved: {error}",
     "pin.active_pinned": "Note: {agent} is pinned to {model}; /unpin {agent} to use the new model with it.",
-    "pin.load_failed": "{agent} is pinned to {model}, which could not be set up ({error}); it uses the configured model."
+    "pin.load_failed": "{agent} is pinned to {model}, which could not be set up ({error}); it uses the configured model.",
+    "help.model_settings": "Show or change a model's own generation settings (temperature, max_tokens, top_p, seed)",
+    "msettings.title": "Model settings",
+    "msettings.none": "No model has settings of its own. Use /model_settings <model> key=value, e.g. /model_settings gpt-5 temperature=0.3",
+    "msettings.usage": "Usage: /model_settings [<model> [key=value ... | reset]]   keys: temperature, max_tokens, top_p, seed; key= clears one",
+    "msettings.bad_pair": "Expected key=value, got {arg}",
+    "msettings.invalid": "Nothing changed: {error}",
+    "msettings.updated": "{model} now uses {settings}.",
+    "msettings.cleared": "{model} now uses the global settings.",
+    "msettings.unsupported": "{provider} doesn't accept {keys} for {model}, so they won't be sent.",
+    "msettings.global": "(global: {value})",
+    "msettings.provider_default": "(provider default)"
   }
 }

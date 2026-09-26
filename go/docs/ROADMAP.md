@@ -2,7 +2,7 @@
 
 Status key: ✅ done · 🔜 next · 📋 planned · 🔍 needs investigation first
 
-Items 10–16 were added after the first plan and appear before item 9, which stays last because it needs a person. Open work and resume notes: [NEXT_STEPS.md](NEXT_STEPS.md).
+Items 10–17 were added after the first plan and appear before item 9, which stays last because it needs a person. Open work and resume notes: [NEXT_STEPS.md](NEXT_STEPS.md).
 
 Each item lists the problem, the approach, where the change lands, how it is tested, and a rough size (S ≤ half a day, M ≈ 1–2 days, L ≈ 3+ days).
 
@@ -170,7 +170,7 @@ Also fixed: the model name now resolves per provider (`code_puppy.default_model`
 - `/cd`: in Go the workspace is the sandbox root (`os.Root`, Seatbelt/bubblewrap profile, blocked paths), plus project memory and session scoping. Changing it mid-session means rebuilding all of those; `code-puppy -d <dir>` does it safely at start.
 - `/truncate N`: deletes history. `/compact [focus]` shrinks the context without losing what was decided.
 - `/dump_context`, `/load_context`: sessions are already saved and resumable; named snapshots would fit under `/session`, and can be added if wanted.
-- `/tutorial`, `/pin_model`, `/unpin`, `/model_settings`, `/add_model`, `/refresh_models`: belong with model management (roadmap: model fallback and a model catalog).
+- `/tutorial`, `/add_model`, `/refresh_models`: belong with a model catalog, which isn't planned. (`/pin_model` and `/unpin` came with item 16, `/model_settings` with item 17.)
 
 **Tests.** Plan mode refuses edits and still reads, covers sub-agents (the sub-agent's refused `create_file` is checked, not just the missing file), and leaves normal turns alone. `/plan` usage, goal recording, a goal that starts with `/`, `--plan` in JSON output and its flag validation. `!` runs in the workspace, reports exit codes, and isn't recorded as a prompt. A stale Ctrl+C after `!` must not end the session; this test was confirmed to fail without the fix once input arrives with realistic timing. `/tools` marking and MCP scoping; `/show` equals `/set`.
 
@@ -188,7 +188,7 @@ Also fixed: the model name now resolves per provider (`code_puppy.default_model`
 
 **Also fixed.** `provider = "ollama"` without `base_url` sent requests to `https://api.openai.com/v1`, the `[llm.openai]` default, with the key "ollama". Ollama now uses localhost unless a different `base_url` is set, and never receives the OpenAI key.
 
-**Not done.** Per-agent model pinning (`/pin_model`) and per-model settings (`/model_settings`), from Python; they're next.
+**Not done.** Per-agent model pinning (`/pin_model`) and per-model settings (`/model_settings`), from Python; done later as items 16 and 17.
 
 **Tests.** Takeover, cooldown, trial and recovery on a fake clock. No switch after output or on cancellation. Everything failing, and a retry with every breaker open. Two regression tests, each confirmed to fail against the bug it guards: a cancelled trial is released, and an untried backup's trial isn't stranded. `ParseModelRef`, including OpenRouter and Ollama tags. The Ollama endpoint fix. A real `NewModel` chain from a failing OpenAI server to an Anthropic one. Engine notices once per change.
 
@@ -202,9 +202,23 @@ Also fixed: the model name now resolves per provider (`code_puppy.default_model`
 - **Provider-aware references everywhere:** `NewModel` parses `"provider/model"` for `/model`, `default_model` and pins, so `/model anthropic/claude-sonnet-5` switches provider.
 - **REPL:** `/pin_model [<agent> <model>]` (no arguments lists pins), `/unpin <agent>` (returns to the agent's `default_model` if it has one), a 📌 marker in `/agents`, a note from `/model` when the active agent is pinned, and completion for both commands. Pins are saved with `config.SaveAgentModel`, which shares the new comment-preserving `editConfigFile` with `SaveUILocale` and can remove keys. `doctor` checks each pin.
 
-**Not done.** Python's `/model_settings` (temperature, seed and so on per model); generation settings stay global (`code_puppy.temperature`, `max_tokens`).
+**Not done.** Python's `/model_settings`; added as item 17.
 
 **Tests.** Pin, replace, unpin and quoted names in the config file, with comments and mode kept. Engine: a pinned sub-agent runs on its model, the main model isn't called for it, and its cost uses its own price (the old pricing path would have used Gemini's). Pin and unpin the active agent. Provider-qualified `/model` and `default_model`. REPL: pin, list, `/agents` marker, unpin saved, unknown agent, usage, the `/model` note, unpin back to `default_model`. Startup precedence and unknown-agent warning.
+
+---
+
+## 17. Per-model settings — ✅ done (S)
+
+**Approach.**
+- **Config:** `[model_settings."<model>"]` with `temperature`, `max_tokens`, `top_p` and `seed`, keyed by model name (a `provider/` prefix is dropped, by the same rule as `ParseModelRef`). A set value wins over the global `code_puppy.temperature` / `max_tokens`; an unset one inherits them.
+- **Where it's applied:** not in `newLLMAgent`, as first suggested. That would give every model in a fallback chain the primary's settings. Instead `newProviderModel` wraps each model it builds (`settingsModel`), so each chain member, pinned agent and `/model` switch applies its own entry on every call. The wrapper copies the request before changing it, because the fallback chain passes the same request to each model. The engine keeps the settings behind a mutex and puts a lookup in the context of `Execute`, `Compact` and `InvokeSubagent`, so `/model_settings` changes apply from the next call with no runner rebuild. Without a lookup (`doctor`) or an entry, the request passes through unchanged.
+- **Provider limits:** the ADK's OpenAI adapter fails the whole request when `Seed` is set, and current Anthropic models reject sampling parameters. `SettingSupported` drops those per provider (OpenAI/Ollama: no seed; Anthropic: `max_tokens`, plus `temperature` on models `supportsSampling` accepts; `top_p` isn't mapped because some Claude models reject it alongside temperature). The provider is taken from the built model's type, so `provider = ""` works too. Dropped settings are logged at debug level, and `/model_settings` warns when they're set.
+- **REPL:** `/model_settings` lists models with settings. `/model_settings <model>` shows each key, or where its value comes from (global, provider default). `/model_settings <model> k=v …` sets several at once and changes nothing if one is invalid; `k=` clears one key and `reset` clears them all. Saved with `config.SaveModelSettings`, which uses `editConfigFile` and removes the table when it's empty. Completion offers the models in use and those with settings.
+
+**Not done.** Python's reasoning and thinking settings (`reasoning_effort`, `extended_thinking`, `budget_tokens`, …) and per-model retry strategies. There's no per-model way to unset a global value (e.g. to send no temperature to one model while others get 0.2).
+
+**Tests.** Validation ranges, and nothing changes on error. Save, replace and remove with comments and file mode kept, quoted names (`gpt-4.1`, `qwen2.5-coder:7b`), an empty table removed, and a real `Load` through modenv. A fallback chain where each model gets its own settings, the backup keeps the global temperature, and the shared request config is unchanged. That test was confirmed to fail when the wrapper edits the request in place. Passthrough without a lookup or entry. `SettingSupported` per provider. The engine applies startup settings (including a `provider/` key), picks up a change on the next call, and removes settings. A sub-agent called with no run context gets its settings; confirmed to fail without the lookup in `InvokeSubagent`. The real OpenAI adapter sends temperature, top_p and max_output_tokens to an `httptest` server and no seed. REPL: list, set several, provider warning, atomic failure, bad pair, clear one, show with inherited values, reset saved. A hand-written `"openai/gpt-5"` table is edited rather than duplicated, and when both a bare and a prefixed key exist the bare one always wins. Also smoke-tested with the binary against a local fake OpenAI server: the model's temperature replaced the global one, and the seed wasn't sent.
 
 ---
 

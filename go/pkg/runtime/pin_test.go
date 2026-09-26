@@ -70,8 +70,10 @@ func TestNewModelAcceptsAProviderQualifiedName(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, ok := m.(*anthropicModel); !ok || m.Name() != "claude-sonnet-5" {
+	if sm, ok := m.(*settingsModel); !ok || m.Name() != "claude-sonnet-5" {
 		t.Fatalf("got %T %q", m, m.Name())
+	} else if _, ok := sm.inner.(*anthropicModel); !ok {
+		t.Fatalf("wraps %T", sm.inner)
 	}
 	// The configured default model can name its provider too.
 	cfg.CodePuppy.DefaultModel = "anthropic/claude-haiku-4-5"

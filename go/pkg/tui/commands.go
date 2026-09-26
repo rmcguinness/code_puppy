@@ -167,6 +167,7 @@ func printHelp() {
 		{"/model [name]", "help.model"},
 		{"/pin_model [<agent> <model>]", "help.pin"},
 		{"/unpin <agent>", "help.unpin"},
+		{"/model_settings [<model> [key=value…|reset]]", "help.model_settings"},
 		{"/skills list|search <q>", "help.skills"},
 		{"/session list [--all]|new|load <id>", "help.session"},
 		{"/undo [--force]", "help.undo"},

@@ -42,6 +42,7 @@ func (e *Engine) Compact(ctx context.Context, sessionID, focus string, keepTurns
 	if keepTurns < 1 {
 		keepTurns = 1
 	}
+	ctx = withSettingsLookup(ctx, e.lookupSettings)
 	ctx, span := observability.Start(ctx, "compact",
 		observability.ConversationID.String(sessionID),
 		attribute.Int("keep_turns", keepTurns),

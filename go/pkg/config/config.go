@@ -44,6 +44,10 @@ type Config struct {
 	// A pin wins over the agent's own default_model; unpinned agents use
 	// the configured model. Set with /pin_model, removed with /unpin.
 	AgentModels map[string]string `toml:"agent_models"`
+	// ModelSettings are per-model generation settings, keyed by model name
+	// (a "provider/" prefix is ignored). They win over the global
+	// temperature and max_tokens. Set with /model_settings.
+	ModelSettings map[string]ModelSettings `toml:"model_settings"`
 }
 
 // CodePuppyConfig controls the core persona and behavior settings.

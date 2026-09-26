@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"maps"
 	"math"
 	"slices"
 	"strings"
@@ -125,6 +126,9 @@ type Engine struct {
 	steers  map[string][]string // session ID -> messages sent mid-turn
 
 	notice     func(string)
+	settingsMu sync.RWMutex
+	settings   map[string]config.ModelSettings // model name -> [model_settings]
+
 	fallbackMu sync.Mutex
 	fallbackBy string // fallback model answering now; "" when the primary is
 
@@ -162,6 +166,18 @@ func NewEngine(
 		memories:  memory.InMemoryService(),
 		llm:       withImages(llm, toolReg.Images()),
 		active:    cfg.CodePuppy.DefaultAgent,
+		settings:  map[string]config.ModelSettings{},
+	}
+	// Sorted, so that when "gpt-5" and "openai/gpt-5" are both written the
+	// bare name wins every time.
+	for _, key := range slices.Sorted(maps.Keys(cfg.ModelSettings)) {
+		name := settingsName(key)
+		if _, bare := cfg.ModelSettings[name]; bare && key != name {
+			continue
+		}
+		if s := cfg.ModelSettings[key]; !s.IsZero() {
+			e.settings[name] = s
+		}
 	}
 	for _, o := range opts {
 		o(e)
@@ -304,6 +320,51 @@ func (e *Engine) modelForLocked(agent string) model.LLM {
 
 // Usage returns the token usage and estimated cost recorded for a session.
 func (e *Engine) Usage(sessionID string) Usage { return e.usage.Session(sessionID) }
+
+// settingsName is the key a model's settings are kept under: its name as
+// the provider reports it, without a "provider/" prefix.
+func settingsName(ref string) string {
+	_, name := ParseModelRef(ref, "")
+	return name
+}
+
+// ModelSettings returns the generation settings for model ("provider/"
+// prefix optional); the zero value when it has none.
+func (e *Engine) ModelSettings(model string) config.ModelSettings {
+	s, _ := e.lookupSettings(settingsName(model))
+	return s
+}
+
+// AllModelSettings returns every model's settings, by model name.
+func (e *Engine) AllModelSettings() map[string]config.ModelSettings {
+	e.settingsMu.RLock()
+	defer e.settingsMu.RUnlock()
+	out := make(map[string]config.ModelSettings, len(e.settings))
+	for k, v := range e.settings {
+		out[k] = v
+	}
+	return out
+}
+
+// SetModelSettings replaces model's settings (the zero value removes
+// them). They apply from the next model call, also to calls already running.
+func (e *Engine) SetModelSettings(model string, s config.ModelSettings) {
+	name := settingsName(model)
+	e.settingsMu.Lock()
+	defer e.settingsMu.Unlock()
+	if s.IsZero() {
+		delete(e.settings, name)
+	} else {
+		e.settings[name] = s
+	}
+}
+
+func (e *Engine) lookupSettings(name string) (config.ModelSettings, bool) {
+	e.settingsMu.RLock()
+	defer e.settingsMu.RUnlock()
+	s, ok := e.settings[name]
+	return s, ok
+}
 
 func (e *Engine) generateConfig() *genai.GenerateContentConfig {
 	gc := &genai.GenerateContentConfig{}
@@ -555,6 +616,7 @@ func (e *Engine) Execute(ctx context.Context, sessionID, prompt string, handler 
 		o(st)
 	}
 	ctx = context.WithValue(ctx, runStateKey{}, st)
+	ctx = withSettingsLookup(ctx, e.lookupSettings)
 	if n := e.cfg.Tools.MaxParallel; n > 0 {
 		ctx = platform.WithTaskRunner(ctx, boundedRunner(n))
 	}
@@ -690,7 +752,7 @@ func (e *Engine) InvokeSubagent(ctx context.Context, agentName, prompt string) (
 		return "", fmt.Errorf("failed to create sub-agent runner: %w", err)
 	}
 
-	subCtx := context.WithValue(ctx, subagentDepthKey{}, depth+1)
+	subCtx := withSettingsLookup(context.WithValue(ctx, subagentDepthKey{}, depth+1), e.lookupSettings)
 	sessionID := fmt.Sprintf("subagent-%s-%d", agentName, e.subagentSeq.Add(1))
 	var out strings.Builder
 	err = drain(r.Run(subCtx, "user", sessionID, genai.NewContentFromText(prompt, genai.RoleUser), agent.RunConfig{}),

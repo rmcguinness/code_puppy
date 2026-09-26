@@ -213,6 +213,17 @@
     "pin.saved": "Guardado en {path}",
     "pin.save_failed": "Cambiado para esta sesión, pero no guardado: {error}",
     "pin.active_pinned": "Nota: {agent} tiene asignado {model}; usa /unpin {agent} para que use el nuevo modelo.",
-    "pin.load_failed": "{agent} tiene asignado {model}, que no se pudo preparar ({error}); usa el modelo configurado."
+    "pin.load_failed": "{agent} tiene asignado {model}, que no se pudo preparar ({error}); usa el modelo configurado.",
+    "help.model_settings": "Ver o cambiar los ajustes de generación propios de un modelo (temperature, max_tokens, top_p, seed)",
+    "msettings.title": "Ajustes por modelo",
+    "msettings.none": "Ningún modelo tiene ajustes propios. Usa /model_settings <modelo> clave=valor, p. ej. /model_settings gpt-5 temperature=0.3",
+    "msettings.usage": "Uso: /model_settings [<modelo> [clave=valor ... | reset]]   claves: temperature, max_tokens, top_p, seed; clave= borra una",
+    "msettings.bad_pair": "Se esperaba clave=valor, se recibió {arg}",
+    "msettings.invalid": "No se cambió nada: {error}",
+    "msettings.updated": "{model} ahora usa {settings}.",
+    "msettings.cleared": "{model} ahora usa los ajustes globales.",
+    "msettings.unsupported": "{provider} no acepta {keys} para {model}, así que no se enviarán.",
+    "msettings.global": "(global: {value})",
+    "msettings.provider_default": "(valor del proveedor)"
   }
 }

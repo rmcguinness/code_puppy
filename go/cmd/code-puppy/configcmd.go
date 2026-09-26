@@ -194,6 +194,9 @@ enabled = true
 # [agent_models]                                   # run agents on their own model (/pin_model, /unpin)
 # qa-kitten = "anthropic/claude-haiku-4-5"
 
+# [model_settings."gpt-5"]                         # per-model generation settings (/model_settings)
+# temperature = 0.3                                # also top_p, max_tokens, seed; wins over the global ones
+
 # [pricing."gemini-3.8-flash"]
 # input_per_mtok = 0.75
 # output_per_mtok = 3.75

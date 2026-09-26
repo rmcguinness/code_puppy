@@ -235,22 +235,23 @@ func runRoot(cmd *cobra.Command, o *rootOptions, args []string) (err error) {
 		fmt.Println()
 	}
 	return tui.RunREPL(ctx, &tui.App{
-		Version:        version,
-		Cfg:            cfg,
-		Engine:         e.engine,
-		Agents:         e.agents,
-		Skills:         e.skills,
-		Storage:        e.storage,
-		Input:          input,
-		Tools:          e.tools,
-		Processes:      e.tools.Processes(),
-		SandboxSummary: e.tools.SandboxSummary(),
-		NewModel:       e.newModel,
-		ReloadMemory:   e.reloadMemory,
-		Attachments:    attached,
-		Locales:        e.locales,
-		SetLocale:      e.setLocale,
-		SaveAgentModel: e.saveAgentModel,
+		Version:           version,
+		Cfg:               cfg,
+		Engine:            e.engine,
+		Agents:            e.agents,
+		Skills:            e.skills,
+		Storage:           e.storage,
+		Input:             input,
+		Tools:             e.tools,
+		Processes:         e.tools.Processes(),
+		SandboxSummary:    e.tools.SandboxSummary(),
+		NewModel:          e.newModel,
+		ReloadMemory:      e.reloadMemory,
+		Attachments:       attached,
+		Locales:           e.locales,
+		SetLocale:         e.setLocale,
+		SaveAgentModel:    e.saveAgentModel,
+		SaveModelSettings: e.saveModelSettings,
 		Printer: tui.PrinterOptions{
 			Out: os.Stdout, Markdown: pretty && cfg.UI.Markdown, Theme: cfg.UI.Theme,
 			Width: terminalWidth(), Spinner: pretty && cfg.UI.Spinner,
@@ -308,7 +309,7 @@ func newCompleter(e *env) *tui.Completer {
 	c := tui.NewCompleter(e.tools.Workspace().Dir())
 	for _, cmd := range []string{"help", "agents", "model", "skills", "session", "set", "clear", "sandbox", "exit", "quit",
 		"undo", "checkpoints", "diff", "cost", "context", "compact", "memory", "approvals", "mcp", "resume", "locale", "attach", "paste",
-		"tools", "plan", "show", "pin_model", "unpin"} {
+		"tools", "plan", "show", "pin_model", "unpin", "model_settings"} {
 		c.Command(cmd)
 	}
 	c.Command("skills", "list", "search")
@@ -341,6 +342,19 @@ func newCompleter(e *env) *tui.Completer {
 			if _, pinned := e.engine.AgentModel(n); pinned {
 				names = append(names, n)
 			}
+		}
+		return names
+	})
+	// Models in use (the main one and any agent's) and those with settings.
+	c.Dynamic("model_settings", func() []string {
+		names := []string{e.engine.ModelName()}
+		for _, n := range agentNames() {
+			if m, pinned := e.engine.AgentModel(n); pinned {
+				names = append(names, m)
+			}
+		}
+		for m := range e.engine.AllModelSettings() {
+			names = append(names, m)
 		}
 		return names
 	})
