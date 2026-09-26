@@ -4,7 +4,7 @@ Written 2026-09-24 at commit `7e211697` on `main`; updated 2026-09-25. Read this
 
 ## State
 
-Roadmap items 1–19 are done and committed; each has its own commit:
+Roadmap items 1–20 are done and committed; each has its own commit:
 
 | Commit | Change |
 |---|---|
@@ -22,6 +22,7 @@ Roadmap items 1–19 are done and committed; each has its own commit:
 | `36c2758b` | Removed the committed editor swap file; `*.swp` ignored |
 | `957c08b9` | Named session snapshots (`/session save`, `/session load <name>`, `--resume=<name>`) |
 | `9eeab5e6` | Google search via Gemini grounding; `/search web`, `/search session` |
+| (the commit adding `pkg/runtime/aside.go`) | Side questions (`/btw`) |
 
 `go vet ./...` and `go test -race ./...` pass.
 

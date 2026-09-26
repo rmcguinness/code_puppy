@@ -182,6 +182,7 @@ func printHelp() {
 		{"/tools", "help.tools"},
 		{"/plan <goal>", "help.plan"},
 		{"/search web|session <terms>", "help.search"},
+		{"/btw <question>", "help.btw"},
 		{"!<command>", "help.shell"},
 		{"/sandbox", "help.sandbox"},
 		{"/attach [path|clear]", "help.attach"},

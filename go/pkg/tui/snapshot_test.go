@@ -11,10 +11,12 @@ import (
 )
 
 // requestText joins the text the model was sent in its last request.
-func requestText(llm *runtime.MockLLM) string {
+func requestText(llm *runtime.MockLLM) string { return requestTextAt(llm, len(llm.Requests)-1) }
+
+// requestTextAt joins the text of the model's i-th request.
+func requestTextAt(llm *runtime.MockLLM, i int) string {
 	var b strings.Builder
-	last := llm.Requests[len(llm.Requests)-1]
-	for _, c := range last.Contents {
+	for _, c := range llm.Requests[i].Contents {
 		for _, p := range c.Parts {
 			b.WriteString(p.Text + "\n")
 		}

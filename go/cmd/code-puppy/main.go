@@ -313,7 +313,7 @@ func newCompleter(e *env) *tui.Completer {
 	c := tui.NewCompleter(e.tools.Workspace().Dir())
 	for _, cmd := range []string{"help", "agents", "model", "skills", "session", "set", "clear", "sandbox", "exit", "quit",
 		"undo", "checkpoints", "diff", "cost", "context", "compact", "memory", "approvals", "mcp", "resume", "locale", "attach", "paste",
-		"tools", "plan", "show", "pin_model", "unpin", "model_settings", "search"} {
+		"tools", "plan", "show", "pin_model", "unpin", "model_settings", "search", "btw"} {
 		c.Command(cmd)
 	}
 	c.Command("skills", "list", "search")

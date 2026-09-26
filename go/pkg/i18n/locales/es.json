@@ -241,6 +241,9 @@
     "search.passages.one": "{count} mensaje",
     "search.passages.other": "{count} mensajes",
     "search.session_found": "Encontré {passages} sobre ello en esta sesión; se lo pregunto al agente.",
-    "search.session_none": "Nada en la transcripción de esta sesión lo menciona; se lo pregunto al agente de todos modos."
+    "search.session_none": "Nada en la transcripción de esta sesión lo menciona; se lo pregunto al agente de todos modos.",
+    "help.btw": "Hacer una pregunta aparte; el agente responde con el contexto de esta sesión, pero no se añade nada a la conversación",
+    "btw.usage": "Uso: /btw <pregunta>   se responde con el contexto de esta sesión y luego se olvida",
+    "btw.mode": "Pregunta aparte: solo lectura, y no se guarda en la conversación."
   }
 }

@@ -2,7 +2,7 @@
 
 Status key: ✅ done · 🔜 next · 📋 planned · 🔍 needs investigation first
 
-Items 10–19 were added after the first plan and appear before item 9, which stays last because it needs a person. Open work and resume notes: [NEXT_STEPS.md](NEXT_STEPS.md).
+Items 10–20 were added after the first plan and appear before item 9, which stays last because it needs a person. Open work and resume notes: [NEXT_STEPS.md](NEXT_STEPS.md).
 
 Each item lists the problem, the approach, where the change lands, how it is tested, and a rough size (S ≤ half a day, M ≈ 1–2 days, L ≈ 3+ days).
 
@@ -249,6 +249,18 @@ Also fixed: the model name now resolves per provider (`code_puppy.default_model`
 **Not done.** Google search charges aren't in `/cost`. Search Suggestions (Google's HTML widget) aren't shown in the terminal. Vertex AI (project/location, no API key) isn't supported for search.
 
 **Tests.** Google: request path, key header, `google_search` tool, answer without thoughts, redirect resolved, a denied target dropped after resolution, an unresolvable link kept, snippets from supports; key and model config. User search with no approver, and unconfigured. Fetch grants: the exact URL (fragment ignored) passes without asking, another page on the host asks, and no grant asks. Transcript search: terms and phrases, ranking, skipping earlier searches, excerpts on UTF-8. Viable links. REPL with a real engine and no auto-approval: usage; five links shown and sent (no PDF, no duplicate, not the sixth); the handed-over page is fetched with no approver while another is refused; `create_file` is refused as read-only; the command is recorded. Session search with and without matches. The grant test was confirmed to fail without the grant. Binary smoke test against a fake SearXNG and OpenAI server: both commands reach the model with the expected prompts.
+
+---
+
+## 20. Side questions (`/btw`) — ✅ done (S/M)
+
+From a review of Google's Antigravity CLI (`docs/AGY.md`): ask something without adding it to the conversation.
+
+**Approach.** `Engine.Aside` copies the session's events (through JSON, so nothing is shared) into a new in-memory session service and runs the question there with the same agent tree, through a separate runner. Compaction summaries in the copy are honoured, but the copy never compacts. The copy is dropped afterwards, so neither the persistent event log nor the next turn sees the question. The run state carries the real session ID, so usage is billed to it and hooks see it. It is read-only (`btw is read-only` refusals, via plan mode's tool list). In the REPL, `runTurn` with `aside` skips the transcript, checkpoints and steering, and leaves `/attach` images for the next real prompt. `prompt_submit` hooks and the audit log still see the question.
+
+**Not done.** `/btw` can't be asked while a turn is running (steering covers that case), and answers can't be kept afterwards; ask again normally to keep one.
+
+**Tests.** Engine, with a persistent session service: the side question's request has the history and the question; `create_file` is refused as read-only and writes nothing; the saved event log is byte-for-byte unchanged; usage counts the side calls; the next turn's request has the history but not the question or answer. That test was confirmed to fail when the side question runs in the real session. A side question on a session with no turns. REPL: usage, the notice, the request, the next prompt, and a transcript without the side question (confirmed to fail when it is recorded).
 
 ---
 

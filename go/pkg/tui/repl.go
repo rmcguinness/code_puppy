@@ -290,6 +290,18 @@ func RunREPL(ctx context.Context, app *App) error {
 			runShellPassthrough(ctx, app, cmd, interrupts)
 			continue
 		}
+		if q, ok := strings.CutPrefix(line, "/btw"); ok && (q == "" || q[0] == ' ') {
+			active := app.Storage.Active()
+			switch {
+			case strings.TrimSpace(q) == "":
+				fmt.Printf("%s%s%s\n", Yellow, i18n.T("btw.usage"), Reset)
+			case active == nil:
+				fmt.Printf("%s❌ %s%s\n", Red, i18n.T("session.none_active"), Reset)
+			default:
+				runTurn(ctx, app, active.ID, strings.TrimSpace(q), interrupts, turnOptions{aside: true})
+			}
+			continue
+		}
 		if rest, ok := strings.CutPrefix(line, "/search"); ok && (rest == "" || rest[0] == ' ') {
 			active := app.Storage.Active()
 			if active == nil {
@@ -347,6 +359,9 @@ type turnOptions struct {
 	// readOnly names a mode that refuses the same tools as plan mode
 	// (see runtime.WithReadOnly).
 	readOnly string
+	// aside: a /btw question, answered in a throwaway copy of the session
+	// (runtime.Engine.Aside) and recorded nowhere.
+	aside bool
 }
 
 // runTurn sends one prompt to the agent and renders the result.
@@ -354,9 +369,12 @@ func runTurn(ctx context.Context, app *App, sessionID, line string, interrupts <
 	if !o.accepted && !acceptPrompt(ctx, app, sessionID, line) {
 		return
 	}
-	attached, ok := takeAttachments(app, line)
-	if !ok {
-		return
+	var attached []*images.Image
+	if !o.aside { // attachments wait for the next real prompt
+		var ok bool
+		if attached, ok = takeAttachments(app, line); !ok {
+			return
+		}
 	}
 	prompt, recorded := line, line
 	if o.prompt != "" {
@@ -366,10 +384,13 @@ func runTurn(ctx context.Context, app *App, sessionID, line string, interrupts <
 		prompt, recorded = runtime.PlanPrompt(line), "/plan "+line
 		fmt.Printf("%s📝 %s%s\n", Dim, i18n.T("plan.mode"), Reset)
 	}
-	if app.Tools != nil {
+	if o.aside {
+		fmt.Printf("%s💬 %s%s\n", Dim, i18n.T("btw.mode"), Reset)
+	}
+	if app.Tools != nil && !o.aside {
 		app.Tools.Checkpoints().Begin(textutil.Ellipsize(strings.Join(strings.Fields(recorded), " "), 60))
 	}
-	if !o.accepted {
+	if !o.accepted && !o.aside {
 		warnOnErr(app.Storage.AddMessage("user", recorded+AttachmentNote(attached)))
 	}
 
@@ -396,9 +417,14 @@ func runTurn(ctx context.Context, app *App, sessionID, line string, interrupts <
 	if o.readOnly != "" {
 		execOpts = append(execOpts, runtime.WithReadOnly(o.readOnly))
 	}
-	stopSteering := watchSteering(turnCtx, app, sessionID, printer)
-	streamErr := app.Engine.Execute(turnCtx, sessionID, prompt, printer.Handle, execOpts...)
-	stopSteering() // waits for a message being typed, so it isn't lost
+	var streamErr error
+	if o.aside {
+		streamErr = app.Engine.Aside(turnCtx, sessionID, prompt, printer.Handle)
+	} else {
+		stopSteering := watchSteering(turnCtx, app, sessionID, printer)
+		streamErr = app.Engine.Execute(turnCtx, sessionID, prompt, printer.Handle, execOpts...)
+		stopSteering() // waits for a message being typed, so it isn't lost
+	}
 	printer.End()
 	turnInterrupted := turnCtx.Err() != nil
 	stopTurn()
@@ -414,10 +440,13 @@ func runTurn(ctx context.Context, app *App, sessionID, line string, interrupts <
 		fmt.Printf("%s%s%s\n", Dim, line, Reset)
 	}
 
-	if modelOutput.Len() > 0 {
+	if modelOutput.Len() > 0 && !o.aside {
 		warnOnErr(app.Storage.AddMessage("model", modelOutput.String()))
 	}
 	fmt.Println()
+	if o.aside {
+		return
+	}
 
 	// Messages sent after the model's last tool call were never read.
 	if left := app.Engine.TakeSteers(sessionID); len(left) > 0 {

@@ -241,6 +241,9 @@
     "search.passages.one": "{count} message",
     "search.passages.other": "{count} messages",
     "search.session_found": "Found {passages} about it in this session; asking the agent.",
-    "search.session_none": "Nothing in this session's transcript mentions it; asking the agent anyway."
+    "search.session_none": "Nothing in this session's transcript mentions it; asking the agent anyway.",
+    "help.btw": "Ask a side question; the agent answers with this session's context, but nothing is added to the conversation",
+    "btw.usage": "Usage: /btw <question>   answered with this session's context, then forgotten",
+    "btw.mode": "Side question: read-only, and not kept in the conversation."
   }
 }

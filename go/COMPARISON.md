@@ -49,6 +49,7 @@ Go measurements were taken on 2026-09-24 on Apple Silicon (arm64), macOS, warm c
 | **Token / cost tracking** | ✅ | ✅ per turn and session | Cache reads/writes priced; `doctor` flags unpriced models |
 | **Project instructions** | ✅ | ✅ `AGENTS.md` / `PUPPY.md` | |
 | **Web** | ➖ browser tooling | ✅ `web_fetch`, `web_search` (Google via Gemini grounding, Brave, Tavily, SearXNG), `/search web` | SSRF protection on every hop; no browser automation |
+| **Side questions** | ❌ | ✅ `/btw <question>` | Answered in a throwaway copy of the session; read-only; nothing kept (idea from Google's Antigravity CLI) |
 | **`/search`** | ❌ | ✅ `/search web <terms>` (top five links read by the agent), `/search session <terms>` (the transcript, including compacted turns) | Search turns are read-only. Session search is literal and doesn't cover tool output; Google search costs aren't in `/cost` (see README, Search) |
 | **Images / attachments** | ✅ | ✅ `@image` mentions, `/attach`, `/paste`, `--image`, `view_image` tool | Gemini, Anthropic, OpenAI-compatible; images kept out of session files |
 | **i18n** | ✅ | ✅ English, Spanish, Canadian French | `/locale`; external JSON catalogs; model replies in the chosen language |

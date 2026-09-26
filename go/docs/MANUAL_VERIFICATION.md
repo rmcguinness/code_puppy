@@ -1,6 +1,6 @@
 # Manual Verification Checklist
 
-Everything here needs a person, a real terminal, real credentials, or GitHub. The automated suite (379 tests on macOS and Linux) covers the logic behind each item; this list checks the parts it can't. Each item has an **expected** result — if you see something else, note it next to the item.
+Everything here needs a person, a real terminal, real credentials, or GitHub. The automated suite (382 tests on macOS and Linux) covers the logic behind each item; this list checks the parts it can't. Each item has an **expected** result — if you see something else, note it next to the item.
 
 Setup for most items: `make build`, then use `./bin/code-puppy` (or put `bin/` on your `PATH`). Use a scratch Git repository as the workspace so edits are safe.
 
@@ -288,3 +288,11 @@ Set `fallback_models = ["anthropic/claude-sonnet-5"]` with a working Anthropic k
 - [ ] `/search session nonsense-word`. **Expected:** "Nothing in this session's transcript mentions it…", and the agent says it never came up.
 - [ ] SearXNG instead: run `docker run -p 8888:8080 searxng/searxng` with `json` added to `search.formats`, set `search_provider = "searxng"` and `search_url = "http://localhost:8888"`, then `/search web …`. **Expected:** it works, with no API key.
 - [ ] Remove `search_provider`. `/search web x`. **Expected:** "Web search isn't set up…".
+
+## 31. Side questions (`/btw`) 💲
+
+- [ ] Ask the agent to remember a word. Then `/btw what was the word?`. **Expected:** "Side question: read-only…" and the word.
+- [ ] Ask "what did I just ask you on the side?". **Expected:** it doesn't know.
+- [ ] `/btw create a file notes.txt`. **Expected:** it says it can't (read-only); no file.
+- [ ] `/cost` before and after a `/btw`. **Expected:** the side question's tokens are included.
+- [ ] Exit and `--continue`. **Expected:** the recap and history have no trace of the side question.

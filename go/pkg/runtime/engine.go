@@ -137,6 +137,8 @@ type Engine struct {
 	llm               model.LLM
 	agentModels       map[string]model.LLM // pinned agents; others use llm
 	runner            *runner.Runner
+	rootAgent         agent.Agent        // the runner's agent tree, for Aside
+	compactionCfg     *compaction.Config // the runner's, for Aside
 	active            string
 	extraInstructions string
 	streaming         bool
@@ -591,7 +593,7 @@ func (e *Engine) rebuildLocked() error {
 	if err != nil {
 		return fmt.Errorf("failed to instantiate ADK runner: %w", err)
 	}
-	e.runner = r
+	e.runner, e.rootAgent, e.compactionCfg = r, rootAgent, rc.Compaction
 	return nil
 }
 
