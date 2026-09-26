@@ -5,17 +5,17 @@ import (
 	"time"
 
 	"connectrpc.com/connect"
-	"github.com/retail-cortex/code_puppy/internal/app"
-	pb "github.com/retail-cortex/code_puppy/internal/gen/codepuppy/v1"
-	"github.com/retail-cortex/code_puppy/internal/gen/codepuppy/v1/codepuppyv1connect"
-	"github.com/retail-cortex/code_puppy/internal/server"
-	"github.com/retail-cortex/code_puppy/internal/workers"
+	"github.com/retail-cortex/blitz/internal/app"
+	pb "github.com/retail-cortex/blitz/internal/gen/blitz/v1"
+	"github.com/retail-cortex/blitz/internal/gen/blitz/v1/blitzv1connect"
+	"github.com/retail-cortex/blitz/internal/server"
+	"github.com/retail-cortex/blitz/internal/workers"
 )
 
 // Workers are one workspace's workers in the service.
 type Workers struct {
 	dir string
-	c   codepuppyv1connect.WorkerServiceClient
+	c   blitzv1connect.WorkerServiceClient
 }
 
 // AttachWorkers reaches the workers of the workspace dir (absolute) in the
@@ -26,7 +26,7 @@ func AttachWorkers(socket, dir string) *Workers {
 
 // AttachWorkersHTTP is AttachWorkers over any HTTP client.
 func AttachWorkersHTTP(hc connect.HTTPClient, baseURL, dir string) *Workers {
-	return &Workers{dir: dir, c: codepuppyv1connect.NewWorkerServiceClient(hc, baseURL)}
+	return &Workers{dir: dir, c: blitzv1connect.NewWorkerServiceClient(hc, baseURL)}
 }
 
 func (w *Workers) ListWorkers() ([]app.WorkerInfo, error) {

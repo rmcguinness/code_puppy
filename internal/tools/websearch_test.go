@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/retail-cortex/code_puppy/internal/config"
+	"github.com/retail-cortex/blitz/internal/config"
 )
 
 type captured struct {

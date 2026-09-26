@@ -29,8 +29,8 @@ import (
 	_ "golang.org/x/image/webp" // registers the WebP decoder
 )
 
-// URIScheme prefixes references to stored images ("code-puppy-image:<sha256>").
-const URIScheme = "code-puppy-image:"
+// URIScheme prefixes references to stored images ("blitz-image:<sha256>").
+const URIScheme = "blitz-image:"
 
 // Defaults suit every supported provider: Anthropic recommends at most 1568
 // pixels on the long edge and caps images at 5 MB (3.75 MB before base64).
@@ -69,7 +69,7 @@ type Image struct {
 	OriginalBytes int
 	Resized       bool
 	// Size is len(Data), kept for an image whose data stays elsewhere (one
-	// held by the Code Puppy service).
+	// held by the Blitz service).
 	Size int
 }
 

@@ -15,7 +15,7 @@ func TestSessionOperations(t *testing.T) {
 		t.Errorf("rename without a session: %v", err)
 	}
 	first, err := w.NewSession()
-	if err != nil || first.Agent != "code-puppy" || first.Workspace != w.Dir() {
+	if err != nil || first.Agent != "blitz" || first.Workspace != w.Dir() {
 		t.Fatalf("new: %+v %v", first, err)
 	}
 	if _, err := w.Run(context.Background(), first.ID, Turn{Text: "remember pineapple"}, ignore); err != nil {

@@ -1,4 +1,4 @@
-// Package server serves Code Puppy's API (api/codepuppy/v1) over Connect:
+// Package server serves Blitz's API (api/blitz/v1) over Connect:
 // one process holding every workspace a user opens, each an app.Workspace.
 // Handlers translate between the protos and internal/app; they hold no
 // logic of their own.
@@ -14,11 +14,11 @@ import (
 	"sync"
 
 	"connectrpc.com/connect"
-	"github.com/retail-cortex/code_puppy/internal/app"
-	pb "github.com/retail-cortex/code_puppy/internal/gen/codepuppy/v1"
-	"github.com/retail-cortex/code_puppy/internal/gen/codepuppy/v1/codepuppyv1connect"
-	"github.com/retail-cortex/code_puppy/internal/images"
-	"github.com/retail-cortex/code_puppy/internal/workers"
+	"github.com/retail-cortex/blitz/internal/app"
+	pb "github.com/retail-cortex/blitz/internal/gen/blitz/v1"
+	"github.com/retail-cortex/blitz/internal/gen/blitz/v1/blitzv1connect"
+	"github.com/retail-cortex/blitz/internal/images"
+	"github.com/retail-cortex/blitz/internal/workers"
 )
 
 // Opener opens the workspace in dir, an absolute directory. The server
@@ -56,9 +56,9 @@ func New(open Opener, opts ...Option) *Server {
 // Handler serves every service.
 func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
-	mux.Handle(codepuppyv1connect.NewSessionServiceHandler(sessionService{s}))
-	mux.Handle(codepuppyv1connect.NewWorkspaceServiceHandler(workspaceService{s}))
-	mux.Handle(codepuppyv1connect.NewWorkerServiceHandler(workerService{s}))
+	mux.Handle(blitzv1connect.NewSessionServiceHandler(sessionService{s}))
+	mux.Handle(blitzv1connect.NewWorkspaceServiceHandler(workspaceService{s}))
+	mux.Handle(blitzv1connect.NewWorkerServiceHandler(workerService{s}))
 	return mux
 }
 

@@ -22,7 +22,7 @@ func newStorage(t *testing.T) (*Storage, string) {
 
 func TestStoragePermissions(t *testing.T) {
 	s, dir := newStorage(t)
-	rec, err := s.CreateSession("", "t", "code-puppy")
+	rec, err := s.CreateSession("", "t", "blitz")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -280,8 +280,8 @@ func TestLastTurnPersistsForActiveAndOtherSessions(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	a, _ := s.CreateSession("a", "A", "code-puppy")
-	b, _ := s.CreateSession("b", "B", "code-puppy") // b is now active
+	a, _ := s.CreateSession("a", "A", "blitz")
+	b, _ := s.CreateSession("b", "B", "blitz") // b is now active
 
 	if tp, n := s.LastTurn(a.ID); tp != "" || n != 0 {
 		t.Fatalf("new session has a last turn: %q %d", tp, n)

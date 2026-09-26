@@ -11,8 +11,8 @@ import (
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
-	"github.com/retail-cortex/code_puppy/internal/breaker"
-	"github.com/retail-cortex/code_puppy/internal/config"
+	"github.com/retail-cortex/blitz/internal/breaker"
+	"github.com/retail-cortex/blitz/internal/config"
 	"google.golang.org/adk/v2/agent"
 	"google.golang.org/adk/v2/tool"
 )
@@ -71,10 +71,10 @@ func TestUnhealthyServerIsSkippedUntilCooldown(t *testing.T) {
 	}
 }
 
-// TestMCPHelperServer is not a test: run with CODE_PUPPY_MCP_HELPER=1 it is
+// TestMCPHelperServer is not a test: run with BLITZ_MCP_HELPER=1 it is
 // a stdio MCP server for the tests below, so they exercise real processes.
 func TestMCPHelperServer(t *testing.T) {
-	if os.Getenv("CODE_PUPPY_MCP_HELPER") != "1" {
+	if os.Getenv("BLITZ_MCP_HELPER") != "1" {
 		t.Skip("helper process")
 	}
 	server := mcp.NewServer(&mcp.Implementation{Name: "helper", Version: "1.0"}, nil)
@@ -102,7 +102,7 @@ func helperServer(t *testing.T, timeoutSeconds int) (*MCPManager, map[string]run
 		Name:           "helper",
 		Command:        os.Args[0],
 		Args:           []string{"-test.run=^TestMCPHelperServer$"},
-		Env:            map[string]string{"CODE_PUPPY_MCP_HELPER": "1"},
+		Env:            map[string]string{"BLITZ_MCP_HELPER": "1"},
 		TimeoutSeconds: timeoutSeconds,
 	}}, nil, nil)
 	if err != nil {

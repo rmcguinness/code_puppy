@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/retail-cortex/code_puppy/internal/i18n"
-	"github.com/retail-cortex/code_puppy/internal/tools"
+	"github.com/retail-cortex/blitz/internal/i18n"
+	"github.com/retail-cortex/blitz/internal/tools"
 	"google.golang.org/genai"
 )
 
@@ -71,7 +71,7 @@ func TestMemoryAndLocale(t *testing.T) {
 		t.Fatalf("memory before: %v %v", paths, err)
 	}
 	p, err := w.AddMemory(ctx, "always run go vet")
-	if err != nil || filepath.Base(p) != "PUPPY.md" {
+	if err != nil || filepath.Base(p) != "BLITZ.md" {
 		t.Fatalf("add: %q %v", p, err)
 	}
 	if paths, _ := w.ReloadMemory(ctx); len(paths) != 1 {

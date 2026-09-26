@@ -111,7 +111,7 @@ func NewStorage(dir string) (*Storage, error) {
 			return nil, fmt.Errorf("resolve home directory: %w", err)
 		}
 		if dir == "" {
-			dir = filepath.Join(home, ".code_puppy", "sessions")
+			dir = filepath.Join(home, ".blitz", "sessions")
 		} else {
 			dir = filepath.Join(home, dir[1:])
 		}

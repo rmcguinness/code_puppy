@@ -5,13 +5,13 @@ import (
 	"log/slog"
 	"strings"
 
-	"github.com/retail-cortex/code_puppy/internal/audit"
-	"github.com/retail-cortex/code_puppy/internal/i18n"
-	"github.com/retail-cortex/code_puppy/internal/images"
-	"github.com/retail-cortex/code_puppy/internal/runtime"
-	"github.com/retail-cortex/code_puppy/internal/session"
-	"github.com/retail-cortex/code_puppy/internal/textutil"
-	"github.com/retail-cortex/code_puppy/internal/tools"
+	"github.com/retail-cortex/blitz/internal/audit"
+	"github.com/retail-cortex/blitz/internal/i18n"
+	"github.com/retail-cortex/blitz/internal/images"
+	"github.com/retail-cortex/blitz/internal/runtime"
+	"github.com/retail-cortex/blitz/internal/session"
+	"github.com/retail-cortex/blitz/internal/textutil"
+	"github.com/retail-cortex/blitz/internal/tools"
 	adksession "google.golang.org/adk/v2/session"
 )
 

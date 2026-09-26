@@ -19,9 +19,9 @@ import (
 	"time"
 
 	"github.com/openai/openai-go/v3/option"
-	"github.com/retail-cortex/code_puppy/internal/config"
-	"github.com/retail-cortex/code_puppy/internal/images"
-	cpsession "github.com/retail-cortex/code_puppy/internal/session"
+	"github.com/retail-cortex/blitz/internal/config"
+	"github.com/retail-cortex/blitz/internal/images"
+	cpsession "github.com/retail-cortex/blitz/internal/session"
 	"google.golang.org/adk/v2/model"
 	"google.golang.org/adk/v2/model/gemini"
 	"google.golang.org/genai"
@@ -233,7 +233,7 @@ func TestOpenAIImages(t *testing.T) {
 	if strings.Count(body, `"type":"input_image"`) != 2 || strings.Count(body, dataURL) != 2 {
 		t.Errorf("expected two input_image items:\n%s", body)
 	}
-	if strings.Contains(body, "code-puppy-image") {
+	if strings.Contains(body, "blitz-image") {
 		t.Errorf("a marker leaked to the provider:\n%s", body)
 	}
 	if strings.Index(body, `"input_image"`) > strings.Index(body, `"what?"`) {

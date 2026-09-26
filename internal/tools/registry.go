@@ -6,11 +6,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/retail-cortex/code_puppy/internal/agents"
-	"github.com/retail-cortex/code_puppy/internal/audit"
-	"github.com/retail-cortex/code_puppy/internal/config"
-	"github.com/retail-cortex/code_puppy/internal/images"
-	"github.com/retail-cortex/code_puppy/internal/skills"
+	"github.com/retail-cortex/blitz/internal/agents"
+	"github.com/retail-cortex/blitz/internal/audit"
+	"github.com/retail-cortex/blitz/internal/config"
+	"github.com/retail-cortex/blitz/internal/images"
+	"github.com/retail-cortex/blitz/internal/skills"
 	"google.golang.org/adk/v2/tool"
 )
 
@@ -34,7 +34,7 @@ type Registry struct {
 	fetch        bool          // web_fetch is available
 }
 
-// NewRegistry initializes all standard Code Puppy tools. Call Close when done
+// NewRegistry initializes all standard Blitz tools. Call Close when done
 // to stop background processes and release the workspace handle.
 func NewRegistry(cfg *config.Config, agentReg *agents.Registry, skillProv *skills.Provider) (*Registry, error) {
 	sb := cfg.Sandbox
@@ -83,7 +83,7 @@ func NewRegistry(cfg *config.Config, agentReg *agents.Registry, skillProv *skill
 		tools:     make(map[string]tool.Tool),
 		workspace: ws,
 		hooks: NewHooks(Policy{
-			AutoApproveAll:      cfg.CodePuppy.AutoApprove,
+			AutoApproveAll:      cfg.Blitz.AutoApprove,
 			AutoApproveCommands: cfg.Tools.AutoApproveCommands,
 		}),
 		processes: NewProcessManager(0, 0),

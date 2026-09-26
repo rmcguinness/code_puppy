@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/retail-cortex/code_puppy/internal/i18n"
+	"github.com/retail-cortex/blitz/internal/i18n"
 )
 
 // runShellPassthrough runs a command typed after "!" directly, as the user's

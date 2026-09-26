@@ -23,7 +23,7 @@ import (
 // outgoing JSON. The markers and images travel in the request context, so
 // nothing is shared between requests.
 
-const imageMarkerPrefix = "⁣code-puppy-image:"
+const imageMarkerPrefix = "⁣blitz-image:"
 
 type openAIImagesKey struct{}
 
@@ -94,7 +94,7 @@ func openAIImageMiddleware(req *http.Request, next option.MiddlewareNext) (*http
 	if err != nil {
 		return nil, err
 	}
-	if bytes.Contains(body, []byte(`code-puppy-image:`)) {
+	if bytes.Contains(body, []byte(`blitz-image:`)) {
 		if body, err = rewriteImageMarkers(body, imgs); err != nil {
 			return nil, fmt.Errorf("openai: attach images: %w", err)
 		}

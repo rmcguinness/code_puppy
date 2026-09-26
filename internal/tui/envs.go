@@ -6,8 +6,8 @@ import (
 	"strings"
 	"time"
 
-	core "github.com/retail-cortex/code_puppy/internal/app"
-	"github.com/retail-cortex/code_puppy/internal/i18n"
+	core "github.com/retail-cortex/blitz/internal/app"
+	"github.com/retail-cortex/blitz/internal/i18n"
 )
 
 // cmdEnvs lists skill scripts' Python environments, prunes those no loaded

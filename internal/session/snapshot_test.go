@@ -23,7 +23,7 @@ func conversation(t *testing.T) (*Storage, *PersistentService, *SessionRecord, s
 	if err != nil {
 		t.Fatal(err)
 	}
-	rec, err := st.CreateSession("", "refactor", "code-puppy")
+	rec, err := st.CreateSession("", "refactor", "blitz")
 	if err != nil {
 		t.Fatal(err)
 	}

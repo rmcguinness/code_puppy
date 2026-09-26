@@ -1,4 +1,4 @@
-// Package client is a workspace held by the Code Puppy service, reached
+// Package client is a workspace held by the Blitz service, reached
 // over its socket: an app.Backend, so front ends drive it exactly as they
 // drive a local *app.Workspace.
 package client
@@ -12,21 +12,21 @@ import (
 	"sync"
 
 	"connectrpc.com/connect"
-	"github.com/retail-cortex/code_puppy/internal/app"
-	"github.com/retail-cortex/code_puppy/internal/config"
-	pb "github.com/retail-cortex/code_puppy/internal/gen/codepuppy/v1"
-	"github.com/retail-cortex/code_puppy/internal/gen/codepuppy/v1/codepuppyv1connect"
-	"github.com/retail-cortex/code_puppy/internal/i18n"
-	"github.com/retail-cortex/code_puppy/internal/images"
-	"github.com/retail-cortex/code_puppy/internal/server"
-	"github.com/retail-cortex/code_puppy/internal/tools"
+	"github.com/retail-cortex/blitz/internal/app"
+	"github.com/retail-cortex/blitz/internal/config"
+	pb "github.com/retail-cortex/blitz/internal/gen/blitz/v1"
+	"github.com/retail-cortex/blitz/internal/gen/blitz/v1/blitzv1connect"
+	"github.com/retail-cortex/blitz/internal/i18n"
+	"github.com/retail-cortex/blitz/internal/images"
+	"github.com/retail-cortex/blitz/internal/server"
+	"github.com/retail-cortex/blitz/internal/tools"
 )
 
 // Remote is one workspace in the service.
 type Remote struct {
 	dir        string
-	sessions   codepuppyv1connect.SessionServiceClient
-	workspaces codepuppyv1connect.WorkspaceServiceClient
+	sessions   blitzv1connect.SessionServiceClient
+	workspaces blitzv1connect.WorkspaceServiceClient
 	// warn reports calls that failed where Backend has no error to return
 	// (a listing comes back empty instead).
 	warn     func(string)
@@ -55,8 +55,8 @@ func AttachHTTP(ctx context.Context, hc connect.HTTPClient, baseURL, dir string,
 	}
 	r := &Remote{
 		dir:        abs,
-		sessions:   codepuppyv1connect.NewSessionServiceClient(hc, baseURL),
-		workspaces: codepuppyv1connect.NewWorkspaceServiceClient(hc, baseURL),
+		sessions:   blitzv1connect.NewSessionServiceClient(hc, baseURL),
+		workspaces: blitzv1connect.NewWorkspaceServiceClient(hc, baseURL),
 		warn:       warn,
 	}
 	// Opens the workspace in the service, and says whether its model works.

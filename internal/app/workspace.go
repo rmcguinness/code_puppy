@@ -1,4 +1,4 @@
-// Package app is Code Puppy without a user interface: it opens a workspace
+// Package app is Blitz without a user interface: it opens a workspace
 // (registries, tools, sessions, the model and the engine) and exposes what a
 // front end needs. The terminal UI and, later, other front ends drive it;
 // none of it prints.
@@ -12,18 +12,18 @@ import (
 	"sync"
 	"time"
 
-	"github.com/retail-cortex/code_puppy/internal/agents"
-	"github.com/retail-cortex/code_puppy/internal/audit"
-	"github.com/retail-cortex/code_puppy/internal/config"
-	"github.com/retail-cortex/code_puppy/internal/i18n"
-	"github.com/retail-cortex/code_puppy/internal/images"
-	"github.com/retail-cortex/code_puppy/internal/memory"
-	"github.com/retail-cortex/code_puppy/internal/redact"
-	"github.com/retail-cortex/code_puppy/internal/runtime"
-	"github.com/retail-cortex/code_puppy/internal/session"
-	"github.com/retail-cortex/code_puppy/internal/skills"
-	"github.com/retail-cortex/code_puppy/internal/tools"
-	"github.com/retail-cortex/code_puppy/internal/workers"
+	"github.com/retail-cortex/blitz/internal/agents"
+	"github.com/retail-cortex/blitz/internal/audit"
+	"github.com/retail-cortex/blitz/internal/config"
+	"github.com/retail-cortex/blitz/internal/i18n"
+	"github.com/retail-cortex/blitz/internal/images"
+	"github.com/retail-cortex/blitz/internal/memory"
+	"github.com/retail-cortex/blitz/internal/redact"
+	"github.com/retail-cortex/blitz/internal/runtime"
+	"github.com/retail-cortex/blitz/internal/session"
+	"github.com/retail-cortex/blitz/internal/skills"
+	"github.com/retail-cortex/blitz/internal/tools"
+	"github.com/retail-cortex/blitz/internal/workers"
 	"google.golang.org/adk/v2/model"
 )
 
@@ -37,7 +37,7 @@ type Options struct {
 	// mock). Agents with their own model still get theirs.
 	Model model.LLM
 	// Workers records which workers are enabled; one store serves every
-	// workspace in a process (nil: ~/.code_puppy/workers.json).
+	// workspace in a process (nil: ~/.blitz/workers.json).
 	Workers *workers.Store
 	// NewModel builds models by name for /model, pins and agents' own
 	// models (nil: runtime.NewModel).
@@ -81,7 +81,7 @@ func Open(ctx context.Context, cfg *config.Config, o Options) (*Workspace, error
 	if w.newModel = o.NewModel; w.newModel == nil {
 		w.newModel = runtime.NewModel
 	}
-	w.runLog = workers.OpenRunLog(config.ExpandHome("~/.code_puppy/worker-runs"))
+	w.runLog = workers.OpenRunLog(config.ExpandHome("~/.blitz/worker-runs"))
 	w.running = map[string]bool{}
 	if w.workerStore = o.Workers; w.workerStore == nil {
 		var err error

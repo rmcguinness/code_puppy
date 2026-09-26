@@ -48,7 +48,7 @@ type ProcessInfo struct {
 
 // ProcessManager owns background processes: it caps how many run at once,
 // bounds their lifetime and captured output, and kills them on shutdown.
-// Processes are guarded (see ExecEnv) so none survive Code Puppy exiting.
+// Processes are guarded (see ExecEnv) so none survive Blitz exiting.
 type ProcessManager struct {
 	mu          sync.Mutex
 	next        int

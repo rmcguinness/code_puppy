@@ -8,9 +8,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/retail-cortex/code_puppy/internal/agents"
-	"github.com/retail-cortex/code_puppy/internal/config"
-	"github.com/retail-cortex/code_puppy/internal/skills"
+	"github.com/retail-cortex/blitz/internal/agents"
+	"github.com/retail-cortex/blitz/internal/config"
+	"github.com/retail-cortex/blitz/internal/skills"
 	"google.golang.org/adk/v2/agent"
 	"google.golang.org/adk/v2/session"
 	"google.golang.org/adk/v2/tool"
@@ -122,7 +122,7 @@ func TestToolsSuite(t *testing.T) {
 	cfg.Tools.WorkspaceDir = tmpDir
 	cfg.Tools.UCToolsDir = filepath.Join(tmpDir, "uc")
 	cfg.Tools.AutoApproveCommands = true
-	cfg.CodePuppy.AutoApprove = true
+	cfg.Blitz.AutoApprove = true
 
 	agentReg, err := agents.NewRegistry()
 	if err != nil {

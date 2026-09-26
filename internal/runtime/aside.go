@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"math"
 
-	"github.com/retail-cortex/code_puppy/internal/observability"
+	"github.com/retail-cortex/blitz/internal/observability"
 	"google.golang.org/adk/v2/agent"
 	"google.golang.org/adk/v2/platform"
 	"google.golang.org/adk/v2/runner"

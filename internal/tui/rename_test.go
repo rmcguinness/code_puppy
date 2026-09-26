@@ -19,7 +19,7 @@ func TestRenameTitleAndResumeHint(t *testing.T) {
 		"Usage: /rename <name>",
 		"Session renamed to Login work.",
 		"\033]0;\007", // restored at exit
-		"Resume with: code-puppy --resume=" + local(app).Storage().Active().ID,
+		"Resume with: blitz --resume=" + local(app).Storage().Active().ID,
 	} {
 		if !strings.Contains(out, want) {
 			t.Errorf("output lacks %q:\n%q", want, out)

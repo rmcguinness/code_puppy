@@ -43,12 +43,12 @@ export function App() {
   if (!status.running) {
     return (
       <main className="center">
-        <h1>🐶 Code Puppy</h1>
-        <p>The Code Puppy service isn't running. It holds your workspaces and runs scheduled workers, and it keeps running after this window closes.</p>
+        <h1>🐶 Blitz</h1>
+        <p>The Blitz service isn't running. It holds your workspaces and runs scheduled workers, and it keeps running after this window closes.</p>
         {status.cli ? (
           <button onClick={install}>{status.installed ? "Start the service" : "Install and start the service"}</button>
         ) : (
-          <p className="error">The code-puppy command wasn't found: install Code Puppy's CLI, then run “code-puppy service install”.</p>
+          <p className="error">The blitz command wasn't found: install Blitz's CLI, then run “blitz service install”.</p>
         )}
         {error && <p className="error">{error}</p>}
       </main>

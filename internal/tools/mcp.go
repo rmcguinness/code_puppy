@@ -11,8 +11,8 @@ import (
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
-	"github.com/retail-cortex/code_puppy/internal/breaker"
-	"github.com/retail-cortex/code_puppy/internal/config"
+	"github.com/retail-cortex/blitz/internal/breaker"
+	"github.com/retail-cortex/blitz/internal/config"
 	"google.golang.org/adk/v2/agent"
 	"google.golang.org/adk/v2/model"
 	"google.golang.org/adk/v2/tool"
@@ -59,7 +59,7 @@ func (s *mcpServer) callTimeout() time.Duration {
 // stdioTransport starts a new server process on every Connect. The SDK's
 // CommandTransport wraps a single exec.Cmd, which can only be started once,
 // so after a server crash the ADK's automatic reconnect could never succeed.
-// Each process is guarded (dies with Code Puppy); the previous one is killed
+// Each process is guarded (dies with Blitz); the previous one is killed
 // when a new one starts.
 type stdioTransport struct {
 	build func() (*guardedCmd, error)

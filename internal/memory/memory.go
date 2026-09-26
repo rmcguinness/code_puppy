@@ -1,4 +1,4 @@
-// Package memory loads project instruction files (AGENTS.md, PUPPY.md) that
+// Package memory loads project instruction files (AGENTS.md, BLITZ.md) that
 // are added to the agents' system prompt.
 package memory
 
@@ -8,8 +8,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/retail-cortex/code_puppy/internal/config"
-	"github.com/retail-cortex/code_puppy/internal/textutil"
+	"github.com/retail-cortex/blitz/internal/config"
+	"github.com/retail-cortex/blitz/internal/textutil"
 )
 
 // Doc is one loaded instructions file.
@@ -129,7 +129,7 @@ func Append(workspace, file, text string) (string, error) {
 	path := filepath.Join(workspace, file)
 	var prefix string
 	if data, err := os.ReadFile(path); err != nil {
-		prefix = "# Project notes for Code Puppy\n\n"
+		prefix = "# Project notes for Blitz\n\n"
 	} else if len(data) > 0 && !strings.HasSuffix(string(data), "\n") {
 		prefix = "\n"
 	}

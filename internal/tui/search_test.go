@@ -9,8 +9,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/retail-cortex/code_puppy/internal/config"
-	"github.com/retail-cortex/code_puppy/internal/runtime"
+	"github.com/retail-cortex/blitz/internal/config"
+	"github.com/retail-cortex/blitz/internal/runtime"
 	"google.golang.org/genai"
 )
 
@@ -37,7 +37,7 @@ func searchApp(t *testing.T, input string, replies ...*genai.Content) (*App, *ru
 	cfg.Tools.WorkspaceDir = t.TempDir()
 	cfg.Images.Dir = t.TempDir()
 	cfg.Audit.Enabled = false
-	cfg.CodePuppy.AutoApprove = false
+	cfg.Blitz.AutoApprove = false
 	cfg.Tools.ApprovalsFile = ""
 	cfg.Sandbox.AllowNetwork = true
 	cfg.Web.Enabled, cfg.Web.AllowPrivate = true, true
@@ -109,7 +109,7 @@ func TestSearchSessionSendsMatchingPassages(t *testing.T) {
 		genai.NewContentFromText("You chose pineapple on day one.", genai.RoleModel),
 		genai.NewContentFromText("Mango never came up.", genai.RoleModel))
 	st := local(app).Storage()
-	st.CreateSession("", "t", "code-puppy")
+	st.CreateSession("", "t", "blitz")
 	st.AddMessage("user", "let's pick a fruit")
 	st.AddMessage("model", "I suggest PINEAPPLE for the demo")
 	st.AddMessage("user", "ok")

@@ -9,9 +9,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/retail-cortex/code_puppy/internal/config"
-	"github.com/retail-cortex/code_puppy/internal/tools"
-	"github.com/retail-cortex/code_puppy/internal/workers"
+	"github.com/retail-cortex/blitz/internal/config"
+	"github.com/retail-cortex/blitz/internal/tools"
+	"github.com/retail-cortex/blitz/internal/workers"
 	"google.golang.org/genai"
 )
 
@@ -97,7 +97,7 @@ func TestRunWorkerEnforcesPermissions(t *testing.T) {
 	}
 	ask := &genai.Content{Role: genai.RoleModel, Parts: []*genai.Part{{FunctionCall: &genai.FunctionCall{Name: "ask_user_question", Args: map[string]any{"question": "ok?"}}}}}
 	// auto_approve is on for people; it must not widen what a worker may do.
-	w, llm := openTestWith(t, func(c *config.Config) { c.CodePuppy.AutoApprove = true },
+	w, llm := openTestWith(t, func(c *config.Config) { c.Blitz.AutoApprove = true },
 		create("reports/deps.md"), create("main.go"), ask, text("Wrote the report."))
 	addWorker(t, w, "deps", "---\nschedule: daily at 6 AM\npermissions: [\"write:reports/\"]\n---\nWrite reports/deps.md.\n")
 	user := newSession(t, w)

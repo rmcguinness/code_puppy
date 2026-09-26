@@ -62,7 +62,7 @@ end try`, p)
 }
 
 func viaTempFile(ctx context.Context, build func(path string) *exec.Cmd) ([]byte, error) {
-	dir, err := os.MkdirTemp("", "code-puppy-clip-")
+	dir, err := os.MkdirTemp("", "blitz-clip-")
 	if err != nil {
 		return nil, err
 	}

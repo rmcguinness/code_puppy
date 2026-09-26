@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/retail-cortex/code_puppy/internal/i18n"
+	"github.com/retail-cortex/blitz/internal/i18n"
 )
 
 func TestLocaleCommand(t *testing.T) {
@@ -32,7 +32,7 @@ func TestLocaleCommand(t *testing.T) {
 		t.Errorf("confirmation should already be in Spanish:\n%s", out)
 	}
 	out = captureStdout(t, func() { HandleCommand(ctx, "/help", app) })
-	if !strings.Contains(out, "Comandos de Code Puppy") || !strings.Contains(out, "/locale [code]") {
+	if !strings.Contains(out, "Comandos de Blitz") || !strings.Contains(out, "/locale [code]") {
 		t.Errorf("/help not translated:\n%s", out)
 	}
 

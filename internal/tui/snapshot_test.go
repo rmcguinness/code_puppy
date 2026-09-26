@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/retail-cortex/code_puppy/internal/runtime"
+	"github.com/retail-cortex/blitz/internal/runtime"
 	adksession "google.golang.org/adk/v2/session"
 )
 
@@ -43,7 +43,7 @@ func TestSessionSaveAndLoadRestoreTheModelsContext(t *testing.T) {
 	if out := run("/session save early"); !strings.Contains(out, "No active session") {
 		t.Errorf("no session:\n%s", out)
 	}
-	orig, _ := st.CreateSession("", "fruit talk", "code-puppy")
+	orig, _ := st.CreateSession("", "fruit talk", "blitz")
 	if out := run("/session save empty"); !strings.Contains(out, "nothing to save") {
 		t.Errorf("empty session:\n%s", out)
 	}

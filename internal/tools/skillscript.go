@@ -12,9 +12,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/retail-cortex/code_puppy/internal/audit"
-	"github.com/retail-cortex/code_puppy/internal/config"
-	"github.com/retail-cortex/code_puppy/internal/skills"
+	"github.com/retail-cortex/blitz/internal/audit"
+	"github.com/retail-cortex/blitz/internal/config"
+	"github.com/retail-cortex/blitz/internal/skills"
 	"google.golang.org/adk/v2/agent"
 	"google.golang.org/adk/v2/tool"
 	"google.golang.org/adk/v2/tool/functiontool"
@@ -24,7 +24,7 @@ const (
 	scriptOutputLimit = 64 << 10 // per stream returned to the model
 	scriptOutputFiles = 50       // files listed from the output directory
 	// SkillOutputDir is where scripts write, relative to the workspace.
-	SkillOutputDir = ".code_puppy/skill-output"
+	SkillOutputDir = ".blitz/skill-output"
 )
 
 // SkillScripts runs skills' scripts: each is checked against
@@ -235,7 +235,7 @@ func materializeScript(skill *skills.Skill, sc skills.ScriptDefinition) (path, d
 		path, err = skill.ScriptPath(sc.RelativePath)
 		return path, skill.HostDir(), cleanup, err
 	}
-	tmp, err := os.MkdirTemp("", "code-puppy-skill-*")
+	tmp, err := os.MkdirTemp("", "blitz-skill-*")
 	if err != nil {
 		return "", "", cleanup, err
 	}

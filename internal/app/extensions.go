@@ -6,9 +6,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/retail-cortex/code_puppy/internal/runtime"
-	"github.com/retail-cortex/code_puppy/internal/skills"
-	"github.com/retail-cortex/code_puppy/internal/tools"
+	"github.com/retail-cortex/blitz/internal/runtime"
+	"github.com/retail-cortex/blitz/internal/skills"
+	"github.com/retail-cortex/blitz/internal/tools"
 )
 
 // Skills and their scripts' environments, MCP servers, and the tools an

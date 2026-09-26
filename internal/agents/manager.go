@@ -10,8 +10,8 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/retail-cortex/code_puppy/internal/agents/builtin"
-	"github.com/retail-cortex/code_puppy/internal/config"
+	"github.com/retail-cortex/blitz/internal/agents/builtin"
+	"github.com/retail-cortex/blitz/internal/config"
 )
 
 // Registry manages discovered and built-in agents.

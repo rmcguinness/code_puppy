@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/retail-cortex/code_puppy/internal/config"
+	"github.com/retail-cortex/blitz/internal/config"
 	"google.golang.org/genai"
 )
 
@@ -33,7 +33,7 @@ func TestPinnedSubagentRunsAndIsPricedOnItsModel(t *testing.T) {
 	if name, pinned := f.eng.AgentModel("qa-kitten"); name != "claude-haiku-4-5" || !pinned {
 		t.Fatalf("AgentModel = %s %v", name, pinned)
 	}
-	if name, pinned := f.eng.AgentModel("code-puppy"); name != "gemini-3.8-flash" || pinned {
+	if name, pinned := f.eng.AgentModel("blitz"); name != "gemini-3.8-flash" || pinned {
 		t.Fatalf("unpinned agent: %s %v", name, pinned)
 	}
 }
@@ -45,7 +45,7 @@ func TestPinAndUnpinTheActiveAgent(t *testing.T) {
 	if err := f.eng.PinModel(ctx, "nope", pinned); err == nil {
 		t.Fatal("pinned an unknown agent")
 	}
-	if err := f.eng.PinModel(ctx, "code-puppy", pinned); err != nil {
+	if err := f.eng.PinModel(ctx, "blitz", pinned); err != nil {
 		t.Fatal(err)
 	}
 	if f.eng.ModelName() != "claude-sonnet-5" {
@@ -54,7 +54,7 @@ func TestPinAndUnpinTheActiveAgent(t *testing.T) {
 	if _, err := collect(t, f.eng, "s", "hi"); err != nil || pinned.Calls() != 1 || f.llm.Calls() != 0 {
 		t.Fatalf("pinned %d, main %d, err %v", pinned.Calls(), f.llm.Calls(), err)
 	}
-	if err := f.eng.Unpin(ctx, "code-puppy"); err != nil {
+	if err := f.eng.Unpin(ctx, "blitz"); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := collect(t, f.eng, "s", "hi"); err != nil || f.llm.Calls() != 1 || f.eng.ModelName() != "gemini-3.8-flash" {
@@ -76,7 +76,7 @@ func TestNewModelAcceptsAProviderQualifiedName(t *testing.T) {
 		t.Fatalf("wraps %T", sm.inner)
 	}
 	// The configured default model can name its provider too.
-	cfg.CodePuppy.DefaultModel = "anthropic/claude-haiku-4-5"
+	cfg.Blitz.DefaultModel = "anthropic/claude-haiku-4-5"
 	if m, err := NewModel(context.Background(), cfg, ""); err != nil || m.Name() != "claude-haiku-4-5" {
 		t.Fatalf("default_model with provider: %v %v", m, err)
 	}

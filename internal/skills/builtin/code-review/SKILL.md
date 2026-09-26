@@ -3,7 +3,7 @@ name: code-review
 description: Architecture review guidelines enforcing DRY, SOLID, security checks, and resource hygiene
 tags: [review, solid, dry, security, architecture]
 version: "1.0.0"
-author: "Code Puppy"
+author: "Blitz"
 ---
 # Code Review & Architecture Hygiene Guidelines
 

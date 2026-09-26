@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/retail-cortex/code_puppy/internal/config"
+	"github.com/retail-cortex/blitz/internal/config"
 )
 
 func TestSkillsReportThePolicyVerdict(t *testing.T) {
@@ -51,7 +51,7 @@ func TestActiveAgentTools(t *testing.T) {
 		}
 		return at.Tools[i], true
 	}
-	if at.Agent != "code-puppy" || !slices.IsSortedFunc(at.Tools, func(a, b ToolInfo) int { return strings.Compare(a.Name, b.Name) }) {
+	if at.Agent != "blitz" || !slices.IsSortedFunc(at.Tools, func(a, b ToolInfo) int { return strings.Compare(a.Name, b.Name) }) {
 		t.Errorf("agent %q, tools unsorted", at.Agent)
 	}
 	if r, ok := find("read_file"); !ok || !r.PlanAllowed || r.Description == "" {

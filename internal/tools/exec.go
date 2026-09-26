@@ -9,22 +9,22 @@ import (
 	"sync"
 )
 
-// ExecEnv builds every process Code Puppy runs on the model's behalf: shell
+// ExecEnv builds every process Blitz runs on the model's behalf: shell
 // commands, background processes, and forged tools. Each process is placed
 // in its own process group, optionally wrapped in the OS sandbox, and guarded
-// so the group is killed if Code Puppy exits for any reason.
+// so the group is killed if Blitz exits for any reason.
 type ExecEnv struct {
 	Sandbox *OSSandbox
 	// ScrubEnv lists environment variable names (globs allowed, e.g.
 	// "*_API_KEY") removed from every child process, so commands the model
-	// runs can't read Code Puppy's own credentials.
+	// runs can't read Blitz's own credentials.
 	ScrubEnv []string
 	// Dir is where commands run unless they set their own directory: the
 	// workspace root, never the process's working directory.
 	Dir string
 }
 
-// guardedCmd is an exec.Cmd whose process group dies with Code Puppy.
+// guardedCmd is an exec.Cmd whose process group dies with Blitz.
 type guardedCmd struct {
 	*exec.Cmd
 	childEnd *os.File

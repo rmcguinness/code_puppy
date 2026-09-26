@@ -5,7 +5,7 @@ import (
 	"slices"
 	"time"
 
-	"github.com/retail-cortex/code_puppy/internal/config"
+	"github.com/retail-cortex/blitz/internal/config"
 )
 
 // Effective is what a worker may actually do and spend: its permissions

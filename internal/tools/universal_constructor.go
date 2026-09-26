@@ -71,7 +71,7 @@ type ucRegistry struct {
 }
 
 // NewUniversalConstructorTool creates the Helios Universal Constructor tool.
-// Forged tools are stored in toolsDir (default ~/.code_puppy/uc_tools), which
+// Forged tools are stored in toolsDir (default ~/.blitz/uc_tools), which
 // is created lazily on the first create. Runs go through the command policy
 // as "universal_constructor <tool> <args...>" and the OS sandbox.
 func NewUniversalConstructorTool(toolsDir string, hooks *Hooks, env *ExecEnv, policy *CommandPolicy) (tool.Tool, error) {
@@ -80,7 +80,7 @@ func NewUniversalConstructorTool(toolsDir string, hooks *Hooks, env *ExecEnv, po
 		if err != nil {
 			return nil, fmt.Errorf("resolve home directory: %w", err)
 		}
-		toolsDir = filepath.Join(home, ".code_puppy", "uc_tools")
+		toolsDir = filepath.Join(home, ".blitz", "uc_tools")
 	}
 	reg := &ucRegistry{dir: toolsDir, tools: make(map[string]*UCToolMetadata), exec: env, policy: policy}
 	reg.load()

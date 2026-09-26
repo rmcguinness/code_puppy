@@ -12,9 +12,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/retail-cortex/code_puppy/internal/config"
-	"github.com/retail-cortex/code_puppy/internal/runtime"
-	"github.com/retail-cortex/code_puppy/internal/session"
+	"github.com/retail-cortex/blitz/internal/config"
+	"github.com/retail-cortex/blitz/internal/runtime"
+	"github.com/retail-cortex/blitz/internal/session"
 	"google.golang.org/adk/v2/model"
 	"google.golang.org/genai"
 )
@@ -225,14 +225,14 @@ func newSteerApp(t *testing.T, message string, cfgFn func(*config.Config), repli
 	cfg.Tools.WorkspaceDir = t.TempDir()
 	cfg.Images.Dir = t.TempDir()
 	cfg.Audit.Enabled = false
-	cfg.CodePuppy.AutoApprove = true
+	cfg.Blitz.AutoApprove = true
 	if cfgFn != nil {
 		cfgFn(cfg)
 	}
 	in := &fakeSteerInput{LineReader: NewLineReader(strings.NewReader(""), io.Discard), message: message, typed: make(chan struct{})}
 	llm := runtime.NewMockLLM("gemini-3.8-flash", replies...)
 	app := openApp(t, cfg, &gatedLLM{MockLLM: llm, gate: in.typed})
-	local(app).Storage().CreateSession("", "t", "code-puppy")
+	local(app).Storage().CreateSession("", "t", "blitz")
 	app.Input = in
 	return app, llm
 }

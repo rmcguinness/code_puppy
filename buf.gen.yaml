@@ -8,7 +8,7 @@ managed:
   enabled: true
   override:
     - file_option: go_package_prefix
-      value: github.com/retail-cortex/code_puppy/internal/gen
+      value: github.com/retail-cortex/blitz/internal/gen
 plugins:
   - local: ["go", "tool", "-modfile=tools/go.mod", "protoc-gen-go"]
     out: internal/gen

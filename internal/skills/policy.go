@@ -7,7 +7,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/retail-cortex/code_puppy/internal/config"
+	"github.com/retail-cortex/blitz/internal/config"
 )
 
 // Evaluation is what a skill may do under a host policy: for each setting,

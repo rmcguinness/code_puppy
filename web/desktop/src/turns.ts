@@ -2,8 +2,8 @@
 // events. Pure functions, so the rules (streamed text shown once, tool
 // results matched to their calls) are tested without a browser.
 import type { JsonObject } from "@bufbuild/protobuf";
-import type { Message } from "./gen/codepuppy/v1/session_pb";
-import type { TurnEvent } from "./gen/codepuppy/v1/turn_pb";
+import type { Message } from "./gen/blitz/v1/session_pb";
+import type { TurnEvent } from "./gen/blitz/v1/turn_pb";
 
 export type Entry =
   | { kind: "user"; text: string }

@@ -9,8 +9,8 @@ import (
 	"time"
 
 	"connectrpc.com/connect"
-	pb "github.com/retail-cortex/code_puppy/internal/gen/codepuppy/v1"
-	"github.com/retail-cortex/code_puppy/internal/gen/codepuppy/v1/codepuppyv1connect"
+	pb "github.com/retail-cortex/blitz/internal/gen/blitz/v1"
+	"github.com/retail-cortex/blitz/internal/gen/blitz/v1/blitzv1connect"
 )
 
 // socketDir returns a short directory: Unix socket paths are limited to
@@ -62,7 +62,7 @@ func TestServeOverTheSocket(t *testing.T) {
 	done := make(chan error, 1)
 	go func() { done <- Serve(ctx, l, s.Handler(), time.Second) }()
 
-	c := codepuppyv1connect.NewWorkspaceServiceClient(Client(path), BaseURL)
+	c := blitzv1connect.NewWorkspaceServiceClient(Client(path), BaseURL)
 	res, err := c.GetModel(context.Background(), connect.NewRequest(&pb.GetModelRequest{Workspace: t.TempDir()}))
 	if err != nil || res.Msg.Name == "" {
 		t.Fatalf("over the socket: %v %v", res, err)

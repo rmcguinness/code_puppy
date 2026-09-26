@@ -1,6 +1,6 @@
-# GoReleaser config for Code Puppy. Test locally with `make snapshot`.
+# GoReleaser config for Blitz. Test locally with `make snapshot`.
 version: 2
-project_name: code-puppy
+project_name: blitz
 
 # python-final marks the last commit with the Python code; it isn't a release.
 git:
@@ -13,9 +13,9 @@ before:
     - go vet ./...
 
 builds:
-  - id: code-puppy
-    main: ./cmd/code-puppy
-    binary: code-puppy
+  - id: blitz
+    main: ./cmd/blitz
+    binary: blitz
     env: [CGO_ENABLED=0]
     goos: [darwin, linux, windows]
     goarch: [amd64, arm64]
@@ -67,7 +67,7 @@ release:
     The macOS binaries aren't notarized by Apple. If you download one in a browser, Gatekeeper refuses to run it until you clear the quarantine flag:
 
     ```bash
-    xattr -d com.apple.quarantine code-puppy
+    xattr -d com.apple.quarantine blitz
     ```
 
     You can also open it once through Finder's context menu (Open). A copy downloaded with `curl` isn't quarantined.

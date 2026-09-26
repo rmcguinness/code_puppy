@@ -9,8 +9,8 @@ import (
 	"sort"
 	"sync"
 
-	"github.com/retail-cortex/code_puppy/internal/config"
-	"github.com/retail-cortex/code_puppy/internal/skills/builtin"
+	"github.com/retail-cortex/blitz/internal/config"
+	"github.com/retail-cortex/blitz/internal/skills/builtin"
 )
 
 // Provider discovers, indexes, and activates skills across embedded and external paths.

@@ -8,9 +8,9 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/retail-cortex/code_puppy/internal/config"
-	"github.com/retail-cortex/code_puppy/internal/i18n"
-	"github.com/retail-cortex/code_puppy/internal/runtime"
+	"github.com/retail-cortex/blitz/internal/config"
+	"github.com/retail-cortex/blitz/internal/i18n"
+	"github.com/retail-cortex/blitz/internal/runtime"
 )
 
 // One process can hold several workspaces (the per-user service does):
@@ -29,7 +29,7 @@ func TestTwoWorkspacesInOneProcess(t *testing.T) {
 		os.WriteFile(filepath.Join(dir, "agents", agent+".md"), []byte("---\nname: "+agent+"\ndisplay_name: "+agent+"\ndescription: d\ntools: []\n---\nprompt\n"), 0o600)
 		cfg := config.DefaultConfig()
 		cfg.Tools.WorkspaceDir = dir
-		cfg.CodePuppy.TrustWorkspace = true // so ./agents is read
+		cfg.Blitz.TrustWorkspace = true // so ./agents is read
 		cfg.Session.StorageDir = t.TempDir()
 		w, err := Open(context.Background(), cfg, Options{Model: runtime.NewMockLLM("m"), NewModel: mockModels})
 		if err != nil {

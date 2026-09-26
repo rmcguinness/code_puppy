@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { ConnectError } from "@connectrpc/connect";
 import { timestampDate } from "@bufbuild/protobuf/wkt";
 import { workers } from "./api";
-import { RunStatus, WorkerState, type Worker, type WorkerRun } from "./gen/codepuppy/v1/worker_pb";
+import { RunStatus, WorkerState, type Worker, type WorkerRun } from "./gen/blitz/v1/worker_pb";
 import { applyEvent, failed, summarizeArgs, type Entry } from "./turns";
 
 const stateLabel: Record<WorkerState, string> = {

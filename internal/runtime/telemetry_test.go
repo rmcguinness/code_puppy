@@ -8,10 +8,10 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/retail-cortex/code_puppy/internal/config"
-	"github.com/retail-cortex/code_puppy/internal/observability"
-	"github.com/retail-cortex/code_puppy/internal/redact"
-	"github.com/retail-cortex/code_puppy/internal/session"
+	"github.com/retail-cortex/blitz/internal/config"
+	"github.com/retail-cortex/blitz/internal/observability"
+	"github.com/retail-cortex/blitz/internal/redact"
+	"github.com/retail-cortex/blitz/internal/session"
 	"go.opentelemetry.io/otel/attribute"
 	sdklog "go.opentelemetry.io/otel/sdk/log"
 	"go.opentelemetry.io/otel/sdk/trace/tracetest"
@@ -132,7 +132,7 @@ func TestTurnsChainAcrossResume(t *testing.T) {
 	dir := t.TempDir()
 
 	store, _ := session.NewStorage(dir)
-	rec, _ := store.CreateSession("", "chain", "code-puppy")
+	rec, _ := store.CreateSession("", "chain", "blitz")
 	f := newEngineWith(t, fixtureOpts{opts: []Option{WithTurnStore(store)}}, textContent("one"), textContent("two"))
 	for _, p := range []string{"first", "second"} {
 		if _, err := collect(t, f.eng, rec.ID, p); err != nil {

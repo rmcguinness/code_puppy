@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/retail-cortex/code_puppy/internal/redact"
+	"github.com/retail-cortex/blitz/internal/redact"
 )
 
 func readEntries(t *testing.T, path string) []Entry {

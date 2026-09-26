@@ -62,7 +62,7 @@ type AuditConfig struct {
 	Dir     string `toml:"dir"`
 }
 
-// LogConfig controls the diagnostic log (<dir>/code-puppy-YYYY-MM-DD.jsonl).
+// LogConfig controls the diagnostic log (<dir>/blitz-YYYY-MM-DD.jsonl).
 // Secrets are masked before writing, as in the audit log.
 type LogConfig struct {
 	Level      string `toml:"level"`       // debug, info, warn, error, or off
@@ -71,7 +71,7 @@ type LogConfig struct {
 }
 
 // TelemetryConfig controls OpenTelemetry trace and log export over OTLP/HTTP.
-// It is off by default; CODE_PUPPY_TELEMETRY=1 also turns it on. Standard
+// It is off by default; BLITZ_TELEMETRY=1 also turns it on. Standard
 // OTEL_EXPORTER_OTLP_* variables (headers, timeouts) apply.
 type TelemetryConfig struct {
 	Enabled bool `toml:"enabled"`
@@ -171,13 +171,13 @@ var DefaultPricing = map[string]ModelPrice{
 	"claude-haiku-4-5": {InputPerMTok: 1.00, OutputPerMTok: 5.00, CachedInputPerMTok: 0.10, CacheWritePerMTok: 1.25},
 }
 
-// Dir returns the Code Puppy home directory (~/.code_puppy).
+// Dir returns the Blitz home directory (~/.blitz).
 func Dir() string {
 	home, err := os.UserHomeDir()
 	if err != nil {
-		return ".code_puppy"
+		return ".blitz"
 	}
-	return filepath.Join(home, ".code_puppy")
+	return filepath.Join(home, ".blitz")
 }
 
 func applyFeatureDefaults(c *Config) {
@@ -195,8 +195,8 @@ func applyFeatureDefaults(c *Config) {
 	}
 	c.Memory = MemoryConfig{
 		Enabled:  true,
-		Files:    []string{"AGENTS.md", "PUPPY.md"},
-		Global:   filepath.Join(dir, "PUPPY.md"),
+		Files:    []string{"AGENTS.md", "BLITZ.md"},
+		Global:   filepath.Join(dir, "BLITZ.md"),
 		MaxBytes: 32 * 1024,
 	}
 	c.Context = ContextConfig{Compaction: true, TokenThreshold: 120_000, RetainEvents: 20}

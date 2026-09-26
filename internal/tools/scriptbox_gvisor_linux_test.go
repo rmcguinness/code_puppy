@@ -60,7 +60,7 @@ func TestGVisorScriptBox(t *testing.T) {
 	}
 }
 
-// A sandbox whose Code Puppy died (so its Close never ran) is removed the
+// A sandbox whose Blitz died (so its Close never ran) is removed the
 // next time a box is set up.
 func TestGVisorSweepsOrphans(t *testing.T) {
 	b := gvisorBoxForTest(t)

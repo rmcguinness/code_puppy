@@ -3,7 +3,7 @@ name: testing-tdd
 description: Test-Driven Development (TDD) cycle with unit testing and regression guarantees
 tags: [testing, tdd, unit-tests, quality]
 version: "1.0.0"
-author: "Code Puppy"
+author: "Blitz"
 ---
 # Test-Driven Development (TDD) Protocol
 

@@ -10,7 +10,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/retail-cortex/code_puppy/internal/redact"
+	"github.com/retail-cortex/blitz/internal/redact"
 )
 
 // Kinds of audit entries.

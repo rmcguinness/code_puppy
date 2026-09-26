@@ -8,15 +8,15 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/retail-cortex/code_puppy/internal/config"
-	"github.com/retail-cortex/code_puppy/internal/tools"
+	"github.com/retail-cortex/blitz/internal/config"
+	"github.com/retail-cortex/blitz/internal/tools"
 	"google.golang.org/genai"
 )
 
 func TestCheckpointsUndoAndDiff(t *testing.T) {
 	create := &genai.Content{Role: genai.RoleModel, Parts: []*genai.Part{{FunctionCall: &genai.FunctionCall{
 		Name: "create_file", Args: map[string]any{"path": "made.txt", "content": "by tool\n"}}}}}
-	w, _ := openTestWith(t, func(c *config.Config) { c.CodePuppy.AutoApprove = true }, create, text("created"))
+	w, _ := openTestWith(t, func(c *config.Config) { c.Blitz.AutoApprove = true }, create, text("created"))
 	sid := newSession(t, w).ID
 	if w.SessionDiff() != "" || len(w.ListCheckpoints()) != 0 {
 		t.Fatal("changes before any turn")

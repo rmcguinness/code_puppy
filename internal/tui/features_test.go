@@ -10,9 +10,9 @@ import (
 	"testing"
 	"time"
 
-	core "github.com/retail-cortex/code_puppy/internal/app"
-	"github.com/retail-cortex/code_puppy/internal/config"
-	"github.com/retail-cortex/code_puppy/internal/runtime"
+	core "github.com/retail-cortex/blitz/internal/app"
+	"github.com/retail-cortex/blitz/internal/config"
+	"github.com/retail-cortex/blitz/internal/runtime"
 	"google.golang.org/genai"
 )
 
@@ -105,7 +105,7 @@ func TestCompleter(t *testing.T) {
 	c := NewCompleter(ws)
 	c.Command("undo", "--force")
 	c.Command("help")
-	c.Dynamic("agent", func() []string { return []string{"helios", "code-puppy"} })
+	c.Dynamic("agent", func() []string { return []string{"helios", "blitz"} })
 
 	do := func(line string) []string {
 		cands, _ := c.Do([]rune(line), len([]rune(line)))
@@ -167,7 +167,7 @@ func newFullApp(t *testing.T) *App {
 	cfg.Tools.WorkspaceDir = t.TempDir()
 	cfg.Tools.ApprovalsFile = filepath.Join(t.TempDir(), "approvals.json")
 	cfg.Images.Dir = t.TempDir()
-	cfg.CodePuppy.AutoApprove = true
+	cfg.Blitz.AutoApprove = true
 	llm := runtime.NewMockLLM("gemini-3.8-flash",
 		&genai.Content{Role: genai.RoleModel, Parts: []*genai.Part{{FunctionCall: &genai.FunctionCall{Name: "create_file", Args: map[string]any{"path": "made.txt", "content": "by tool\n"}}}}},
 		genai.NewContentFromText("created", genai.RoleModel))
@@ -228,11 +228,11 @@ func TestApprovalsAndMemoryCommands(t *testing.T) {
 	}
 
 	captureStdout(t, func() { HandleCommand(ctx, "/memory add always run go vet", app) })
-	b, err := os.ReadFile(filepath.Join(app.Workspace.Dir(), "PUPPY.md"))
+	b, err := os.ReadFile(filepath.Join(app.Workspace.Dir(), "BLITZ.md"))
 	if err != nil || !strings.Contains(string(b), "- always run go vet") {
 		t.Errorf("/memory add: %q %v", b, err)
 	}
-	if out := captureStdout(t, func() { HandleCommand(ctx, "/memory", app) }); !strings.Contains(out, "PUPPY.md") {
+	if out := captureStdout(t, func() { HandleCommand(ctx, "/memory", app) }); !strings.Contains(out, "BLITZ.md") {
 		t.Errorf("/memory: %s", out)
 	}
 	if out := captureStdout(t, func() { HandleCommand(ctx, "/mcp", app) }); !strings.Contains(out, "No MCP servers") {
@@ -245,9 +245,9 @@ func TestApprovalsAndMemoryCommands(t *testing.T) {
 
 func TestResumeCommand(t *testing.T) {
 	app := newFullApp(t)
-	rec, _ := local(app).Storage().CreateSession("", "earlier", "code-puppy")
+	rec, _ := local(app).Storage().CreateSession("", "earlier", "blitz")
 	local(app).Storage().AddMessage("user", "remember the plan")
-	local(app).Storage().CreateSession("", "later", "code-puppy")
+	local(app).Storage().CreateSession("", "later", "blitz")
 
 	out := captureStdout(t, func() { HandleCommand(context.Background(), "/resume "+rec.ID, app) })
 	if local(app).Storage().Active().ID != rec.ID || !strings.Contains(out, "remember the plan") {
@@ -298,7 +298,7 @@ func TestCtrlCAtApprovalCancelsTurn(t *testing.T) {
 	cfg.Tools.WorkspaceDir = t.TempDir()
 	cfg.Tools.ApprovalsFile = filepath.Join(t.TempDir(), "approvals.json")
 	cfg.Images.Dir = t.TempDir()
-	cfg.CodePuppy.AutoApprove = false // approvals required
+	cfg.Blitz.AutoApprove = false // approvals required
 	llm := runtime.NewMockLLM("m",
 		&genai.Content{Role: genai.RoleModel, Parts: []*genai.Part{{FunctionCall: &genai.FunctionCall{Name: "create_file", Args: map[string]any{"path": "x.txt", "content": "x"}}}}},
 		genai.NewContentFromText("should never be reached", genai.RoleModel))
@@ -326,9 +326,9 @@ func TestCtrlCAtApprovalCancelsTurn(t *testing.T) {
 func TestSessionListScopedToWorkspace(t *testing.T) {
 	app := newFullApp(t)
 	local(app).Storage().SetWorkspace("/proj/other")
-	local(app).Storage().CreateSession("", "elsewhere", "code-puppy")
+	local(app).Storage().CreateSession("", "elsewhere", "blitz")
 	local(app).Storage().SetWorkspace("/proj/here")
-	local(app).Storage().CreateSession("", "local", "code-puppy")
+	local(app).Storage().CreateSession("", "local", "blitz")
 
 	out := captureStdout(t, func() { HandleCommand(context.Background(), "/session list", app) })
 	if !strings.Contains(out, "local") || strings.Contains(out, "elsewhere") || !strings.Contains(out, "(1)") {
@@ -346,7 +346,7 @@ func TestCompactCommand(t *testing.T) {
 	if out := captureStdout(t, func() { HandleCommand(ctx, "/compact", app) }); !strings.Contains(out, "No active session") {
 		t.Errorf("no session: %s", out)
 	}
-	local(app).Storage().CreateSession("", "t", "code-puppy")
+	local(app).Storage().CreateSession("", "t", "blitz")
 	sid := local(app).Storage().Active().ID
 	for _, p := range []string{"make a file", "second turn"} {
 		if err := local(app).Engine().Execute(ctx, sid, p, nil); err != nil {
@@ -358,7 +358,7 @@ func TestCompactCommand(t *testing.T) {
 		t.Errorf("/compact output: %s", out)
 	}
 	fresh := newFullApp(t)
-	local(fresh).Storage().CreateSession("", "t", "code-puppy")
+	local(fresh).Storage().CreateSession("", "t", "blitz")
 	if out := captureStdout(t, func() { HandleCommand(ctx, "/compact", fresh) }); !strings.Contains(out, "nothing to compact") {
 		t.Errorf("empty session: %s", out)
 	}

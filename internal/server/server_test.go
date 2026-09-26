@@ -11,18 +11,18 @@ import (
 	"testing"
 
 	"connectrpc.com/connect"
-	"github.com/retail-cortex/code_puppy/internal/app"
-	"github.com/retail-cortex/code_puppy/internal/config"
-	pb "github.com/retail-cortex/code_puppy/internal/gen/codepuppy/v1"
-	"github.com/retail-cortex/code_puppy/internal/gen/codepuppy/v1/codepuppyv1connect"
-	"github.com/retail-cortex/code_puppy/internal/runtime"
+	"github.com/retail-cortex/blitz/internal/app"
+	"github.com/retail-cortex/blitz/internal/config"
+	pb "github.com/retail-cortex/blitz/internal/gen/blitz/v1"
+	"github.com/retail-cortex/blitz/internal/gen/blitz/v1/blitzv1connect"
+	"github.com/retail-cortex/blitz/internal/runtime"
 	"google.golang.org/adk/v2/model"
 	"google.golang.org/genai"
 )
 
 type clients struct {
-	sessions   codepuppyv1connect.SessionServiceClient
-	workspaces codepuppyv1connect.WorkspaceServiceClient
+	sessions   blitzv1connect.SessionServiceClient
+	workspaces blitzv1connect.WorkspaceServiceClient
 }
 
 // serve starts a server whose workspaces run on mock models answering with
@@ -51,8 +51,8 @@ func serve(t *testing.T, mutate func(*config.Config), replies ...*genai.Content)
 	srv := httptest.NewServer(s.Handler())
 	t.Cleanup(func() { srv.Close(); s.Close() })
 	return clients{
-		sessions:   codepuppyv1connect.NewSessionServiceClient(http.DefaultClient, srv.URL),
-		workspaces: codepuppyv1connect.NewWorkspaceServiceClient(http.DefaultClient, srv.URL),
+		sessions:   blitzv1connect.NewSessionServiceClient(http.DefaultClient, srv.URL),
+		workspaces: blitzv1connect.NewWorkspaceServiceClient(http.DefaultClient, srv.URL),
 	}, s
 }
 
@@ -85,7 +85,7 @@ func TestWorkspaceOperationsOverTheAPI(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if i := slices.IndexFunc(agents.Msg.Agents, func(a *pb.AgentInfo) bool { return a.Active }); i < 0 || agents.Msg.Agents[i].Name != "code-puppy" {
+	if i := slices.IndexFunc(agents.Msg.Agents, func(a *pb.AgentInfo) bool { return a.Active }); i < 0 || agents.Msg.Agents[i].Name != "blitz" {
 		t.Errorf("agents %v", agents.Msg.Agents)
 	}
 	if _, err := c.workspaces.SetAgent(ctx, connect.NewRequest(&pb.SetAgentRequest{Workspace: dir, Name: "qa-kitten"})); err != nil {

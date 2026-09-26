@@ -8,7 +8,7 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/retail-cortex/code_puppy/internal/config"
+	"github.com/retail-cortex/blitz/internal/config"
 )
 
 // PathMatcher matches absolute paths against blocked-path glob patterns.

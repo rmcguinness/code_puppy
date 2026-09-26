@@ -12,7 +12,7 @@
 //	}
 //
 // Catalogs are embedded for the shipped languages and also loaded from extra
-// directories (e.g. ~/.code_puppy/locales), so a language can be added, or a
+// directories (e.g. ~/.blitz/locales), so a language can be added, or a
 // shipped translation corrected, without rebuilding. Lookups fall back along
 // the locale chain (fr-CA → fr → en-US), so a partial catalog still works.
 //

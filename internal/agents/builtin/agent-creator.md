@@ -25,4 +25,4 @@ When creating a new agent:
    - Identity & core philosophy
    - Step-by-step workflow guidelines
    - Anti-patterns to avoid
-3. Save agent markdown files into `./agents/` or `~/.code_puppy/agents/`.
+3. Save agent markdown files into `./agents/` or `~/.blitz/agents/`.

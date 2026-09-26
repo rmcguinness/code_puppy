@@ -53,13 +53,13 @@ func TestEmbeddedRegistry(t *testing.T) {
 		t.Errorf("expected at least 7 embedded agents, got %d", len(list))
 	}
 
-	puppy, ok := reg.Get("code-puppy")
+	puppy, ok := reg.Get("blitz")
 	if !ok || puppy == nil {
-		t.Fatalf("expected to find 'code-puppy' agent")
+		t.Fatalf("expected to find 'blitz' agent")
 	}
 
-	if puppy.DisplayName != "Code-Puppy 🐶" {
-		t.Errorf("expected 'Code-Puppy 🐶', got '%s'", puppy.DisplayName)
+	if puppy.DisplayName != "Blitz 🐶" {
+		t.Errorf("expected 'Blitz 🐶', got '%s'", puppy.DisplayName)
 	}
 
 	helios, ok := reg.Get("helios")

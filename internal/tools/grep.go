@@ -10,7 +10,7 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/retail-cortex/code_puppy/internal/textutil"
+	"github.com/retail-cortex/blitz/internal/textutil"
 	"google.golang.org/adk/v2/agent"
 	"google.golang.org/adk/v2/tool"
 	"google.golang.org/adk/v2/tool/functiontool"

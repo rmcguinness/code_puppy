@@ -12,13 +12,13 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"github.com/retail-cortex/code_puppy/internal/agents"
-	"github.com/retail-cortex/code_puppy/internal/audit"
-	"github.com/retail-cortex/code_puppy/internal/config"
-	"github.com/retail-cortex/code_puppy/internal/i18n"
-	"github.com/retail-cortex/code_puppy/internal/observability"
-	"github.com/retail-cortex/code_puppy/internal/skills"
-	"github.com/retail-cortex/code_puppy/internal/tools"
+	"github.com/retail-cortex/blitz/internal/agents"
+	"github.com/retail-cortex/blitz/internal/audit"
+	"github.com/retail-cortex/blitz/internal/config"
+	"github.com/retail-cortex/blitz/internal/i18n"
+	"github.com/retail-cortex/blitz/internal/observability"
+	"github.com/retail-cortex/blitz/internal/skills"
+	"github.com/retail-cortex/blitz/internal/tools"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
 	"google.golang.org/adk/v2/agent"
@@ -34,7 +34,7 @@ import (
 	"google.golang.org/genai"
 )
 
-const appName = "code-puppy"
+const appName = "blitz"
 
 // MaxSubagentDepth bounds nested invoke_agent calls so agents cannot recurse forever.
 const MaxSubagentDepth = 3
@@ -106,7 +106,7 @@ func WithAgentModel(agent string, llm model.LLM) Option {
 // WithInstructions appends text (e.g. project memory) to every agent's instructions.
 func WithInstructions(text string) Option { return func(e *Engine) { e.extraInstructions = text } }
 
-// Engine orchestrates the Google ADK execution lifecycle for Code Puppy.
+// Engine orchestrates the Google ADK execution lifecycle for Blitz.
 // It is safe for concurrent use.
 type Engine struct {
 	cfg       *config.Config
@@ -168,7 +168,7 @@ func NewEngine(
 		artifacts: artifact.InMemoryService(),
 		memories:  memory.InMemoryService(),
 		llm:       withImages(llm, toolReg.Images()),
-		active:    cfg.CodePuppy.DefaultAgent,
+		active:    cfg.Blitz.DefaultAgent,
 		settings:  map[string]config.ModelSettings{},
 	}
 	// Sorted, so that when "gpt-5" and "openai/gpt-5" are both written the
@@ -371,11 +371,11 @@ func (e *Engine) lookupSettings(name string) (config.ModelSettings, bool) {
 
 func (e *Engine) generateConfig() *genai.GenerateContentConfig {
 	gc := &genai.GenerateContentConfig{}
-	if e.cfg.CodePuppy.Temperature > 0 {
-		gc.Temperature = genai.Ptr(float32(e.cfg.CodePuppy.Temperature))
+	if e.cfg.Blitz.Temperature > 0 {
+		gc.Temperature = genai.Ptr(float32(e.cfg.Blitz.Temperature))
 	}
-	if e.cfg.CodePuppy.MaxTokens > 0 {
-		gc.MaxOutputTokens = int32(e.cfg.CodePuppy.MaxTokens)
+	if e.cfg.Blitz.MaxTokens > 0 {
+		gc.MaxOutputTokens = int32(e.cfg.Blitz.MaxTokens)
 	}
 	return gc
 }
@@ -519,18 +519,18 @@ func (e *Engine) imageInstruction(spec *agents.AgentSpec) string {
 }
 
 func (e *Engine) subInstruction(spec *agents.AgentSpec) string {
-	return spec.InterpolatePrompt(e.cfg.CodePuppy.PuppyName, e.cfg.CodePuppy.OwnerName, spec.AgencyLevel)
+	return spec.InterpolatePrompt(e.cfg.Blitz.PuppyName, e.cfg.Blitz.OwnerName, spec.AgencyLevel)
 }
 
 // rebuildLocked requires e.mu held for writing.
 func (e *Engine) rebuildLocked() error {
 	rootSpec, ok := e.agentReg.Get(e.active)
 	if !ok {
-		rootSpec, ok = e.agentReg.Get("code-puppy")
+		rootSpec, ok = e.agentReg.Get("blitz")
 		if !ok {
-			return fmt.Errorf("default agent 'code-puppy' not found in registry")
+			return fmt.Errorf("default agent 'blitz' not found in registry")
 		}
-		e.active = "code-puppy"
+		e.active = "blitz"
 	}
 
 	var subAgents []agent.Agent
@@ -546,9 +546,9 @@ func (e *Engine) rebuildLocked() error {
 	}
 
 	rootInstruction := rootSpec.InterpolatePrompt(
-		e.cfg.CodePuppy.PuppyName,
-		e.cfg.CodePuppy.OwnerName,
-		e.cfg.CodePuppy.AgencyLevel,
+		e.cfg.Blitz.PuppyName,
+		e.cfg.Blitz.OwnerName,
+		e.cfg.Blitz.AgencyLevel,
 	)
 	if e.cfg.Skills.Enabled && e.skillProv != nil {
 		if allSkills := e.skillProv.List(); len(allSkills) > 0 {

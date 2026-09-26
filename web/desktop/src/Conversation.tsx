@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ConnectError } from "@connectrpc/connect";
 import { sessions } from "./api";
-import type { SessionInfo } from "./gen/codepuppy/v1/session_pb";
-import { Decision, type ApprovalRequest, type Question, type Usage } from "./gen/codepuppy/v1/turn_pb";
+import type { SessionInfo } from "./gen/blitz/v1/session_pb";
+import { Decision, type ApprovalRequest, type Question, type Usage } from "./gen/blitz/v1/turn_pb";
 import { applyEvent, failed, fromMessages, summarizeArgs, type Entry } from "./turns";
 
 type Pending = { kind: "approval"; req: ApprovalRequest } | { kind: "question"; q: Question };
@@ -214,7 +214,7 @@ function Composer({ running, onSubmit, onStop }: { running: boolean; onSubmit: (
             send();
           }
         }}
-        placeholder={running ? "Steer the agent: it reads this with its next tool result" : "Ask Code Puppy… (Shift+Enter for a new line)"}
+        placeholder={running ? "Steer the agent: it reads this with its next tool result" : "Ask Blitz… (Shift+Enter for a new line)"}
         rows={3}
       />
       <div className="buttons">

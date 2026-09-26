@@ -22,7 +22,7 @@ type ScriptRequest struct {
 	// Dir is the working directory; it must be one of the mounted paths.
 	Dir string
 	// Env is the whole environment besides PATH, HOME, TMPDIR and LANG,
-	// which the box sets. Nothing is inherited from Code Puppy's own.
+	// which the box sets. Nothing is inherited from Blitz's own.
 	Env []string
 	// Network gives the command the host's network; otherwise it has none.
 	Network bool
@@ -59,7 +59,7 @@ type ScriptBoxConfig struct {
 	// them (the OS sandbox; gVisor doesn't mount them at all).
 	Blocked *PathMatcher
 	// StateDir holds gVisor's container state and bundles
-	// (~/.code_puppy/sandboxes).
+	// (~/.blitz/sandboxes).
 	StateDir string
 }
 
@@ -121,7 +121,7 @@ func (b *osBox) Run(ctx context.Context, req ScriptRequest) (ScriptResult, error
 	if len(req.Argv) == 0 {
 		return ScriptResult{}, errors.New("no command")
 	}
-	tmp, err := os.MkdirTemp("", "code-puppy-script-*")
+	tmp, err := os.MkdirTemp("", "blitz-script-*")
 	if err != nil {
 		return ScriptResult{}, err
 	}

@@ -8,12 +8,12 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/retail-cortex/code_puppy/internal/agents"
-	"github.com/retail-cortex/code_puppy/internal/audit"
-	"github.com/retail-cortex/code_puppy/internal/config"
-	cpsession "github.com/retail-cortex/code_puppy/internal/session"
-	"github.com/retail-cortex/code_puppy/internal/skills"
-	"github.com/retail-cortex/code_puppy/internal/tools"
+	"github.com/retail-cortex/blitz/internal/agents"
+	"github.com/retail-cortex/blitz/internal/audit"
+	"github.com/retail-cortex/blitz/internal/config"
+	cpsession "github.com/retail-cortex/blitz/internal/session"
+	"github.com/retail-cortex/blitz/internal/skills"
+	"github.com/retail-cortex/blitz/internal/tools"
 	"google.golang.org/adk/v2/session"
 	"google.golang.org/genai"
 )
@@ -65,7 +65,7 @@ func newEngineWith(t *testing.T, fo fixtureOpts, responses ...*genai.Content) en
 	cfg.Tools.UCToolsDir = t.TempDir()
 	cfg.Images.Dir = t.TempDir()
 	cfg.Tools.ApprovalsFile = filepath.Join(t.TempDir(), "approvals.json")
-	cfg.CodePuppy.AutoApprove = true
+	cfg.Blitz.AutoApprove = true
 	if fo.cfg != nil {
 		fo.cfg(cfg)
 	}

@@ -7,10 +7,10 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/retail-cortex/code_puppy/internal/agents"
-	"github.com/retail-cortex/code_puppy/internal/config"
-	"github.com/retail-cortex/code_puppy/internal/skills"
-	"github.com/retail-cortex/code_puppy/internal/tools"
+	"github.com/retail-cortex/blitz/internal/agents"
+	"github.com/retail-cortex/blitz/internal/config"
+	"github.com/retail-cortex/blitz/internal/skills"
+	"github.com/retail-cortex/blitz/internal/tools"
 	"google.golang.org/adk/v2/model"
 	"google.golang.org/adk/v2/session"
 	"google.golang.org/genai"
@@ -155,7 +155,7 @@ func TestEngineSetActiveAgentUnknownKeepsPrevious(t *testing.T) {
 	if err := f.eng.SetActiveAgent(context.Background(), "ghost"); err == nil {
 		t.Error("expected error for unknown agent")
 	}
-	if f.eng.ActiveAgent() != "code-puppy" {
+	if f.eng.ActiveAgent() != "blitz" {
 		t.Errorf("active agent changed to %q", f.eng.ActiveAgent())
 	}
 }
@@ -166,10 +166,10 @@ func TestEngineAppliesGenerationConfig(t *testing.T) {
 		t.Fatal(err)
 	}
 	req := f.llm.Requests[0]
-	if req.Config == nil || req.Config.Temperature == nil || *req.Config.Temperature != float32(f.cfg.CodePuppy.Temperature) {
+	if req.Config == nil || req.Config.Temperature == nil || *req.Config.Temperature != float32(f.cfg.Blitz.Temperature) {
 		t.Errorf("temperature not applied: %+v", req.Config)
 	}
-	if req.Config.MaxOutputTokens != int32(f.cfg.CodePuppy.MaxTokens) {
+	if req.Config.MaxOutputTokens != int32(f.cfg.Blitz.MaxTokens) {
 		t.Errorf("max tokens not applied: %d", req.Config.MaxOutputTokens)
 	}
 }
@@ -248,7 +248,7 @@ func TestInvokeAgentToolWiredEndToEnd(t *testing.T) {
 func TestEngineConcurrentUse(t *testing.T) {
 	f := newEngine(t)
 	var wg sync.WaitGroup
-	names := []string{"helios", "code-puppy", "qa-kitten"}
+	names := []string{"helios", "blitz", "qa-kitten"}
 	for i := 0; i < 6; i++ {
 		wg.Add(3)
 		go func(i int) {

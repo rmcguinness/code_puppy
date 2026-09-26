@@ -18,7 +18,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/retail-cortex/code_puppy/internal/config"
+	"github.com/retail-cortex/blitz/internal/config"
 	"gvisor.dev/gvisor/sandboxexec/sandbox"
 )
 
@@ -53,7 +53,7 @@ func newGVisorBox(cfg ScriptBoxConfig) (ScriptBox, error) {
 	}
 	dir := cfg.StateDir
 	if dir == "" {
-		dir = config.ExpandHome("~/.code_puppy/sandboxes")
+		dir = config.ExpandHome("~/.blitz/sandboxes")
 	}
 	b := &gvisorBox{blocked: cfg.Blocked, runsc: runsc, stateDir: filepath.Join(dir, "state"), bundles: filepath.Join(dir, "bundles"), empty: filepath.Join(dir, "empty")}
 	for _, d := range []string{b.stateDir, b.bundles} {
@@ -95,7 +95,7 @@ func (b *gvisorBox) probe() error {
 }
 
 // findRunsc looks for runsc in RUNSC_PATH, then PATH, then
-// ~/.code_puppy/bin. It must sit beside its gvisor-bin directory, as the
+// ~/.blitz/bin. It must sit beside its gvisor-bin directory, as the
 // release tarball unpacks.
 func findRunsc() (string, error) {
 	if p := os.Getenv(sandbox.RunscPathEnvVar); p != "" {
@@ -107,11 +107,11 @@ func findRunsc() (string, error) {
 	if p, err := exec.LookPath("runsc"); err == nil {
 		return p, nil
 	}
-	p := config.ExpandHome("~/.code_puppy/bin/runsc")
+	p := config.ExpandHome("~/.blitz/bin/runsc")
 	if _, err := os.Stat(p); err == nil {
 		return p, nil
 	}
-	return "", errors.New("runsc not found (set RUNSC_PATH, put it on PATH, or unpack gVisor into ~/.code_puppy/bin)")
+	return "", errors.New("runsc not found (set RUNSC_PATH, put it on PATH, or unpack gVisor into ~/.blitz/bin)")
 }
 
 func (b *gvisorBox) Name() string { return "gvisor" }
@@ -148,7 +148,7 @@ func (b *gvisorBox) Run(ctx context.Context, req ScriptRequest) (ScriptResult, e
 		dir = "/tmp"
 	}
 	// The sandbox's name carries this process's ID, so a sandbox left behind
-	// by a Code Puppy that was killed can be found and removed (sweep).
+	// by a Blitz that was killed can be found and removed (sweep).
 	id := fmt.Sprintf("cp-%d-%d", os.Getpid(), b.seq.Add(1))
 	os.Setenv(sandbox.RunscPathEnvVar, b.runsc) // how sandboxexec finds runsc
 
@@ -196,7 +196,7 @@ func (b *gvisorBox) Run(ctx context.Context, req ScriptRequest) (ScriptResult, e
 	return res, nil
 }
 
-// sweep kills and deletes sandboxes left by Code Puppy processes that no
+// sweep kills and deletes sandboxes left by Blitz processes that no
 // longer exist (killed before their deferred Close ran).
 func (b *gvisorBox) sweep(ctx context.Context) {
 	out, err := exec.CommandContext(ctx, b.runsc, "--root", b.stateDir, "list", "-quiet").Output()
@@ -216,7 +216,7 @@ func (b *gvisorBox) sweep(ctx context.Context) {
 	}
 }
 
-// sandboxOwner returns the Code Puppy process ID in a sandbox name
+// sandboxOwner returns the Blitz process ID in a sandbox name
 // ("cp-<pid>-<n>").
 func sandboxOwner(id string) (int, bool) {
 	rest, ok := strings.CutPrefix(id, "cp-")

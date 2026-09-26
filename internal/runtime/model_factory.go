@@ -10,7 +10,7 @@ import (
 	"sync"
 
 	"github.com/openai/openai-go/v3/option"
-	"github.com/retail-cortex/code_puppy/internal/config"
+	"github.com/retail-cortex/blitz/internal/config"
 	"google.golang.org/adk/v2/model"
 	"google.golang.org/adk/v2/model/gemini"
 	"google.golang.org/adk/v2/model/openaimodel"
@@ -38,7 +38,7 @@ func NewModel(ctx context.Context, cfg *config.Config, overrideModel string) (mo
 		p, name := ParseModelRef(ref, provider)
 		m, err := newProviderModel(ctx, cfg, p, name)
 		if err != nil {
-			// Usually missing credentials; `code-puppy doctor` lists each fallback.
+			// Usually missing credentials; `blitz doctor` lists each fallback.
 			slog.WarnContext(ctx, "fallback model unavailable", "model", ref, "error", err)
 			continue
 		}
@@ -147,7 +147,7 @@ func buildProviderModel(ctx context.Context, cfg *config.Config, provider, model
 			return gemini.NewModel(ctx, modelName, gc)
 		}
 		if cfg.LLM.Anthropic.APIKey != "" {
-			if cfg.CodePuppy.DefaultModel == "" {
+			if cfg.Blitz.DefaultModel == "" {
 				modelName = cfg.LLM.Anthropic.Model
 			}
 			return newAnthropicModel(cfg.LLM.Anthropic, modelName, pol.anthropicOptions()...), nil

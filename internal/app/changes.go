@@ -6,8 +6,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/retail-cortex/code_puppy/internal/audit"
-	"github.com/retail-cortex/code_puppy/internal/tools"
+	"github.com/retail-cortex/blitz/internal/audit"
+	"github.com/retail-cortex/blitz/internal/tools"
 )
 
 // Checkpoints of the agent's file changes, and the approvals it was given.

@@ -60,7 +60,7 @@ func ParseMarkdownSpec(content []byte) (*AgentSpec, error) {
 func (spec *AgentSpec) InterpolatePrompt(puppyName, ownerName, agencyLevel string) string {
 	prompt := spec.SystemPrompt
 	if puppyName == "" {
-		puppyName = "Code Puppy"
+		puppyName = "Blitz"
 	}
 	if ownerName == "" {
 		ownerName = "Developer"

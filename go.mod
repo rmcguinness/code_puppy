@@ -1,4 +1,4 @@
-module github.com/retail-cortex/code_puppy
+module github.com/retail-cortex/blitz
 
 go 1.27.1
 

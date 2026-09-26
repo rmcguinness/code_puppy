@@ -7,8 +7,8 @@ import (
 	"sort"
 	"sync"
 
-	"github.com/retail-cortex/code_puppy/internal/audit"
-	"github.com/retail-cortex/code_puppy/internal/observability"
+	"github.com/retail-cortex/blitz/internal/audit"
+	"github.com/retail-cortex/blitz/internal/observability"
 	"go.opentelemetry.io/otel/attribute"
 )
 
@@ -78,7 +78,7 @@ type InvokeAgentFunc func(ctx context.Context, agentName, prompt string) (string
 
 // Policy controls which actions skip the approval prompt.
 type Policy struct {
-	AutoApproveAll      bool // code_puppy.auto_approve
+	AutoApproveAll      bool // blitz.auto_approve
 	AutoApproveCommands bool // tools.auto_approve_commands
 }
 

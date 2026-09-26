@@ -15,8 +15,8 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/retail-cortex/code_puppy/internal/audit"
-	"github.com/retail-cortex/code_puppy/internal/textutil"
+	"github.com/retail-cortex/blitz/internal/audit"
+	"github.com/retail-cortex/blitz/internal/textutil"
 	"golang.org/x/net/html"
 	"google.golang.org/adk/v2/agent"
 	"google.golang.org/adk/v2/tool"
@@ -215,7 +215,7 @@ func (f *webFetcher) fetch(ctx context.Context, hooks *Hooks, raw string) WebFet
 	if err != nil {
 		return fail(err)
 	}
-	req.Header.Set("User-Agent", "code-puppy/2 (+web_fetch)")
+	req.Header.Set("User-Agent", "blitz/2 (+web_fetch)")
 	req.Header.Set("Accept", "text/html,text/plain,application/json,application/xml;q=0.9,*/*;q=0.1")
 	resp, err := f.client.Do(req)
 	if err != nil {

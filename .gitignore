@@ -9,7 +9,7 @@
 /dist/
 
 # Desktop app build outputs (the embedded page is rebuilt from web/desktop).
-/cmd/code-puppy-desktop/dist/*
-!/cmd/code-puppy-desktop/dist/.gitkeep
+/cmd/blitz-desktop/dist/*
+!/cmd/blitz-desktop/dist/.gitkeep
 /build/desktop/bin/
 /web/desktop/wailsjs/

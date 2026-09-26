@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/retail-cortex/code_puppy/internal/observability"
+	"github.com/retail-cortex/blitz/internal/observability"
 	"go.opentelemetry.io/otel/attribute"
 	"google.golang.org/adk/v2/session"
 	"google.golang.org/adk/v2/session/compaction"

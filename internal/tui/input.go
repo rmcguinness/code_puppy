@@ -9,9 +9,9 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/retail-cortex/code_puppy/internal/i18n"
-	"github.com/retail-cortex/code_puppy/internal/textutil"
-	"github.com/retail-cortex/code_puppy/internal/tools"
+	"github.com/retail-cortex/blitz/internal/i18n"
+	"github.com/retail-cortex/blitz/internal/textutil"
+	"github.com/retail-cortex/blitz/internal/tools"
 )
 
 type lineResult struct {

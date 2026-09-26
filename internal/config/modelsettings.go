@@ -10,7 +10,7 @@ import (
 
 // ModelSettings are generation settings for one model, from
 // [model_settings."<model>"]. Unset (nil) fields fall back to the global
-// code_puppy.temperature and max_tokens, or the provider's default.
+// blitz.temperature and max_tokens, or the provider's default.
 type ModelSettings struct {
 	Temperature *float64 `toml:"temperature"`
 	MaxTokens   *int     `toml:"max_tokens"`

@@ -4,14 +4,14 @@ import (
 	"context"
 	"strconv"
 
-	"github.com/retail-cortex/code_puppy/internal/audit"
-	"github.com/retail-cortex/code_puppy/internal/config"
-	"github.com/retail-cortex/code_puppy/internal/images"
-	"github.com/retail-cortex/code_puppy/internal/tools"
+	"github.com/retail-cortex/blitz/internal/audit"
+	"github.com/retail-cortex/blitz/internal/config"
+	"github.com/retail-cortex/blitz/internal/images"
+	"github.com/retail-cortex/blitz/internal/tools"
 )
 
 // Backend is what a front end drives: a *Workspace in this process, or a
-// workspace held by the Code Puppy service (internal/client). Front ends
+// workspace held by the Blitz service (internal/client). Front ends
 // use nothing else, so they work the same either way.
 type Backend interface {
 	// Dir is the workspace directory.

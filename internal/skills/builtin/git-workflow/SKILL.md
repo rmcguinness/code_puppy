@@ -3,7 +3,7 @@ name: git-workflow
 description: Conventional commits, atomic checkpoints, and clean version control workflows
 tags: [git, workflow, commits, devops]
 version: "1.0.0"
-author: "Code Puppy"
+author: "Blitz"
 ---
 # Git Workflow & Atomic Checkpoints
 

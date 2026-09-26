@@ -10,18 +10,18 @@ import (
 	"time"
 
 	"connectrpc.com/connect"
-	"github.com/retail-cortex/code_puppy/internal/app"
-	"github.com/retail-cortex/code_puppy/internal/config"
-	pb "github.com/retail-cortex/code_puppy/internal/gen/codepuppy/v1"
-	"github.com/retail-cortex/code_puppy/internal/gen/codepuppy/v1/codepuppyv1connect"
-	"github.com/retail-cortex/code_puppy/internal/runtime"
-	"github.com/retail-cortex/code_puppy/internal/workers"
+	"github.com/retail-cortex/blitz/internal/app"
+	"github.com/retail-cortex/blitz/internal/config"
+	pb "github.com/retail-cortex/blitz/internal/gen/blitz/v1"
+	"github.com/retail-cortex/blitz/internal/gen/blitz/v1/blitzv1connect"
+	"github.com/retail-cortex/blitz/internal/runtime"
+	"github.com/retail-cortex/blitz/internal/workers"
 	"google.golang.org/genai"
 )
 
 // serveWorkers starts a server that runs workers, on mock models answering
 // with replies, and returns a worker client for it.
-func serveWorkers(t *testing.T, rescan time.Duration, replies ...*genai.Content) (codepuppyv1connect.WorkerServiceClient, *Server) {
+func serveWorkers(t *testing.T, rescan time.Duration, replies ...*genai.Content) (blitzv1connect.WorkerServiceClient, *Server) {
 	t.Helper()
 	t.Setenv("HOME", t.TempDir())
 	t.Setenv("MODENV_PREFIX", "")
@@ -34,12 +34,12 @@ func serveWorkers(t *testing.T, rescan time.Duration, replies ...*genai.Content)
 		cfg.Tools.WorkspaceDir = dir
 		cfg.Session.StorageDir = t.TempDir()
 		return app.Open(ctx, cfg, app.Options{Model: runtime.NewMockLLM("m", replies...), Workers: store})
-	}, WithScheduler(SchedulerConfig{Store: store, Runs: workers.OpenRunLog(filepath.Join(os.Getenv("HOME"), ".code_puppy", "worker-runs")), MaxConcurrent: 2, Rescan: rescan}))
+	}, WithScheduler(SchedulerConfig{Store: store, Runs: workers.OpenRunLog(filepath.Join(os.Getenv("HOME"), ".blitz", "worker-runs")), MaxConcurrent: 2, Rescan: rescan}))
 	srv := httptest.NewServer(s.Handler())
 	ctx, cancel := context.WithCancel(context.Background())
 	s.StartScheduler(ctx)
 	t.Cleanup(func() { cancel(); srv.Close(); s.Close() })
-	return codepuppyv1connect.NewWorkerServiceClient(http.DefaultClient, srv.URL), s
+	return blitzv1connect.NewWorkerServiceClient(http.DefaultClient, srv.URL), s
 }
 
 func addWorker(t *testing.T, dir, name, content string) {

@@ -12,11 +12,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/retail-cortex/code_puppy/internal/agents"
-	"github.com/retail-cortex/code_puppy/internal/config"
-	"github.com/retail-cortex/code_puppy/internal/i18n"
-	"github.com/retail-cortex/code_puppy/internal/runtime"
-	"github.com/retail-cortex/code_puppy/internal/session"
+	"github.com/retail-cortex/blitz/internal/agents"
+	"github.com/retail-cortex/blitz/internal/config"
+	"github.com/retail-cortex/blitz/internal/i18n"
+	"github.com/retail-cortex/blitz/internal/runtime"
+	"github.com/retail-cortex/blitz/internal/session"
 	"google.golang.org/adk/v2/model"
 	"google.golang.org/genai"
 )
@@ -62,7 +62,7 @@ func mockModels(_ context.Context, _ *config.Config, ref string) (model.LLM, err
 // savedConfig reads back the config file that operations save to.
 func savedConfig(t *testing.T) *config.Config {
 	t.Helper()
-	cfg, err := config.Load(filepath.Join(os.Getenv("HOME"), ".code_puppy"))
+	cfg, err := config.Load(filepath.Join(os.Getenv("HOME"), ".blitz"))
 	if err != nil {
 		t.Fatal(err)
 	}

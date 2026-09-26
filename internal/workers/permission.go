@@ -5,7 +5,7 @@ import (
 	"path"
 	"strings"
 
-	"github.com/retail-cortex/code_puppy/internal/tools"
+	"github.com/retail-cortex/blitz/internal/tools"
 )
 
 // Permission is something a worker may do without approval, as written in

@@ -2,7 +2,7 @@
 
 Everything here needs a person, a real terminal, real credentials, or GitHub. The automated suite (413 tests on macOS and Linux) covers the logic behind each item; this list checks the parts it can't. Each item has an **expected** result — if you see something else, note it next to the item.
 
-Setup for most items: `make build`, then use `./bin/code-puppy` (or put `bin/` on your `PATH`). Use a scratch Git repository as the workspace so edits are safe.
+Setup for most items: `make build`, then use `./bin/blitz` (or put `bin/` on your `PATH`). Use a scratch Git repository as the workspace so edits are safe.
 
 **Cost note:** items marked 💲 call a paid API. A short session costs cents; long sessions and `/compact` cost more.
 
@@ -10,9 +10,9 @@ Setup for most items: `make build`, then use `./bin/code-puppy` (or put `bin/` o
 
 ## 0. Setup
 
-- [ ] `code-puppy config init`, then add your API key(s) to `~/.code_puppy/.env.toml`.
+- [ ] `blitz config init`, then add your API key(s) to `~/.blitz/.env.toml`.
   **Expected:** file created with mode 600; re-running without `--force` refuses.
-- [ ] `code-puppy doctor` 💲 then `code-puppy doctor --online`
+- [ ] `blitz doctor` 💲 then `blitz doctor --online`
   **Expected:** credentials ✓, model ✓, `model request` ✓ with `--online`, shell sandbox **on**, pricing ✓ for the default model.
 
 ## 1. Gemini end to end 💲
@@ -35,7 +35,7 @@ Set `[llm] provider = "anthropic"` (key via `api_key`, `ANTHROPIC_API_KEY`, or `
   **Expected:** completes without "invalid request" errors between tool calls (thinking blocks are carried across correctly).
 - [ ] Run two turns in a row, then `/cost`.
   **Expected:** "read from cache" is non-zero from the second turn on.
-- [ ] Quit, then `code-puppy --continue "what did we just do?"`.
+- [ ] Quit, then `blitz --continue "what did we just do?"`.
   **Expected:** it remembers the previous turn's details.
 - [ ] Optional: `fallbacks = "off"` in config, repeat one turn. **Expected:** works the same.
 
@@ -48,13 +48,13 @@ Set `[llm] provider = "anthropic"` (key via `api_key`, `ANTHROPIC_API_KEY`, or `
 
 ## 4. Terminal experience
 
-- [ ] Up/Down recall history; history survives restart (`~/.code_puppy/history`, mode 600).
+- [ ] Up/Down recall history; history survives restart (`~/.blitz/history`, mode 600).
 - [ ] Ctrl+R searches history.
 - [ ] Tab completes `/com` → `/compact`, `/agent he` → `helios`, `/resume ` → this directory's session IDs, `look at @src/` → file names.
 - [ ] Multi-line: end a line with `\` and continue; also a block between two `"""` lines.
   **Expected:** sent as one prompt with the line breaks kept.
 - [ ] Resize the terminal mid-answer. **Expected:** no garbled output afterwards.
-- [ ] Light terminal theme: `COLORFGBG="0;15" code-puppy`. **Expected:** Markdown readable on a light background.
+- [ ] Light terminal theme: `COLORFGBG="0;15" blitz`. **Expected:** Markdown readable on a light background.
 - [ ] Spinner shows while waiting and disappears before output and approval prompts.
 
 ## 5. Ctrl+C behaviour
@@ -87,9 +87,9 @@ Set `[llm] provider = "anthropic"` (key via `api_key`, `ANTHROPIC_API_KEY`, or `
 
 ## 9. Sessions
 
-- [ ] Run a prompt in directory A, then in directory B. In A: `code-puppy --continue "…"`. **Expected:** continues A's session, not B's.
+- [ ] Run a prompt in directory A, then in directory B. In A: `blitz --continue "…"`. **Expected:** continues A's session, not B's.
 - [ ] `/session list` in A shows only A's; `/session list --all` shows both with their directories.
-- [ ] `code-puppy --resume <B's id>` from A. **Expected:** works, with a warning that it started elsewhere.
+- [ ] `blitz --resume <B's id>` from A. **Expected:** works, with a warning that it started elsewhere.
 
 ## 10. Sandbox on your real workflow
 
@@ -102,7 +102,7 @@ Set `[llm] provider = "anthropic"` (key via `api_key`, `ANTHROPIC_API_KEY`, or `
 ## 11. Background processes
 
 - [ ] Ask the agent to start a dev server in the background, then `/exit`. **Expected:** warning listing it; `k` kills it; `w` waits; `c` cancels the exit.
-- [ ] Start one, then from another terminal `kill -9 <code-puppy pid>`. **Expected:** the server is gone within a second or two (`lsof -i :<port>` shows nothing).
+- [ ] Start one, then from another terminal `kill -9 <blitz pid>`. **Expected:** the server is gone within a second or two (`lsof -i :<port>` shows nothing).
 
 ## 12. MCP (real server)
 
@@ -137,18 +137,18 @@ prefix = "fs"
 ## 15. Forged tools (helios)
 
 - [ ] `/agent helios`, ask it to forge a small bash tool and run it. **Expected:** approval shows the code as a diff; run needs separate approval.
-- [ ] Restart, ask helios to list and run it. **Expected:** still there. Ask it to delete it. **Expected:** gone from `~/.code_puppy/uc_tools`.
+- [ ] Restart, ask helios to list and run it. **Expected:** still there. Ask it to delete it. **Expected:** gone from `~/.blitz/uc_tools`.
 
 ## 16. Scripting
 
-- [ ] `git diff | code-puppy review this --output-format json | jq .result` **Expected:** a single JSON object; `jq` works.
-- [ ] `code-puppy --output-format stream-json "…" | jq -c .type` **Expected:** `session`, then events, ending with `result`.
-- [ ] `code-puppy --max-turns 1 "do a multi-step task"; echo $?` **Expected:** exit code 3.
-- [ ] Without credentials: `code-puppy "hi"; echo $?` **Expected:** clear error, exit code 1.
+- [ ] `git diff | blitz review this --output-format json | jq .result` **Expected:** a single JSON object; `jq` works.
+- [ ] `blitz --output-format stream-json "…" | jq -c .type` **Expected:** `session`, then events, ending with `result`.
+- [ ] `blitz --max-turns 1 "do a multi-step task"; echo $?` **Expected:** exit code 3.
+- [ ] Without credentials: `blitz "hi"; echo $?` **Expected:** clear error, exit code 1.
 
 ## 17. Other platforms
 
-- [ ] Ubuntu 24.04 desktop: `sudo apt install bubblewrap`, `code-puppy doctor`. **Expected:** sandbox on, or a clear AppArmor reason (fix: an AppArmor profile for bwrap, or `sysctl kernel.apparmor_restrict_unprivileged_userns=0`).
+- [ ] Ubuntu 24.04 desktop: `sudo apt install bubblewrap`, `blitz doctor`. **Expected:** sandbox on, or a clear AppArmor reason (fix: an AppArmor profile for bwrap, or `sysctl kernel.apparmor_restrict_unprivileged_userns=0`).
 - [ ] Windows: run the `.exe` with Git Bash on `PATH`; a simple prompt and a shell command. **Expected:** works without the OS sandbox; `doctor` shows sandbox off with a reason.
 
 ## 18. Repository and release
@@ -166,7 +166,7 @@ prefix = "fs"
   ```
   **Expected:** `Verified OK` and every file `OK`. Then publish the draft.
   *Verified 2026-09-26 with cosign v3.1.3 (the bundle was made by cosign v2 in CI), using the exact identity `https://github.com/rmcguinness/code_puppy/.github/workflows/go-release.yml@refs/tags/v0.1.0`: `Verified OK`. A tampered `checksums.txt` and a wrong identity were both rejected. All 10 files `OK`. The SBOMs are SPDX 2.3 with 96 Go modules (95 in the binary's build info). The darwin/arm64 binary reports `0.1.0` and `vcs.revision=4e008b41`, and `doctor` runs. Draft assets need authentication: `gh api repos/<owner>/<repo>/releases/<id>/assets`, then download each asset with `Accept: application/octet-stream`. Not yet published.*
-- [x] Publish the draft. *Published 2026-09-26 as Latest, after deleting a stray empty release on the same tag; the public `checksums.txt` is identical to the verified one.* Binaries aren't Apple-notarized: on macOS, a copy downloaded in a browser gets the quarantine flag, and Gatekeeper refuses to run it until it's cleared (`xattr -d com.apple.quarantine code-puppy`) or opened through Finder's context menu. Document this in the release notes, or notarize later.
+- [x] Publish the draft. *Published 2026-09-26 as Latest, after deleting a stray empty release on the same tag; the public `checksums.txt` is identical to the verified one.* Binaries aren't Apple-notarized: on macOS, a copy downloaded in a browser gets the quarantine flag, and Gatekeeper refuses to run it until it's cleared (`xattr -d com.apple.quarantine blitz`) or opened through Finder's context menu. Document this in the release notes, or notarize later.
 
 ## 19. Cost sanity 💲
 
@@ -175,12 +175,12 @@ prefix = "fs"
 ## 20. Language
 
 - [ ] `/locale` **Expected:** "Interface language: English (US) (en-US)" and the list `en-US, es, fr-CA`.
-- [ ] `/locale ES-sp` **Expected:** confirmation in Spanish; `~/.code_puppy/.env.toml` now has `locale = "es"` under `[ui]`, with your other settings and comments unchanged.
+- [ ] `/locale ES-sp` **Expected:** confirmation in Spanish; `~/.blitz/.env.toml` now has `locale = "es"` under `[ui]`, with your other settings and comments unchanged.
 - [ ] `/help`, `/cost`, an approval prompt, and `/exit` with a background process running. **Expected:** all in Spanish; answer letters still `y/s/a/n` and `k/w/c`.
 - [ ] 💲 Ask a question. **Expected:** the answer is in Spanish; code, paths, and command output are unchanged.
 - [ ] Restart. **Expected:** still Spanish (banner, spinner "pensando").
 - [ ] `/locale ja` 💲 **Expected:** a note that menus stay in English; replies come in Japanese.
-- [ ] Put a `de.json` with a few keys in `~/.code_puppy/locales/` (see `docs/TRANSLATING.md`), then `/locale de`. **Expected:** those keys in German, the rest in English.
+- [ ] Put a `de.json` with a few keys in `~/.blitz/locales/` (see `docs/TRANSLATING.md`), then `/locale de`. **Expected:** those keys in German, the rest in English.
 - [ ] `/locale en-XA` **Expected:** accented ⟦…⟧ text everywhere; note any plain English you see.
 - [ ] **Native-speaker review:** someone fluent reads `internal/i18n/locales/es.json` and `fr-CA.json` (tone, terminology, Québec typography for fr-CA) and runs a short session in each.
 - [ ] `/locale en-US` to switch back.
@@ -198,19 +198,19 @@ Use a real screenshot (e.g. a UI with visible text) saved in the workspace as `s
 - [ ] Linux desktop: `/paste` with `wl-paste` (Wayland) or `xclip` (X11) installed.
 - [ ] A 4000×3000 photo: **Expected:** attaches as 1568×1176; the model still describes it.
 - [ ] `@~/Desktop/x.png` (outside the workspace) and `@id_rsa_screenshot.png`. **Expected:** refused; "Nothing was sent".
-- [ ] Quit and `--continue "what was in that image?"`. **Expected:** the model can still see it. Check `ls -la ~/.code_puppy/images` (files mode 600) and that the session file under `~/.code_puppy/sessions` is small (no base64).
-- [ ] `code-puppy --image shot.png "describe" --output-format json | jq .result` **Expected:** a description.
+- [ ] Quit and `--continue "what was in that image?"`. **Expected:** the model can still see it. Check `ls -la ~/.blitz/images` (files mode 600) and that the session file under `~/.blitz/sessions` is small (no base64).
+- [ ] `blitz --image shot.png "describe" --output-format json | jq .result` **Expected:** a description.
 
 ## 22. Diagnostic log and telemetry
 
-- [ ] After any session: `ls -la ~/.code_puppy/logs`. **Expected:** directory mode 700, `code-puppy-YYYY-MM-DD.jsonl` mode 600 with a `start` line; a failed turn adds an `ERROR` line.
-- [ ] `CODE_PUPPY_LOG_LEVEL=off code-puppy "hi"`. **Expected:** nothing new in the log.
-- [ ] Run a local collector, e.g. Jaeger: `docker run --rm -p 16686:16686 -p 4318:4318 jaegertracing/jaeger:latest`. Then `CODE_PUPPY_TELEMETRY=1 code-puppy` 💲 and do a turn that reads and edits a file.
-  **Expected:** in Jaeger (http://localhost:16686, service `code-puppy`), one trace per prompt: `turn` → `invoke_agent` → `generate_content …` and `execute_tool …`, with `approval` under the edit's tool span. No file content, prompt text or tool arguments in any attribute.
+- [ ] After any session: `ls -la ~/.blitz/logs`. **Expected:** directory mode 700, `blitz-YYYY-MM-DD.jsonl` mode 600 with a `start` line; a failed turn adds an `ERROR` line.
+- [ ] `BLITZ_LOG_LEVEL=off blitz "hi"`. **Expected:** nothing new in the log.
+- [ ] Run a local collector, e.g. Jaeger: `docker run --rm -p 16686:16686 -p 4318:4318 jaegertracing/jaeger:latest`. Then `BLITZ_TELEMETRY=1 blitz` 💲 and do a turn that reads and edits a file.
+  **Expected:** in Jaeger (http://localhost:16686, service `blitz`), one trace per prompt: `turn` → `invoke_agent` → `generate_content …` and `execute_tool …`, with `approval` under the edit's tool span. No file content, prompt text or tool arguments in any attribute.
 - [ ] Two prompts, quit, then `--continue` with a third. In Jaeger search by tag `gen_ai.conversation.id=<session id>`. **Expected:** three `turn` traces with `turn.index` 1–3; turns 2 and 3 each show a link ("References") to the previous turn, including across the restart.
 - [ ] Same with `capture_content = true`. **Expected:** prompts and tool arguments appear; your API key does not.
 - [ ] Stop the collector, then run and quit a session. **Expected:** exit is not delayed by more than about 3 s; no telemetry errors in the terminal (they go to the log at debug level).
-- [ ] `code-puppy doctor`. **Expected:** `log` and `telemetry` lines matching your settings.
+- [ ] `blitz doctor`. **Expected:** `log` and `telemetry` lines matching your settings.
 
 ## 23. Resilience 💲
 
@@ -238,13 +238,13 @@ Use a real screenshot (e.g. a UI with visible text) saved in the workspace as `s
 - [ ] `!sleep 30`, then Ctrl+C. **Expected:** `⚡ Interrupted`; the session continues (no exit prompt).
 - [ ] `!exit 3`. **Expected:** `❌ Exit code 3`. The audit log has a `user_shell` entry.
 - [ ] 💲 `/plan add input validation to the signup handler`. **Expected:** a "Plan mode" note; the agent reads files; any attempt to edit or run a command comes back as "plan mode: … disabled"; the answer is a numbered plan and no files change (`git status` clean).
-- [ ] 💲 `code-puppy --plan "…" --output-format json | jq .result`. **Expected:** a plan; no changes.
+- [ ] 💲 `blitz --plan "…" --output-format json | jq .result`. **Expected:** a plan; no changes.
 - [ ] `/tools`. **Expected:** the active agent's tools with ● on read-only ones; configured MCP servers listed for the primary agent only (unless `agents` says otherwise).
 
 ## 26. Model fallback 💲
 
 Set `fallback_models = ["anthropic/claude-sonnet-5"]` with a working Anthropic key, and the primary on Gemini.
-- [ ] `code-puppy doctor --online`. **Expected:** `model` and `fallback 1` each initialised and responding.
+- [ ] `blitz doctor --online`. **Expected:** `model` and `fallback 1` each initialised and responding.
 - [ ] Break the primary: an invalid `GEMINI_API_KEY`. Ask something. **Expected:** one notice "gemini-… is unavailable; answering with fallback claude-sonnet-5", then the answer. Ask again: no second notice and no delay from the primary.
 - [ ] `/cost`. **Expected:** priced at Claude's rates.
 - [ ] Fix the key, wait 15 s or more, and ask. **Expected:** "gemini-… is answering again".
@@ -256,7 +256,7 @@ Set `fallback_models = ["anthropic/claude-sonnet-5"]` with a working Anthropic k
 - [ ] `/pin_model qa-kitten anthropic/claude-haiku-4-5`. **Expected:** "qa-kitten now runs on claude-haiku-4-5", "Saved in …/.env.toml"; the file has `[agent_models]` with that line and your comments intact.
 - [ ] `/agents`. **Expected:** 📌 claude-haiku-4-5 next to qa-kitten.
 - [ ] Ask the main agent to have qa-kitten review a file. **Expected:** it works; `/cost` includes Haiku-priced tokens. With telemetry on, qa-kitten's `generate_content` span names claude-haiku-4-5.
-- [ ] Restart. **Expected:** the pin is still there (`/pin_model` lists it). `code-puppy doctor` shows `pin qa-kitten`.
+- [ ] Restart. **Expected:** the pin is still there (`/pin_model` lists it). `blitz doctor` shows `pin qa-kitten`.
 - [ ] `/model anthropic/claude-sonnet-5`. **Expected:** the main agent switches provider.
 - [ ] `/unpin qa-kitten`. **Expected:** it runs on the configured model again; the line is gone from the config file.
 
@@ -264,7 +264,7 @@ Set `fallback_models = ["anthropic/claude-sonnet-5"]` with a working Anthropic k
 
 - [ ] `/model_settings`. **Expected:** "No model has settings of its own…".
 - [ ] `/model_settings gemini-3.8-flash temperature=0.1 seed=7`. **Expected:** "gemini-3.8-flash now uses temperature=0.1 seed=7", "Saved in …/.env.toml"; the file has `[model_settings."gemini-3.8-flash"]` with both lines and your comments intact.
-- [ ] Ask the same short question twice. **Expected:** it works; the answers are close to identical. With `CODE_PUPPY_LOG_LEVEL=debug` nothing is logged about dropped settings.
+- [ ] Ask the same short question twice. **Expected:** it works; the answers are close to identical. With `BLITZ_LOG_LEVEL=debug` nothing is logged about dropped settings.
 - [ ] `/model_settings gemini-3.8-flash`. **Expected:** temperature 0.1, seed 7, max_tokens "(global: 8192)", top_p "(provider default)".
 - [ ] `/model_settings anthropic/claude-sonnet-5 temperature=0.5`. **Expected:** a warning that anthropic doesn't accept temperature for claude-sonnet-5. `/model anthropic/claude-sonnet-5` and ask something: it answers (no 400 error).
 - [ ] With an OpenAI key: `/model_settings openai/gpt-5 seed=1`, `/model openai/gpt-5`, ask something. **Expected:** a warning when setting; the answer works (the seed isn't sent).
@@ -277,12 +277,12 @@ Set `fallback_models = ["anthropic/claude-sonnet-5"]` with a working Anthropic k
 - [ ] Tell it "actually, remember mango". `/session load fruit`, then ask "which word?". **Expected:** "Started session … from snapshot fruit"; it answers pineapple and doesn't know mango.
 - [ ] `/resume <the original session's id>` and ask again. **Expected:** mango.
 - [ ] `/session save fruit`. **Expected:** refused with a hint about `--force`; with `--force` it's replaced and `/session list` shows one 📸 fruit.
-- [ ] Exit. `code-puppy --continue "which word?"`. **Expected:** continues your last ordinary session, not the snapshot. `code-puppy --resume=fruit "which word?"`: pineapple, in a new session.
+- [ ] Exit. `blitz --continue "which word?"`. **Expected:** continues your last ordinary session, not the snapshot. `blitz --resume=fruit "which word?"`: pineapple, in a new session.
 - [ ] In a session that used tools (e.g. edited a file), save, load, and ask what it just did. **Expected:** it knows about the tool calls, not only the chat text.
 
 ## 30. `/search` and Google search 💲
 
-- [ ] `[web] search_provider = "google"` with a Gemini key. `code-puppy doctor --online`. **Expected:** `web search  google: N results`.
+- [ ] `[web] search_provider = "google"` with a Gemini key. `blitz doctor --online`. **Expected:** `web search  google: N results`.
 - [ ] `/search web golang errors.Is vs errors.As`. **Expected:** up to five numbered links with real site URLs (no `vertexaisearch.cloud.google.com` links), "Handing these to the agent to read", then an answer that cites some of them. No approval prompt for those pages.
 - [ ] In the same answer, if the agent tries a page that wasn't listed. **Expected:** an approval prompt.
 - [ ] Ask it to save its findings to a file in that turn (e.g. `/search web … and write notes.md`). **Expected:** `create_file` is refused as read-only; no file.
@@ -303,13 +303,13 @@ Set `fallback_models = ["anthropic/claude-sonnet-5"]` with a working Anthropic k
 
 - [ ] Start the REPL. **Expected:** the terminal tab/window title is "🐶 (untitled)". Send a prompt; at the next prompt the title is its first line.
 - [ ] `/rename Login work`. **Expected:** "Session renamed to Login work."; the window title follows; `/session list` shows it.
-- [ ] `/exit`. **Expected:** "Resume with: code-puppy --resume=session-…"; the terminal's own title comes back. Running that command resumes the session.
+- [ ] `/exit`. **Expected:** "Resume with: blitz --resume=session-…"; the terminal's own title comes back. Running that command resumes the session.
 - [ ] `ui.terminal_title = false`. **Expected:** the window title isn't touched.
 - [ ] In tmux, with `set -g set-titles on`. **Expected:** the tmux title follows the session name.
 
 ## 33. Skill definitions and `[skills.policy]`
 
-- [ ] Put a Castor-style `SKILL.md` (with `scripts`, `tool_requirements`, `execution_hints`) in `~/.code_puppy/skills/<name>/`. `/skills list`. **Expected:** a line such as "1 script · TIER_2_AUDITED_WRITE · allowed by skills.policy".
+- [ ] Put a Castor-style `SKILL.md` (with `scripts`, `tool_requirements`, `execution_hints`) in `~/.blitz/skills/<name>/`. `/skills list`. **Expected:** a line such as "1 script · TIER_2_AUDITED_WRITE · allowed by skills.policy".
 - [ ] `/skills show <name>`. **Expected:** the content hash, required tools, tier, network, passed and withheld variables, and each script with ✓/✗ and its reasons.
 - [ ] Add `custom_hints: {network: "true"}`. **Expected:** the scripts are blocked ("needs the network…"). Set `network = "allowlist"` and `network_allow = ["<name>"]`: allowed.
 - [ ] Put the hash from `/skills show` in `trusted_hashes`, then edit the script. **Expected:** blocked ("isn't in skills.policy.trusted_hashes").
@@ -318,17 +318,17 @@ Set `fallback_models = ["anthropic/claude-sonnet-5"]` with a working Anthropic k
 
 ## 34. Script sandbox (gVisor)
 
-- [ ] macOS: `code-puppy doctor`. **Expected:** `script sandbox   os (gVisor unavailable: gVisor runs only on Linux)`.
+- [ ] macOS: `blitz doctor`. **Expected:** `script sandbox   os (gVisor unavailable: gVisor runs only on Linux)`.
 - [ ] Linux without gVisor: `doctor`. **Expected:** `script sandbox   os (gVisor unavailable: runsc not found …)`.
-- [ ] Linux: unpack gVisor's release tarball into `~/.code_puppy/bin` (keep `gvisor-bin/` beside `runsc`). `doctor`. **Expected:** `script sandbox   gvisor`.
+- [ ] Linux: unpack gVisor's release tarball into `~/.blitz/bin` (keep `gvisor-bin/` beside `runsc`). `doctor`. **Expected:** `script sandbox   gvisor`.
 - [ ] `skills.policy.sandbox = "gvisor"` on macOS. **Expected:** `doctor` warns that skill scripts won't run.
-- [ ] Linux with gVisor: kill Code Puppy with `kill -9` while a script runs, then start it again. **Expected:** `runsc --root ~/.code_puppy/sandboxes/state list` is empty after the restart.
+- [ ] Linux with gVisor: kill Blitz with `kill -9` while a script runs, then start it again. **Expected:** `runsc --root ~/.blitz/sandboxes/state list` is empty after the restart.
 
 ## 35. Skill scripts and environments 💲
 
-- [ ] Put a skill with a Python script that has a dependency (e.g. `requests>=2.31`) in `~/.code_puppy/skills/<name>/`. Ask the agent to use the skill. **Expected:** `activate_skill` lists the script as allowed; running it asks once to install ("Install packages for skill … --only-binary :all: -- requests>=2.31"), then runs.
+- [ ] Put a skill with a Python script that has a dependency (e.g. `requests>=2.31`) in `~/.blitz/skills/<name>/`. Ask the agent to use the skill. **Expected:** `activate_skill` lists the script as allowed; running it asks once to install ("Install packages for skill … --only-binary :all: -- requests>=2.31"), then runs.
 - [ ] Ask again. **Expected:** no install prompt; `/envs` shows one environment with the package, "used by <name>".
-- [ ] A script that writes `$SKILL_OUTPUT/report.md` and tries to write a workspace file. **Expected:** the workspace write fails, `report.md` appears under `.code_puppy/skill-output/…`, and the agent can read it and apply changes with the file tools (diff and approval as usual).
+- [ ] A script that writes `$SKILL_OUTPUT/report.md` and tries to write a workspace file. **Expected:** the workspace write fails, `report.md` appears under `.blitz/skill-output/…`, and the agent can read it and apply changes with the file tools (diff and approval as usual).
 - [ ] `hitl_tier: TIER_3_MANDATORY_APPROVAL`. **Expected:** asked before every run, with no "always" option.
 - [ ] A script that needs the network, without `network_allow`. **Expected:** refused with the reason; allowed after `network = "allowlist"` plus `network_allow`.
 - [ ] Linux with gVisor: a script that runs `ls ~` and `cat .env` in the workspace. **Expected:** home doesn't exist and `.env` reads as empty.
@@ -336,17 +336,17 @@ Set `fallback_models = ["anthropic/claude-sonnet-5"]` with a working Anthropic k
 
 ## 36. The service, attaching and workers
 
-- [ ] `code-puppy serve` in one terminal, `code-puppy` in a workspace in another. **Expected:** the REPL says it attached; a turn streams as usual; an approval prompt appears in the REPL and its answer is honoured; `/pin_model`, `/session save`, `/undo` work.
-- [ ] While attached, `code-puppy --local` in the same workspace. **Expected:** refused, naming the other owner (exit code 2).
-- [ ] Stop the service with Ctrl+C during a turn. **Expected:** the turn ends within about 10 s, the socket file is gone, and a new `code-puppy` in the workspace runs locally.
-- [ ] `code-puppy service install` on macOS, then log out and in. **Expected:** `code-puppy service status` says installed and answering; `~/.code_puppy/logs/service.log` shows it started. With a key only in the shell, install warns about it. `code-puppy service uninstall` removes it.
-- [ ] Same on Linux with systemd (`systemctl --user status code-puppy`).
-- [ ] 💲 A worker `workers/check/WORKER.md` with `schedule: every 5 minutes` and `permissions: ["write:reports/"]` whose workflow writes `reports/check.md` and also tries to edit `main.go`. `code-puppy workers enable check`, wait. **Expected:** it runs on schedule; `reports/check.md` exists, `main.go` is unchanged; `code-puppy workers runs check` lists the run with one refusal; `/resume <session>` shows the conversation. Edit `WORKER.md`: the listing says "changed" and it stops running until re-enabled.
+- [ ] `blitz serve` in one terminal, `blitz` in a workspace in another. **Expected:** the REPL says it attached; a turn streams as usual; an approval prompt appears in the REPL and its answer is honoured; `/pin_model`, `/session save`, `/undo` work.
+- [ ] While attached, `blitz --local` in the same workspace. **Expected:** refused, naming the other owner (exit code 2).
+- [ ] Stop the service with Ctrl+C during a turn. **Expected:** the turn ends within about 10 s, the socket file is gone, and a new `blitz` in the workspace runs locally.
+- [ ] `blitz service install` on macOS, then log out and in. **Expected:** `blitz service status` says installed and answering; `~/.blitz/logs/service.log` shows it started. With a key only in the shell, install warns about it. `blitz service uninstall` removes it.
+- [ ] Same on Linux with systemd (`systemctl --user status blitz`).
+- [ ] 💲 A worker `workers/check/WORKER.md` with `schedule: every 5 minutes` and `permissions: ["write:reports/"]` whose workflow writes `reports/check.md` and also tries to edit `main.go`. `blitz workers enable check`, wait. **Expected:** it runs on schedule; `reports/check.md` exists, `main.go` is unchanged; `blitz workers runs check` lists the run with one refusal; `/resume <session>` shows the conversation. Edit `WORKER.md`: the listing says "changed" and it stops running until re-enabled.
 - [ ] 💲 A worker with `limits: {max_cost_usd: 0.001}`. **Expected:** stopped as "limited" with the cost limit as the reason.
 
 ## 37. Desktop app
 
-- [ ] `make desktop`, open `build/desktop/bin/code-puppy-desktop.app` with no service running. **Expected:** it offers to install the service; accepting runs `code-puppy service install` and the app continues.
+- [ ] `make desktop`, open `build/desktop/bin/blitz-desktop.app` with no service running. **Expected:** it offers to install the service; accepting runs `blitz service install` and the app continues.
 - [ ] With the service running: open a workspace with "+". **Expected:** a tab named after the directory, showing the active agent and model (or why the model is unavailable).
 - [ ] 💲 A turn in the app: its text appears as it streams, not only at the end. **This checks that WebKit streams responses through Wails's asset server**, which the tests can't: they exercise the proxy over plain HTTP.
 - [ ] 💲 A turn that edits a file with approvals on. **Expected:** the approval shows the diff; "Allow once" edits the file; "Deny" doesn't, and the agent says so.

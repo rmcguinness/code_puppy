@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/retail-cortex/code_puppy/internal/config"
-	cpsession "github.com/retail-cortex/code_puppy/internal/session"
+	"github.com/retail-cortex/blitz/internal/config"
+	cpsession "github.com/retail-cortex/blitz/internal/session"
 	"google.golang.org/genai"
 )
 

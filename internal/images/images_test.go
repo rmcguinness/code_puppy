@@ -175,7 +175,7 @@ func TestStore(t *testing.T) {
 	if err != nil || mime != "image/png" || !bytes.Equal(data, img.Data) {
 		t.Errorf("Get: %s %v", mime, err)
 	}
-	for _, bad := range []string{"", "code-puppy-image:../../etc/passwd", URIScheme + strings.Repeat("A", 64), "file:///x.png"} {
+	for _, bad := range []string{"", "blitz-image:../../etc/passwd", URIScheme + strings.Repeat("A", 64), "file:///x.png"} {
 		if _, _, err := s.Get(bad); err == nil {
 			t.Errorf("Get(%q) should fail", bad)
 		}

@@ -1,7 +1,7 @@
-// Build tools for Code Puppy, kept out of the main module so their
+// Build tools for Blitz, kept out of the main module so their
 // dependencies don't reach its go.mod. Run them with
 // `go tool -modfile=tools/go.mod <name>` (see the Makefile).
-module github.com/retail-cortex/code_puppy/tools
+module github.com/retail-cortex/blitz/tools
 
 go 1.27.1
 

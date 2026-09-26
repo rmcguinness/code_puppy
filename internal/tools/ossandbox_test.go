@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/retail-cortex/code_puppy/internal/config"
+	"github.com/retail-cortex/blitz/internal/config"
 )
 
 func TestSeatbeltProfile(t *testing.T) {
@@ -179,7 +179,7 @@ func TestOSSandboxIsolationExtras(t *testing.T) {
 	if out := run("echo x >> .env"); out.ExitCode == 0 {
 		t.Error("blocked file was writable")
 	}
-	if out := run("echo x > /etc/code-puppy-sandbox-test"); out.ExitCode == 0 {
+	if out := run("echo x > /etc/blitz-sandbox-test"); out.ExitCode == 0 {
 		t.Error("system path was writable")
 	}
 	if out := run("echo x > \"$HOME/outside.txt\""); out.ExitCode == 0 {

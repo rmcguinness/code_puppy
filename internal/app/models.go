@@ -8,8 +8,8 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/retail-cortex/code_puppy/internal/config"
-	"github.com/retail-cortex/code_puppy/internal/runtime"
+	"github.com/retail-cortex/blitz/internal/config"
+	"github.com/retail-cortex/blitz/internal/runtime"
 )
 
 // Agents, models, pins, model settings and settings. Operations return data
@@ -92,7 +92,7 @@ func (w *Workspace) SetModel(ctx context.Context, ref string) (activePin string,
 	if err != nil {
 		return "", err
 	}
-	w.cfg.CodePuppy.DefaultModel = ref
+	w.cfg.Blitz.DefaultModel = ref
 	if m, pinned := w.engine.AgentModel(w.engine.ActiveAgent()); pinned {
 		return m, nil
 	}
@@ -184,7 +184,7 @@ func (w *Workspace) ModelSettings(ref string) (ModelSettingsInfo, error) {
 	}
 	return ModelSettingsInfo{
 		Model: name, Provider: provider, Settings: w.engine.ModelSettings(name),
-		GlobalTemperature: w.cfg.CodePuppy.Temperature, GlobalMaxTokens: w.cfg.CodePuppy.MaxTokens,
+		GlobalTemperature: w.cfg.Blitz.Temperature, GlobalMaxTokens: w.cfg.Blitz.MaxTokens,
 	}, nil
 }
 
@@ -264,7 +264,7 @@ type Settings struct {
 // Settings returns the current settings.
 func (w *Workspace) Settings() Settings {
 	return Settings{
-		PuppyName: w.cfg.CodePuppy.PuppyName, OwnerName: w.cfg.CodePuppy.OwnerName, Agency: w.cfg.CodePuppy.AgencyLevel,
+		PuppyName: w.cfg.Blitz.PuppyName, OwnerName: w.cfg.Blitz.OwnerName, Agency: w.cfg.Blitz.AgencyLevel,
 		Model: w.Model(), Agent: w.engine.ActiveAgent(), Locale: w.reply.Tag().String(),
 	}
 }
@@ -289,11 +289,11 @@ func (w *Workspace) Set(ctx context.Context, key, value string) (string, error) 
 		default:
 			return key, ErrInvalidAgency
 		}
-		w.cfg.CodePuppy.AgencyLevel = strings.ToLower(value)
+		w.cfg.Blitz.AgencyLevel = strings.ToLower(value)
 	case "puppy_name":
-		w.cfg.CodePuppy.PuppyName = value
+		w.cfg.Blitz.PuppyName = value
 	case "owner_name":
-		w.cfg.CodePuppy.OwnerName = value
+		w.cfg.Blitz.OwnerName = value
 	default:
 		return key, &UnknownSettingError{key}
 	}

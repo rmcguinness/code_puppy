@@ -15,7 +15,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/retail-cortex/code_puppy/internal/textutil"
+	"github.com/retail-cortex/blitz/internal/textutil"
 	"google.golang.org/adk/v2/agent"
 	"google.golang.org/adk/v2/tool"
 	"google.golang.org/adk/v2/tool/functiontool"
@@ -208,7 +208,7 @@ func (s *webSearcher) do(req *http.Request, into any) error {
 	if s.cfg.Provider == "google" {
 		req.Header.Set("x-goog-api-key", s.cfg.APIKey)
 	}
-	req.Header.Set("User-Agent", "code-puppy/2 (+web_search)")
+	req.Header.Set("User-Agent", "blitz/2 (+web_search)")
 	resp, err := s.client.Do(req)
 	if err != nil {
 		return fmt.Errorf("%s search: %w", s.cfg.Provider, err)

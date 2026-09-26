@@ -8,8 +8,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/retail-cortex/code_puppy/internal/config"
-	"github.com/retail-cortex/code_puppy/internal/redact"
+	"github.com/retail-cortex/blitz/internal/config"
+	"github.com/retail-cortex/blitz/internal/redact"
 	"go.opentelemetry.io/contrib/bridges/otelslog"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
@@ -22,8 +22,8 @@ import (
 	"go.opentelemetry.io/otel/sdk/trace/tracetest"
 )
 
-// ServiceName identifies Code Puppy in exported telemetry.
-const ServiceName = "code-puppy"
+// ServiceName identifies Blitz in exported telemetry.
+const ServiceName = "blitz"
 
 // captureContentEnv is read by the ADK to decide whether prompts and replies
 // go into spans and log events.

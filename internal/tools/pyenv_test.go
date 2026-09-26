@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/retail-cortex/code_puppy/internal/config"
+	"github.com/retail-cortex/blitz/internal/config"
 )
 
 func TestPyEnvKey(t *testing.T) {
@@ -46,12 +46,12 @@ func TestMountsFor(t *testing.T) {
 }
 
 // Builds a real environment from PyPI inside the script sandbox, then uses
-// it with the network off. Needs the network: CODE_PUPPY_PYENV_TESTS=1.
+// it with the network off. Needs the network: BLITZ_PYENV_TESTS=1.
 func TestPyEnvBuildAndUse(t *testing.T) {
-	if os.Getenv("CODE_PUPPY_PYENV_TESTS") != "1" {
-		t.Skip("set CODE_PUPPY_PYENV_TESTS=1 to build a real environment (needs the network)")
+	if os.Getenv("BLITZ_PYENV_TESTS") != "1" {
+		t.Skip("set BLITZ_PYENV_TESTS=1 to build a real environment (needs the network)")
 	}
-	box, _, err := NewScriptBox(ScriptBoxConfig{Mode: os.Getenv("CODE_PUPPY_PYENV_SANDBOX"), StateDir: t.TempDir()})
+	box, _, err := NewScriptBox(ScriptBoxConfig{Mode: os.Getenv("BLITZ_PYENV_SANDBOX"), StateDir: t.TempDir()})
 	if err != nil {
 		t.Skipf("no script sandbox: %v", err)
 	}
@@ -77,7 +77,7 @@ func TestPyEnvBuildAndUse(t *testing.T) {
 		t.Fatalf("using the env (network off): %+v %v\n%s", res, err, out.String())
 	}
 	// A build that fails leaves nothing behind.
-	if _, err := m.Ensure(context.Background(), box, python, "demo", []string{"no-such-package-code-puppy-test==9.9.9"}); err == nil {
+	if _, err := m.Ensure(context.Background(), box, python, "demo", []string{"no-such-package-blitz-test==9.9.9"}); err == nil {
 		t.Fatal("impossible requirement installed")
 	}
 	if n := len(m.List()); n != 1 {

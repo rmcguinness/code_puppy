@@ -14,10 +14,10 @@ import (
 	"time"
 	"unicode/utf8"
 
-	core "github.com/retail-cortex/code_puppy/internal/app"
-	"github.com/retail-cortex/code_puppy/internal/config"
-	"github.com/retail-cortex/code_puppy/internal/runtime"
-	"github.com/retail-cortex/code_puppy/internal/tools"
+	core "github.com/retail-cortex/blitz/internal/app"
+	"github.com/retail-cortex/blitz/internal/config"
+	"github.com/retail-cortex/blitz/internal/runtime"
+	"github.com/retail-cortex/blitz/internal/tools"
 	"google.golang.org/adk/v2/model"
 )
 
@@ -205,7 +205,7 @@ func TestSummarizeToolResponse(t *testing.T) {
 }
 
 // isolateHome points HOME at a temporary directory, so opening a workspace
-// never reads or writes the real ~/.code_puppy. Call it before
+// never reads or writes the real ~/.blitz. Call it before
 // config.DefaultConfig, which resolves paths under HOME.
 func isolateHome(t *testing.T) {
 	t.Helper()
@@ -239,7 +239,7 @@ func local(app *App) *core.Workspace { return app.Workspace.(*core.Workspace) }
 // savedConfig reads back the config file that commands save to.
 func savedConfig(t *testing.T) *config.Config {
 	t.Helper()
-	cfg, err := config.Load(filepath.Join(os.Getenv("HOME"), ".code_puppy"))
+	cfg, err := config.Load(filepath.Join(os.Getenv("HOME"), ".blitz"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -270,12 +270,12 @@ func TestHandleCommandModel(t *testing.T) {
 	if handled, err := HandleCommand(ctx, "/model mock-b", app); !handled || err != nil {
 		t.Fatalf("handled=%v err=%v", handled, err)
 	}
-	if local(app).Engine().ModelName() != "mock-b" || local(app).Config().CodePuppy.DefaultModel != "mock-b" {
-		t.Errorf("model not switched: engine=%q cfg=%q", local(app).Engine().ModelName(), local(app).Config().CodePuppy.DefaultModel)
+	if local(app).Engine().ModelName() != "mock-b" || local(app).Config().Blitz.DefaultModel != "mock-b" {
+		t.Errorf("model not switched: engine=%q cfg=%q", local(app).Engine().ModelName(), local(app).Config().Blitz.DefaultModel)
 	}
 	// Negative: factory failure leaves the current model in place.
 	HandleCommand(ctx, "/model bad-model", app)
-	if local(app).Engine().ModelName() != "mock-b" || local(app).Config().CodePuppy.DefaultModel != "mock-b" {
+	if local(app).Engine().ModelName() != "mock-b" || local(app).Config().Blitz.DefaultModel != "mock-b" {
 		t.Errorf("failed switch changed model to %q", local(app).Engine().ModelName())
 	}
 }
@@ -285,18 +285,18 @@ func TestHandleCommandSetAndSession(t *testing.T) {
 	app := newTestApp(t, nil)
 
 	HandleCommand(ctx, "/set agency=low", app)
-	if local(app).Config().CodePuppy.AgencyLevel != "low" {
-		t.Errorf("agency not updated: %q", local(app).Config().CodePuppy.AgencyLevel)
+	if local(app).Config().Blitz.AgencyLevel != "low" {
+		t.Errorf("agency not updated: %q", local(app).Config().Blitz.AgencyLevel)
 	}
 	// Negative: invalid agency rejected.
 	HandleCommand(ctx, "/set agency=reckless", app)
-	if local(app).Config().CodePuppy.AgencyLevel != "low" {
-		t.Errorf("invalid agency accepted: %q", local(app).Config().CodePuppy.AgencyLevel)
+	if local(app).Config().Blitz.AgencyLevel != "low" {
+		t.Errorf("invalid agency accepted: %q", local(app).Config().Blitz.AgencyLevel)
 	}
 	// Values with spaces are kept whole.
 	HandleCommand(ctx, "/set owner_name=Ada Lovelace", app)
-	if local(app).Config().CodePuppy.OwnerName != "Ada Lovelace" {
-		t.Errorf("owner_name = %q", local(app).Config().CodePuppy.OwnerName)
+	if local(app).Config().Blitz.OwnerName != "Ada Lovelace" {
+		t.Errorf("owner_name = %q", local(app).Config().Blitz.OwnerName)
 	}
 
 	// /session new records the active agent and becomes active.

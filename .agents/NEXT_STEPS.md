@@ -1,4 +1,4 @@
-# Code Puppy Go — Where to Pick Up
+# Blitz Go — Where to Pick Up
 
 Written 2026-09-24 at commit `7e211697` on `main`; updated 2026-09-25. Read this first when resuming. [ROADMAP.md](ROADMAP.md) has the detail behind each finished item, and [MANUAL_VERIFICATION.md](MANUAL_VERIFICATION.md) has the checks that need a person.
 
@@ -38,7 +38,7 @@ Roadmap items 1–22 are done and committed, and item 23 (the desktop app) is in
 | `42aaf41b` | Phase 5b: per-workspace state, no dependence on the working directory |
 | `f9a6e7bf` | ROADMAP item 24 planned: workers |
 | `d8c08d91` | Phase 6: the service API as protos, buf, generated Go and Connect code |
-| `2e4cb2c0`, `a6ed23d6`, `a926faa6` | Phase 7: `internal/server`, approvals over the stream, `code-puppy serve`, the workspace lock |
+| `2e4cb2c0`, `a6ed23d6`, `a926faa6` | Phase 7: `internal/server`, approvals over the stream, `blitz serve`, the workspace lock |
 | `26e261cd`, `d969c75f`, `d5562753` | Phase 8: `app.Backend`, `internal/client`, the CLI attaching to the service, `--local` |
 | `31531764`, (the commit adding `internal/app/workers.go`) | Item 24a–b: worker definitions, schedules, permissions (`ApprovalRequest.Targets`); enabling pinned to the hash, `[workers.policy]` |
 | (the commit adding `internal/session/title_test.go`) | Session names from the first prompt, `/rename`, terminal title, resume hint on exit |
@@ -51,7 +51,7 @@ Roadmap items 1–22 are done and committed, and item 23 (the desktop app) is in
 
 ## Open work, in suggested order
 
-1. **ROADMAP item 23 is done in a first version**: the per-user service (`code-puppy serve`, `service install`), the proto API, the CLI attaching to it, workers (item 24), and the desktop app (`make desktop`). **Next, in order:** run MANUAL_VERIFICATION sections 36–37 (the service, workers and the app need a person, and some checks are 💲); then the known gaps: a worker's `agent`/`model`, workers' edits joining `/undo`, an attached CLI's process list and `!cmd` audit (ROADMAP 8b, 24c); then the app's slash commands and Markdown, releasing the app (macOS job, notarization with an Apple Developer account).
+1. **ROADMAP item 23 is done in a first version**: the per-user service (`blitz serve`, `service install`), the proto API, the CLI attaching to it, workers (item 24), and the desktop app (`make desktop`). **Next, in order:** run MANUAL_VERIFICATION sections 36–37 (the service, workers and the app need a person, and some checks are 💲); then the known gaps: a worker's `agent`/`model`, workers' edits joining `/undo`, an attached CLI's process list and `!cmd` audit (ROADMAP 8b, 24c); then the app's slash commands and Markdown, releasing the app (macOS job, notarization with an Apple Developer account).
 2. **Manual verification (needs a person).** Nothing in `MANUAL_VERIFICATION.md` has been run yet. It covers real providers (💲 = paid calls), terminal behavior, the macOS and Linux sandboxes, MCP, steering, fallback and pinning. Record results in the file; any failure becomes the next task.
 3. **Optional: notarize the macOS binaries** (needs an Apple Developer account). Until then, the release notes (GoReleaser `release.footer`) and the README explain clearing the quarantine flag. Dependabot (`.github/dependabot.yml`) keeps the pinned action SHAs current. `~/.gnupg/gpg-agent.conf` now points at GPG Suite's `pinentry-mac`; the next tag will show whether signing works.
 4. **Linux sandbox startup cost.** Before every sandboxed command, `expandBlocked` (`internal/tools/bwrap.go`) scans the writable roots, including the temp and cache directories (e.g. the Go build cache), for blocked names, up to 50,000 entries. Measured in a Linux container: about 0.1 s per command normally, 3.4 s under `-race`. Worth reducing (e.g. skip cache directories for name patterns, or reuse a recent scan), keeping in mind that a file created between scans could then escape masking. CI's parallel-cap test runs with the sandbox off because of this.
@@ -60,12 +60,14 @@ Roadmap items 1–22 are done and committed, and item 23 (the desktop app) is in
    - scripts that write the workspace directly, with snapshots;
    - `requires-python` with uv-managed interpreters;
    - `storage_uri` and resources;
-   - running the opt-in real-install tests in CI (`CODE_PUPPY_PYENV_TESTS=1`);
+   - running the opt-in real-install tests in CI (`BLITZ_PYENV_TESTS=1`);
    - adding a network field to Castor's proto, instead of `custom_hints.network`.
 6. **Optional: reasoning settings per model.** Python's `/model_settings` also sets `reasoning_effort`, extended thinking and budgets. The Go wrapper (`internal/runtime/settings.go`) is where they'd go, mapped to genai `ThinkingConfig`, which each adapter translates differently.
 7. **Optional, from the Antigravity review (ROADMAP, "Antigravity CLI review"):** `/copy` (last reply to the clipboard, with OSC 52 over SSH), `--add-dir <path>` at startup, `/grill-me` (the agent interviews you before coding), and `/fork [n]` (branch a new session from an earlier turn).
 
 ## Decisions already made (don't redo without a reason)
+
+- **The product is Blitz** (2026-09-26), renamed from Code Puppy: binary `blitz` (with `blz` as a symlink), module `github.com/retail-cortex/blitz`, proto package `blitz.v1`, `~/.blitz`, `.blitz/` in workspaces, `BLITZ.md`, `BLITZ_*` variables, the `[blitz]` config section, the default agent `blitz`, `Blitz.app` (`dev.blitz.desktop`), the login item `dev.blitz.service` / `blitz.service`. **A clean break:** nothing under the old name is read or migrated. `NOTICE` and `docs/HISTORY.md` keep the attribution to Mike Pfaffenberger's Code Puppy. The GitHub repository is still `rmcguinness/code_puppy` until it's moved; its URLs (remote, CI, the cosign identity) change then. Next: a tone pass (no mascot, terse messages, persona-free agent prompts, drop `puppy_name`/`owner_name`), then `blitz exec` and the README's new lore (without `blz refactor` until it's designed; check the Sam Walton line, whose famous dog was Ol' Roy).
 
 - **No shared event bus.** Considered for steering and dropped: audit, hooks and traces are fed from engine callbacks, and steering didn't need a bus.
 - **Steering rides on tool results** (`message_from_user`), because ADK model callbacks can't add session events (`Session()` returns nil there).
@@ -80,8 +82,8 @@ Roadmap items 1–22 are done and committed, and item 23 (the desktop app) is in
 - **`/search web` pre-approves exactly the URLs it hands over, for that turn only** (`tools.WithFetchGrants`); everything else the agent fetches still asks.
 - **Telemetry and OTel need one provider per process:** the ADK binds its tracer to the first global provider.
 - **No Bazel** (2026-09-26). Go modules, `CGO_ENABLED=0` and GoReleaser already give reproducible CLI builds, and the planned Wails app needs host cgo libraries (WebKit, webkit2gtk) that Bazel can't make hermetic. Close the gaps by pinning tools instead; reconsider only for a multi-language monorepo or a need for remote caching. Make stays as a thin entry point.
-- **Layout follows golang-standards/project-layout** (2026-09-26): `cmd/code-puppy` (CLI/TUI, pure Go) and `cmd/code-puppy-desktop` (Wails, cgo, built on each OS); code in `internal/`, `pkg/` only for deliberately public APIs; frontend in `web/desktop`, packaging in `build/`. Slash-command logic moves from `tui` to a UI-agnostic `internal/app` shared by both UIs.
-- **One engine service per user** (2026-09-26, replacing "a process per tab"): `code-puppy serve` hosts every workspace over Connect on a Unix socket; the CLI attaches when it's running, else runs in-process. Scheduled workers (item 24) run in it. See ROADMAP item 23.
-- **The module path stays `github.com/retail-cortex/code_puppy`** even though the repository is `rmcguinness/code_puppy`.
+- **Layout follows golang-standards/project-layout** (2026-09-26): `cmd/blitz` (CLI/TUI, pure Go) and `cmd/blitz-desktop` (Wails, cgo, built on each OS); code in `internal/`, `pkg/` only for deliberately public APIs; frontend in `web/desktop`, packaging in `build/`. Slash-command logic moves from `tui` to a UI-agnostic `internal/app` shared by both UIs.
+- **One engine service per user** (2026-09-26, replacing "a process per tab"): `blitz serve` hosts every workspace over Connect on a Unix socket; the CLI attaches when it's running, else runs in-process. Scheduled workers (item 24) run in it. See ROADMAP item 23.
+- **The module path stays `github.com/retail-cortex/blitz`** even though the repository is `rmcguinness/code_puppy`.
 
 Conventions, layout and commands: [AGENTS.md](AGENTS.md).

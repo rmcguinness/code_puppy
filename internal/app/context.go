@@ -7,12 +7,12 @@ import (
 	"path"
 	"strings"
 
-	"github.com/retail-cortex/code_puppy/internal/config"
-	"github.com/retail-cortex/code_puppy/internal/images"
-	"github.com/retail-cortex/code_puppy/internal/memory"
-	"github.com/retail-cortex/code_puppy/internal/runtime"
-	"github.com/retail-cortex/code_puppy/internal/session"
-	"github.com/retail-cortex/code_puppy/internal/tools"
+	"github.com/retail-cortex/blitz/internal/config"
+	"github.com/retail-cortex/blitz/internal/images"
+	"github.com/retail-cortex/blitz/internal/memory"
+	"github.com/retail-cortex/blitz/internal/runtime"
+	"github.com/retail-cortex/blitz/internal/session"
+	"github.com/retail-cortex/blitz/internal/tools"
 )
 
 // What the model sees: usage and context size, compaction, project memory,
@@ -100,10 +100,10 @@ func (w *Workspace) ReloadMemory(ctx context.Context) ([]string, error) {
 	return paths, nil
 }
 
-// AddMemory appends text to the last project instruction file (PUPPY.md
+// AddMemory appends text to the last project instruction file (BLITZ.md
 // when none is configured), reloads memory, and returns the file's path.
 func (w *Workspace) AddMemory(ctx context.Context, text string) (string, error) {
-	file := "PUPPY.md"
+	file := "BLITZ.md"
 	if files := w.cfg.Memory.Files; len(files) > 0 {
 		file = files[len(files)-1]
 	}

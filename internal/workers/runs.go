@@ -14,7 +14,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/retail-cortex/code_puppy/internal/tools"
+	"github.com/retail-cortex/blitz/internal/tools"
 )
 
 // RunStatus is where a run stands.

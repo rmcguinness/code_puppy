@@ -6,7 +6,7 @@ export interface ServiceStatus {
   running: boolean;
   installed: boolean;
   socket: string;
-  cli: string; // the code-puppy binary used to install the service ("" if not found)
+  cli: string; // the blitz binary used to install the service ("" if not found)
 }
 
 type Bound = {
@@ -17,7 +17,7 @@ type Bound = {
 
 function app(): Bound {
   const go = (window as unknown as { go?: { main?: { App?: Bound } } }).go;
-  if (!go?.main?.App) throw new Error("not running inside the Code Puppy desktop app");
+  if (!go?.main?.App) throw new Error("not running inside the Blitz desktop app");
   return go.main.App;
 }
 

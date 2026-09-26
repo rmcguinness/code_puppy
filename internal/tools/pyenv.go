@@ -18,11 +18,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/retail-cortex/code_puppy/internal/config"
+	"github.com/retail-cortex/blitz/internal/config"
 )
 
 // PyEnvs manages isolated Python environments for skill scripts, one per
-// distinct set of requirements, in ~/.code_puppy/envs/<key>. An environment
+// distinct set of requirements, in ~/.blitz/envs/<key>. An environment
 // is built inside the script sandbox (network on, writes only to the
 // environment and the package cache), and is only used once its marker
 // file is written, so an interrupted build is rebuilt rather than used.
@@ -54,16 +54,16 @@ type PyEnv struct {
 func (e PyEnv) Interpreter() string { return filepath.Join(e.Dir, "bin", "python") }
 
 const (
-	pyEnvMarker     = ".code-puppy-env.json"
+	pyEnvMarker     = ".blitz-env.json"
 	pyEnvCacheDir   = ".cache"
 	pyEnvBuildLimit = 10 * time.Minute
 )
 
-// NewPyEnvs manages environments in dir (default ~/.code_puppy/envs) under
+// NewPyEnvs manages environments in dir (default ~/.blitz/envs) under
 // the package policy.
 func NewPyEnvs(dir string, p config.PackagePolicy) *PyEnvs {
 	if dir == "" {
-		dir = config.ExpandHome("~/.code_puppy/envs")
+		dir = config.ExpandHome("~/.blitz/envs")
 	}
 	index := p.Index
 	if index == "" {
@@ -211,12 +211,12 @@ func MountsFor(python string) []string {
 	return []string{prefix}
 }
 
-// findUV looks for uv on PATH, then in ~/.code_puppy/bin.
+// findUV looks for uv on PATH, then in ~/.blitz/bin.
 func findUV() (string, error) {
 	if p, err := exec.LookPath("uv"); err == nil {
 		return filepath.EvalSymlinks(p)
 	}
-	p := config.ExpandHome("~/.code_puppy/bin/uv")
+	p := config.ExpandHome("~/.blitz/bin/uv")
 	if _, err := os.Stat(p); err == nil {
 		return p, nil
 	}

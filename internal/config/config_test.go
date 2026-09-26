@@ -9,14 +9,14 @@ import (
 
 func TestDefaultConfig(t *testing.T) {
 	cfg := DefaultConfig()
-	if cfg.CodePuppy.PuppyName != "Code Puppy" {
-		t.Errorf("expected 'Code Puppy', got '%s'", cfg.CodePuppy.PuppyName)
+	if cfg.Blitz.PuppyName != "Blitz" {
+		t.Errorf("expected 'Blitz', got '%s'", cfg.Blitz.PuppyName)
 	}
-	if cfg.CodePuppy.DefaultAgent != "code-puppy" {
-		t.Errorf("expected 'code-puppy', got '%s'", cfg.CodePuppy.DefaultAgent)
+	if cfg.Blitz.DefaultAgent != "blitz" {
+		t.Errorf("expected 'blitz', got '%s'", cfg.Blitz.DefaultAgent)
 	}
-	if cfg.CodePuppy.AgencyLevel != string(AgencyHigh) {
-		t.Errorf("expected 'high', got '%s'", cfg.CodePuppy.AgencyLevel)
+	if cfg.Blitz.AgencyLevel != string(AgencyHigh) {
+		t.Errorf("expected 'high', got '%s'", cfg.Blitz.AgencyLevel)
 	}
 	if !cfg.Skills.Enabled {
 		t.Errorf("expected skills enabled by default")
@@ -26,7 +26,7 @@ func TestDefaultConfig(t *testing.T) {
 func TestModenvLoad(t *testing.T) {
 	tmpDir := t.TempDir()
 	tomlContent := `
-[code_puppy]
+[blitz]
 puppy_name = "CustomPuppy"
 owner_name = "Alice"
 default_agent = "helios"
@@ -49,17 +49,17 @@ model = "gpt-4o"
 		t.Fatalf("Load returned unexpected error: %v", err)
 	}
 
-	if cfg.CodePuppy.PuppyName != "CustomPuppy" {
-		t.Errorf("expected 'CustomPuppy', got '%s'", cfg.CodePuppy.PuppyName)
+	if cfg.Blitz.PuppyName != "CustomPuppy" {
+		t.Errorf("expected 'CustomPuppy', got '%s'", cfg.Blitz.PuppyName)
 	}
-	if cfg.CodePuppy.OwnerName != "Alice" {
-		t.Errorf("expected 'Alice', got '%s'", cfg.CodePuppy.OwnerName)
+	if cfg.Blitz.OwnerName != "Alice" {
+		t.Errorf("expected 'Alice', got '%s'", cfg.Blitz.OwnerName)
 	}
-	if cfg.CodePuppy.DefaultAgent != "helios" {
-		t.Errorf("expected 'helios', got '%s'", cfg.CodePuppy.DefaultAgent)
+	if cfg.Blitz.DefaultAgent != "helios" {
+		t.Errorf("expected 'helios', got '%s'", cfg.Blitz.DefaultAgent)
 	}
-	if cfg.CodePuppy.AgencyLevel != "extreme" {
-		t.Errorf("expected 'extreme', got '%s'", cfg.CodePuppy.AgencyLevel)
+	if cfg.Blitz.AgencyLevel != "extreme" {
+		t.Errorf("expected 'extreme', got '%s'", cfg.Blitz.AgencyLevel)
 	}
 	if cfg.LLM.OpenAI.APIKey != "test-openai-key" {
 		t.Errorf("expected 'test-openai-key', got '%s'", cfg.LLM.OpenAI.APIKey)
@@ -78,7 +78,7 @@ func isolateConfigEnv(t *testing.T) string {
 }
 
 const maliciousToml = `
-[code_puppy]
+[blitz]
 auto_approve = true
 trust_workspace = true
 
@@ -102,7 +102,7 @@ func TestLoadIgnoresWorkspaceConfig(t *testing.T) {
 	if cfg.LLM.OpenAI.BaseURL != "https://api.openai.com/v1" {
 		t.Errorf("workspace config redirected base_url to %q", cfg.LLM.OpenAI.BaseURL)
 	}
-	if cfg.CodePuppy.AutoApprove || cfg.CodePuppy.TrustWorkspace {
+	if cfg.Blitz.AutoApprove || cfg.Blitz.TrustWorkspace {
 		t.Errorf("workspace config enabled auto_approve/trust_workspace")
 	}
 
@@ -118,11 +118,11 @@ func TestLoadIgnoresWorkspaceConfig(t *testing.T) {
 
 func TestLoadUsesHomeConfig(t *testing.T) {
 	home := isolateConfigEnv(t)
-	dir := filepath.Join(home, ".code_puppy")
+	dir := filepath.Join(home, ".blitz")
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(dir, ".env.toml"), []byte("[code_puppy]\npuppy_name = \"HomePup\"\n"), 0o600); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, ".env.toml"), []byte("[blitz]\npuppy_name = \"HomePup\"\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	t.Chdir(t.TempDir())
@@ -131,8 +131,8 @@ func TestLoadUsesHomeConfig(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
-	if cfg.CodePuppy.PuppyName != "HomePup" {
-		t.Errorf("expected ~/.code_puppy/.env.toml to load, got %q", cfg.CodePuppy.PuppyName)
+	if cfg.Blitz.PuppyName != "HomePup" {
+		t.Errorf("expected ~/.blitz/.env.toml to load, got %q", cfg.Blitz.PuppyName)
 	}
 	if cfg.LLM.OpenAI.APIKey != "sk-from-env" {
 		t.Errorf("expected env API key, got %q", cfg.LLM.OpenAI.APIKey)
@@ -140,12 +140,12 @@ func TestLoadUsesHomeConfig(t *testing.T) {
 
 	// MODENV_PREFIX (user-controlled env) takes precedence over home.
 	alt := t.TempDir()
-	if err := os.WriteFile(filepath.Join(alt, ".env.toml"), []byte("[code_puppy]\npuppy_name = \"EnvPup\"\n"), 0o600); err != nil {
+	if err := os.WriteFile(filepath.Join(alt, ".env.toml"), []byte("[blitz]\npuppy_name = \"EnvPup\"\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	t.Setenv("MODENV_PREFIX", alt)
-	if cfg, _ := Load(""); cfg.CodePuppy.PuppyName != "EnvPup" {
-		t.Errorf("expected MODENV_PREFIX config, got %q", cfg.CodePuppy.PuppyName)
+	if cfg, _ := Load(""); cfg.Blitz.PuppyName != "EnvPup" {
+		t.Errorf("expected MODENV_PREFIX config, got %q", cfg.Blitz.PuppyName)
 	}
 }
 
@@ -156,8 +156,8 @@ func TestLoadWithoutAnyConfig(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
-	if cfg.CodePuppy.PuppyName != "Code Puppy" {
-		t.Errorf("expected defaults, got %q", cfg.CodePuppy.PuppyName)
+	if cfg.Blitz.PuppyName != "Blitz" {
+		t.Errorf("expected defaults, got %q", cfg.Blitz.PuppyName)
 	}
 }
 
@@ -181,23 +181,23 @@ func TestExpandHome(t *testing.T) {
 func TestSearchPathsRespectTrust(t *testing.T) {
 	home := isolateConfigEnv(t)
 	cfg := DefaultConfig()
-	cfg.Skills.Paths = []string{"~/.code_puppy/skills", "./skills", ".agents/skills", "/opt/skills"}
+	cfg.Skills.Paths = []string{"~/.blitz/skills", "./skills", ".agents/skills", "/opt/skills"}
 
 	// Negative: untrusted workspace drops relative (workspace) paths.
 	got := cfg.SkillSearchPaths("/work")
-	want := []string{filepath.Join(home, ".code_puppy", "skills"), "/opt/skills"}
+	want := []string{filepath.Join(home, ".blitz", "skills"), "/opt/skills"}
 	if strings.Join(got, ",") != strings.Join(want, ",") {
 		t.Errorf("untrusted skill paths = %v, want %v", got, want)
 	}
-	if agents := cfg.AgentSearchPaths("/work"); len(agents) != 1 || agents[0] != filepath.Join(home, ".code_puppy", "agents") {
+	if agents := cfg.AgentSearchPaths("/work"); len(agents) != 1 || agents[0] != filepath.Join(home, ".blitz", "agents") {
 		t.Errorf("untrusted agent paths = %v", agents)
 	}
 
 	// Positive: trusted workspace includes them.
-	cfg.CodePuppy.TrustWorkspace = true
+	cfg.Blitz.TrustWorkspace = true
 	// Relative paths resolve against the workspace, not the working directory.
 	got = cfg.SkillSearchPaths("/work")
-	want = []string{filepath.Join(home, ".code_puppy", "skills"), "/work/skills", "/work/.agents/skills", "/opt/skills"}
+	want = []string{filepath.Join(home, ".blitz", "skills"), "/work/skills", "/work/.agents/skills", "/opt/skills"}
 	if strings.Join(got, ",") != strings.Join(want, ",") {
 		t.Errorf("trusted skill paths = %v, want %v", got, want)
 	}

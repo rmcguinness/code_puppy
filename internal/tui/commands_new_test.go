@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/retail-cortex/code_puppy/internal/config"
-	"github.com/retail-cortex/code_puppy/internal/runtime"
+	"github.com/retail-cortex/blitz/internal/config"
+	"github.com/retail-cortex/blitz/internal/runtime"
 	"google.golang.org/genai"
 )
 
@@ -21,7 +21,7 @@ func newCommandApp(t *testing.T, input string, replies ...*genai.Content) (*App,
 	cfg.Tools.WorkspaceDir = t.TempDir()
 	cfg.Images.Dir = t.TempDir()
 	cfg.Audit.Enabled = false
-	cfg.CodePuppy.AutoApprove = true
+	cfg.Blitz.AutoApprove = true
 	llm := runtime.NewMockLLM("gemini-3.8-flash", replies...)
 	app := openApp(t, cfg, llm)
 	app.Input = NewLineReader(strings.NewReader(input), io.Discard)

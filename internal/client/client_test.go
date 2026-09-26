@@ -14,11 +14,11 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/retail-cortex/code_puppy/internal/app"
-	"github.com/retail-cortex/code_puppy/internal/config"
-	"github.com/retail-cortex/code_puppy/internal/runtime"
-	"github.com/retail-cortex/code_puppy/internal/server"
-	"github.com/retail-cortex/code_puppy/internal/tools"
+	"github.com/retail-cortex/blitz/internal/app"
+	"github.com/retail-cortex/blitz/internal/config"
+	"github.com/retail-cortex/blitz/internal/runtime"
+	"github.com/retail-cortex/blitz/internal/server"
+	"github.com/retail-cortex/blitz/internal/tools"
 	"google.golang.org/adk/v2/model"
 	"google.golang.org/genai"
 )
@@ -69,7 +69,7 @@ func call(name string, args map[string]any) *genai.Content {
 func TestRemoteOperationsAndTypedErrors(t *testing.T) {
 	r := attach(t, nil)
 	ctx := context.Background()
-	if r.ModelErr() != nil || r.Model().Name == "" || r.ActiveAgent().Name != "code-puppy" {
+	if r.ModelErr() != nil || r.Model().Name == "" || r.ActiveAgent().Name != "blitz" {
 		t.Fatalf("model %v %v, agent %v", r.ModelErr(), r.Model(), r.ActiveAgent())
 	}
 	var unknown *app.UnknownAgentError
@@ -101,7 +101,7 @@ func TestRemoteOperationsAndTypedErrors(t *testing.T) {
 func TestRemoteTurnWithApprovalAndQuestion(t *testing.T) {
 	create := call("create_file", map[string]any{"path": "made.txt", "content": "hi\n"})
 	ask := call("ask_user_question", map[string]any{"question": "Tabs or spaces?"})
-	r := attach(t, func(c *config.Config) { c.CodePuppy.AutoApprove = false }, create, ask, text("all done"))
+	r := attach(t, func(c *config.Config) { c.Blitz.AutoApprove = false }, create, ask, text("all done"))
 	var asked []string
 	r.SetUI(
 		func(_ context.Context, req tools.ApprovalRequest) (tools.Decision, error) {

@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/retail-cortex/code_puppy/internal/session"
-	"github.com/retail-cortex/code_puppy/internal/tools"
+	"github.com/retail-cortex/blitz/internal/session"
+	"github.com/retail-cortex/blitz/internal/tools"
 )
 
 // WebSearchPrompt hands the links the user's /search web picked to the

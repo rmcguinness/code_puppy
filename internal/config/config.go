@@ -19,15 +19,15 @@ const (
 	AgencyExtreme AgencyLevel = "extreme" // Maximally autonomous, polling background tasks
 )
 
-// Config represents the complete Code Puppy configuration.
+// Config represents the complete Blitz configuration.
 type Config struct {
-	CodePuppy CodePuppyConfig `toml:"code_puppy"`
-	LLM       LLMConfig       `toml:"llm"`
-	Skills    SkillsConfig    `toml:"skills"`
-	Workers   WorkersConfig   `toml:"workers"`
-	Tools     ToolsConfig     `toml:"tools"`
-	Session   SessionConfig   `toml:"session"`
-	Sandbox   SandboxConfig   `toml:"sandbox"`
+	Blitz   BlitzConfig   `toml:"blitz"`
+	LLM     LLMConfig     `toml:"llm"`
+	Skills  SkillsConfig  `toml:"skills"`
+	Workers WorkersConfig `toml:"workers"`
+	Tools   ToolsConfig   `toml:"tools"`
+	Session SessionConfig `toml:"session"`
+	Sandbox SandboxConfig `toml:"sandbox"`
 
 	UI          UIConfig              `toml:"ui"`
 	Memory      MemoryConfig          `toml:"memory"`
@@ -51,8 +51,8 @@ type Config struct {
 	ModelSettings map[string]ModelSettings `toml:"model_settings"`
 }
 
-// CodePuppyConfig controls the core persona and behavior settings.
-type CodePuppyConfig struct {
+// BlitzConfig controls the core persona and behavior settings.
+type BlitzConfig struct {
 	PuppyName    string  `toml:"puppy_name"`
 	OwnerName    string  `toml:"owner_name"`
 	DefaultAgent string  `toml:"default_agent"`
@@ -121,11 +121,11 @@ type AnthropicConfig struct {
 	Fallbacks string `toml:"fallbacks"`
 }
 
-// ModelName returns the model to use: code_puppy.default_model when set,
+// ModelName returns the model to use: blitz.default_model when set,
 // otherwise the active provider's model.
 func (c *Config) ModelName() string {
-	if c.CodePuppy.DefaultModel != "" {
-		return c.CodePuppy.DefaultModel
+	if c.Blitz.DefaultModel != "" {
+		return c.Blitz.DefaultModel
 	}
 	switch strings.ToLower(c.LLM.Provider) {
 	case "openai", "ollama":
@@ -302,11 +302,11 @@ var DefaultBlockedPaths = []string{
 	".env", ".env.local", ".env.*.local", ".env.toml", ".env.*.toml",
 	"*.pem", "*.key", "*.p12", "id_rsa*", "id_ecdsa*", "id_ed25519*",
 	"~/.ssh", "~/.aws", "~/.gnupg", "~/.config/gcloud", "~/.azure", "~/.kube",
-	"~/.docker/config.json", "~/.netrc", "~/.code_puppy/puppy.cfg",
+	"~/.docker/config.json", "~/.netrc", "~/.blitz/puppy.cfg",
 }
 
 // DefaultScrubEnv are environment variables withheld from commands the model
-// runs, so they can't read Code Puppy's own credentials.
+// runs, so they can't read Blitz's own credentials.
 var DefaultScrubEnv = []string{
 	"*_API_KEY", "*_API_TOKEN", "*_SECRET", "*_SECRET_KEY", "*_ACCESS_KEY",
 	"AWS_SESSION_TOKEN", "GOOGLE_APPLICATION_CREDENTIALS", "MODENV_*",
@@ -332,10 +332,10 @@ func DefaultConfig() *Config {
 	}
 
 	cfg := &Config{
-		CodePuppy: CodePuppyConfig{
-			PuppyName:    "Code Puppy",
+		Blitz: BlitzConfig{
+			PuppyName:    "Blitz",
 			OwnerName:    "Developer",
-			DefaultAgent: "code-puppy",
+			DefaultAgent: "blitz",
 			DefaultModel: "", // empty: use llm.<provider>.model
 			AgencyLevel:  string(AgencyHigh),
 			Temperature:  0.2,
@@ -378,7 +378,7 @@ func DefaultConfig() *Config {
 		Skills: SkillsConfig{
 			Enabled: true,
 			Paths: []string{
-				filepath.Join(homeDir, ".code_puppy", "skills"),
+				filepath.Join(homeDir, ".blitz", "skills"),
 				"./skills",
 				".agents/skills",
 			},
@@ -399,7 +399,7 @@ func DefaultConfig() *Config {
 			MaxParallel:         8,
 		},
 		Session: SessionConfig{
-			StorageDir: filepath.Join(homeDir, ".code_puppy", "sessions"),
+			StorageDir: filepath.Join(homeDir, ".blitz", "sessions"),
 			AutoSave:   true,
 		},
 		Sandbox: SandboxConfig{
@@ -421,7 +421,7 @@ func DefaultConfig() *Config {
 // to DefaultConfig with environment variable overrides.
 //
 // The config directory is, in order: prefixDir (the --config flag), the
-// MODENV_PREFIX environment variable, then ~/.code_puppy. The current working
+// MODENV_PREFIX environment variable, then ~/.blitz. The current working
 // directory is deliberately NOT consulted: a cloned repository could otherwise
 // ship a .env.toml that redirects llm.openai.base_url to an attacker's server
 // and receive the user's API key, or enable auto-approval. Pass --config .
@@ -461,7 +461,7 @@ func ConfigDir(prefixDir string) string {
 		return ExpandHome(pfx)
 	}
 	if home, err := os.UserHomeDir(); err == nil {
-		return filepath.Join(home, ".code_puppy")
+		return filepath.Join(home, ".blitz")
 	}
 	return ""
 }
@@ -489,13 +489,13 @@ func IsWorkspaceRelative(p string) bool {
 // workspace-relative entries removed unless the workspace is trusted, and
 // otherwise resolved against workspace (the working directory if "").
 func (c *Config) SkillSearchPaths(workspace string) []string {
-	return filterTrusted(c.Skills.Paths, c.CodePuppy.TrustWorkspace, workspace)
+	return filterTrusted(c.Skills.Paths, c.Blitz.TrustWorkspace, workspace)
 }
 
 // AgentSearchPaths returns directories to scan for user-defined agents,
 // resolved like SkillSearchPaths.
 func (c *Config) AgentSearchPaths(workspace string) []string {
-	return filterTrusted([]string{"~/.code_puppy/agents", "./agents"}, c.CodePuppy.TrustWorkspace, workspace)
+	return filterTrusted([]string{"~/.blitz/agents", "./agents"}, c.Blitz.TrustWorkspace, workspace)
 }
 
 func filterTrusted(paths []string, trustWorkspace bool, workspace string) []string {
@@ -536,26 +536,26 @@ func applyEnvOverrides(cfg *Config) {
 	if key := os.Getenv("ANTHROPIC_API_KEY"); key != "" && cfg.LLM.Anthropic.APIKey == "" {
 		cfg.LLM.Anthropic.APIKey = key
 	}
-	if model := os.Getenv("CODE_PUPPY_MODEL"); model != "" {
-		cfg.CodePuppy.DefaultModel = model
+	if model := os.Getenv("BLITZ_MODEL"); model != "" {
+		cfg.Blitz.DefaultModel = model
 	}
-	if agent := os.Getenv("CODE_PUPPY_AGENT"); agent != "" {
-		cfg.CodePuppy.DefaultAgent = agent
+	if agent := os.Getenv("BLITZ_AGENT"); agent != "" {
+		cfg.Blitz.DefaultAgent = agent
 	}
-	if agency := os.Getenv("CODE_PUPPY_AGENCY"); agency != "" {
-		cfg.CodePuppy.AgencyLevel = strings.ToLower(agency)
+	if agency := os.Getenv("BLITZ_AGENCY"); agency != "" {
+		cfg.Blitz.AgencyLevel = strings.ToLower(agency)
 	}
-	if level := os.Getenv("CODE_PUPPY_LOG_LEVEL"); level != "" {
+	if level := os.Getenv("BLITZ_LOG_LEVEL"); level != "" {
 		cfg.Log.Level = strings.ToLower(level)
 	}
-	switch strings.ToLower(os.Getenv("CODE_PUPPY_TELEMETRY")) {
+	switch strings.ToLower(os.Getenv("BLITZ_TELEMETRY")) {
 	case "1", "true", "yes", "on":
 		cfg.Telemetry.Enabled = true
 	case "0", "false", "no", "off":
 		cfg.Telemetry.Enabled = false
 	}
 
-	// Fallback to reading legacy ~/.code_puppy/puppy.cfg if keys still empty
+	// Fallback to reading legacy ~/.blitz/puppy.cfg if keys still empty
 	if cfg.LLM.Gemini.APIKey == "" || cfg.LLM.OpenAI.APIKey == "" || cfg.LLM.Anthropic.APIKey == "" {
 		loadLegacyPuppyCfg(cfg)
 	}
@@ -566,7 +566,7 @@ func loadLegacyPuppyCfg(cfg *Config) {
 	if err != nil {
 		return
 	}
-	cfgPath := filepath.Join(home, ".code_puppy", "puppy.cfg")
+	cfgPath := filepath.Join(home, ".blitz", "puppy.cfg")
 	data, err := os.ReadFile(cfgPath)
 	if err != nil {
 		return

@@ -4,7 +4,7 @@ import (
 	"context"
 	"iter"
 
-	"github.com/retail-cortex/code_puppy/internal/images"
+	"github.com/retail-cortex/blitz/internal/images"
 	"google.golang.org/adk/v2/model"
 	"google.golang.org/genai"
 )

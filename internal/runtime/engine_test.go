@@ -5,10 +5,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/retail-cortex/code_puppy/internal/agents"
-	"github.com/retail-cortex/code_puppy/internal/config"
-	"github.com/retail-cortex/code_puppy/internal/skills"
-	"github.com/retail-cortex/code_puppy/internal/tools"
+	"github.com/retail-cortex/blitz/internal/agents"
+	"github.com/retail-cortex/blitz/internal/config"
+	"github.com/retail-cortex/blitz/internal/skills"
+	"github.com/retail-cortex/blitz/internal/tools"
 	"google.golang.org/adk/v2/session"
 	"google.golang.org/genai"
 )
@@ -41,8 +41,8 @@ func TestEngineExecution(t *testing.T) {
 		t.Fatalf("failed to create engine: %v", err)
 	}
 
-	if eng.ActiveAgent() != "code-puppy" {
-		t.Errorf("expected active agent 'code-puppy', got '%s'", eng.ActiveAgent())
+	if eng.ActiveAgent() != "blitz" {
+		t.Errorf("expected active agent 'blitz', got '%s'", eng.ActiveAgent())
 	}
 
 	var observedTexts []string

@@ -41,7 +41,7 @@ type entry struct {
 }
 
 // Store keeps which workers are enabled, at which hash, in one file for
-// the user (~/.code_puppy/workers.json). The service is its only writer.
+// the user (~/.blitz/workers.json). The service is its only writer.
 type Store struct {
 	path string
 

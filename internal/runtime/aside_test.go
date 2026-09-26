@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	cpsession "github.com/retail-cortex/code_puppy/internal/session"
+	cpsession "github.com/retail-cortex/blitz/internal/session"
 	"google.golang.org/adk/v2/model"
 	"google.golang.org/adk/v2/session"
 	"google.golang.org/genai"

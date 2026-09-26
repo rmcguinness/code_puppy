@@ -8,9 +8,9 @@ import (
 	"strconv"
 	"strings"
 
-	core "github.com/retail-cortex/code_puppy/internal/app"
-	"github.com/retail-cortex/code_puppy/internal/i18n"
-	"github.com/retail-cortex/code_puppy/internal/textutil"
+	core "github.com/retail-cortex/blitz/internal/app"
+	"github.com/retail-cortex/blitz/internal/i18n"
+	"github.com/retail-cortex/blitz/internal/textutil"
 )
 
 // handleExtraCommand processes commands added for checkpoints, cost,

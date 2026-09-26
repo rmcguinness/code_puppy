@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/retail-cortex/code_puppy/internal/agents"
+	"github.com/retail-cortex/blitz/internal/agents"
 )
 
 func TestUniversalConstructorNameValidation(t *testing.T) {

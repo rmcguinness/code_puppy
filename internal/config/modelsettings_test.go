@@ -39,7 +39,7 @@ func TestModelSettingsSetValidates(t *testing.T) {
 func TestSaveModelSettingsWritesAndRemoves(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, ".env.toml")
-	orig := "# mine\n[code_puppy]\ntemperature = 0.2  # global\n\n[agent_models]\nqa-kitten = \"gpt-5\"\n"
+	orig := "# mine\n[blitz]\ntemperature = 0.2  # global\n\n[agent_models]\nqa-kitten = \"gpt-5\"\n"
 	os.WriteFile(path, []byte(orig), 0o600)
 
 	var gpt, local ModelSettings
@@ -91,7 +91,7 @@ func TestSaveModelSettingsWritesAndRemoves(t *testing.T) {
 // Settings saved by SaveModelSettings load through modenv, as at startup.
 func TestLoadReadsModelSettings(t *testing.T) {
 	home := isolateConfigEnv(t)
-	dir := filepath.Join(home, ".code_puppy")
+	dir := filepath.Join(home, ".blitz")
 	var s ModelSettings
 	s.Set("temperature", "0.7")
 	s.Set("seed", "11")

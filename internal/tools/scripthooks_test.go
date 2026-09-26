@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/retail-cortex/code_puppy/internal/config"
+	"github.com/retail-cortex/blitz/internal/config"
 )
 
 func newHooks(t *testing.T, cfg config.HooksConfig) (*ScriptHooks, *[]string) {

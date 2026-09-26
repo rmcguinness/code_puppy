@@ -30,9 +30,9 @@ func killProcessGroup(cmd *exec.Cmd) error {
 
 // guardScript runs a watcher in the command's process group that blocks
 // reading fd 3 and SIGKILLs the whole group when it hits EOF. The write end
-// stays in Code Puppy, so EOF arrives when Code Puppy closes it after the
-// command exits (cleaning up stragglers) or when Code Puppy dies for any
-// reason, including SIGKILL. Nothing Code Puppy starts can outlive it.
+// stays in Blitz, so EOF arrives when Blitz closes it after the
+// command exits (cleaning up stragglers) or when Blitz dies for any
+// reason, including SIGKILL. Nothing Blitz starts can outlive it.
 const guardScript = `( read -r -u 3 _ ; kill -KILL 0 ) </dev/null >/dev/null 2>&1 & exec 3<&- ; exec "$@"`
 
 // guardArgv wraps argv with the parent-death guard. The returned file must be
@@ -42,6 +42,6 @@ func guardArgv(argv []string) (wrapped []string, childEnd *os.File, release func
 	if err != nil {
 		return nil, nil, nil, err
 	}
-	wrapped = append([]string{"bash", "-c", guardScript, "code-puppy-guard"}, argv...)
+	wrapped = append([]string{"bash", "-c", guardScript, "blitz-guard"}, argv...)
 	return wrapped, r, func() { w.Close() }, nil
 }

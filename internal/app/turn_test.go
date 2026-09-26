@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/retail-cortex/code_puppy/internal/config"
-	"github.com/retail-cortex/code_puppy/internal/runtime"
+	"github.com/retail-cortex/blitz/internal/config"
+	"github.com/retail-cortex/blitz/internal/runtime"
 	"google.golang.org/adk/v2/model"
 	adksession "google.golang.org/adk/v2/session"
 	"google.golang.org/genai"
@@ -152,7 +152,7 @@ func lastUserText(m *runtime.MockLLM) string {
 }
 
 func adkText(text string, partial, thought bool) *adksession.Event {
-	ev := &adksession.Event{Author: "code-puppy"}
+	ev := &adksession.Event{Author: "blitz"}
 	ev.LLMResponse = model.LLMResponse{Content: &genai.Content{Role: genai.RoleModel, Parts: []*genai.Part{{Text: text, Thought: thought}}}, Partial: partial}
 	return ev
 }
@@ -173,7 +173,7 @@ func TestRelayMarksRepeatedText(t *testing.T) {
 	}
 	var shown strings.Builder
 	for _, e := range got {
-		if e.Author != "code-puppy" || e.Text == nil {
+		if e.Author != "blitz" || e.Text == nil {
 			t.Fatalf("event %+v", e)
 		}
 		if !e.Text.Thought && (e.Text.Partial || !e.Text.Repeat) {

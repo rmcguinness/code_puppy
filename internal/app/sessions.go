@@ -6,7 +6,7 @@ import (
 	"slices"
 	"time"
 
-	"github.com/retail-cortex/code_puppy/internal/session"
+	"github.com/retail-cortex/blitz/internal/session"
 )
 
 // Saved sessions: listing, starting, resuming, snapshots and renaming.

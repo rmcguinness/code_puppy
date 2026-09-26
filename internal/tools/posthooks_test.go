@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/retail-cortex/code_puppy/internal/config"
+	"github.com/retail-cortex/blitz/internal/config"
 )
 
 // appendHook appends each event (one JSON document) as a line to out.

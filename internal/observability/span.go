@@ -11,7 +11,7 @@ import (
 	"go.opentelemetry.io/otel/trace"
 )
 
-const tracerName = "github.com/retail-cortex/code_puppy"
+const tracerName = "github.com/retail-cortex/blitz"
 
 // ConversationID is the OpenTelemetry GenAI key for the session a span
 // belongs to. The ADK sets it on its spans; ours use the same key so one

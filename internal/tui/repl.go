@@ -11,16 +11,16 @@ import (
 	"strings"
 	"sync"
 
-	core "github.com/retail-cortex/code_puppy/internal/app"
-	"github.com/retail-cortex/code_puppy/internal/i18n"
-	"github.com/retail-cortex/code_puppy/internal/images"
-	"github.com/retail-cortex/code_puppy/internal/runtime"
+	core "github.com/retail-cortex/blitz/internal/app"
+	"github.com/retail-cortex/blitz/internal/i18n"
+	"github.com/retail-cortex/blitz/internal/images"
+	"github.com/retail-cortex/blitz/internal/runtime"
 )
 
 // App is the REPL's state: the workspace it drives and the terminal.
 type App struct {
 	// Workspace is the program behind the REPL: every command and turn goes
-	// through it. It runs here or in the Code Puppy service.
+	// through it. It runs here or in the Blitz service.
 	Workspace core.Backend
 	Version   string
 	Input     Input
@@ -207,7 +207,7 @@ func RunREPL(ctx context.Context, app *App) error {
 	goodbye := func() error {
 		fmt.Printf("\n🐾 %s%s%s\n", Cyan, i18n.T("repl.goodbye"), Reset)
 		if a, ok := app.Workspace.ActiveSession(); ok && a.MessageCount > 0 {
-			fmt.Printf("%s%s%s\n", Dim, i18n.T("repl.resume_hint", "command", "code-puppy --resume="+a.ID), Reset)
+			fmt.Printf("%s%s%s\n", Dim, i18n.T("repl.resume_hint", "command", "blitz --resume="+a.ID), Reset)
 		}
 		return nil
 	}

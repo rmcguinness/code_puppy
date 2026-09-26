@@ -11,7 +11,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/retail-cortex/code_puppy/internal/config"
+	"github.com/retail-cortex/blitz/internal/config"
 	"google.golang.org/adk/v2/model"
 	"google.golang.org/genai"
 )
@@ -135,7 +135,7 @@ func TestEngineAppliesModelSettingsAndChangesTakeEffect(t *testing.T) {
 	if _, err := collect(t, f.eng, "s", "hi"); err != nil {
 		t.Fatal(err)
 	}
-	if got := rec.last(t); *got.Temperature != 1.1 || got.MaxOutputTokens != int32(f.cfg.CodePuppy.MaxTokens) {
+	if got := rec.last(t); *got.Temperature != 1.1 || got.MaxOutputTokens != int32(f.cfg.Blitz.MaxTokens) {
 		t.Fatalf("first call: temperature %v, max %d", *got.Temperature, got.MaxOutputTokens)
 	}
 	if all := f.eng.AllModelSettings(); len(all) != 1 || all["gemini-3.8-flash"].Temperature == nil {
@@ -146,7 +146,7 @@ func TestEngineAppliesModelSettingsAndChangesTakeEffect(t *testing.T) {
 	if _, err := collect(t, f.eng, "s", "again"); err != nil {
 		t.Fatal(err)
 	}
-	if got := rec.last(t); got.MaxOutputTokens != 100 || *got.Temperature != float32(f.cfg.CodePuppy.Temperature) {
+	if got := rec.last(t); got.MaxOutputTokens != 100 || *got.Temperature != float32(f.cfg.Blitz.Temperature) {
 		t.Fatalf("after change: max %d temperature %v", got.MaxOutputTokens, *got.Temperature)
 	}
 

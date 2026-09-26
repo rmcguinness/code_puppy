@@ -10,25 +10,25 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/retail-cortex/code_puppy/internal/config"
+	"github.com/retail-cortex/blitz/internal/config"
 )
 
 // The service listens on a Unix socket that only its user can reach: it
 // runs shell commands, so it is never on a network port by default.
 
 // BaseURL is the URL clients use over the socket (the host is ignored).
-const BaseURL = "http://code-puppy"
+const BaseURL = "http://blitz"
 
 // ErrRunning reports a service already answering on the socket.
-var ErrRunning = errors.New("a Code Puppy service is already running")
+var ErrRunning = errors.New("a Blitz service is already running")
 
 // DefaultSocket is where the per-user service listens:
-// $CODE_PUPPY_SOCKET, or ~/.code_puppy/run/code-puppy.sock.
+// $BLITZ_SOCKET, or ~/.blitz/run/blitz.sock.
 func DefaultSocket() string {
-	if p := os.Getenv("CODE_PUPPY_SOCKET"); p != "" {
+	if p := os.Getenv("BLITZ_SOCKET"); p != "" {
 		return config.ExpandHome(p)
 	}
-	return config.ExpandHome("~/.code_puppy/run/code-puppy.sock")
+	return config.ExpandHome("~/.blitz/run/blitz.sock")
 }
 
 // Listen opens the Unix socket at path for this user only. It refuses when

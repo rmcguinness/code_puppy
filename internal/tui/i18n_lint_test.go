@@ -16,14 +16,14 @@ var wordRE = regexp.MustCompile(`[A-Za-z]{3,}`)
 
 // Literals allowed to stay as they are: --version output (parsed by
 // scripts), product names and key names.
-var lintAllowed = []string{"Code Puppy Go (Google ADK) version", "Code Puppy Go", "Ctrl+C"}
+var lintAllowed = []string{"Blitz Go (Google ADK) version", "Blitz Go", "Ctrl+C"}
 
 // TestNoUntranslatedOutput fails when user-facing output in the REPL is a
 // literal English string instead of an i18n.T lookup. Doctor, config and
 // CLI errors are deliberately English and not scanned.
 func TestNoUntranslatedOutput(t *testing.T) {
 	files, _ := filepath.Glob("*.go")
-	files = append(files, "../../cmd/code-puppy/main.go")
+	files = append(files, "../../cmd/blitz/main.go")
 	printers := map[string]bool{"Print": true, "Println": true, "Printf": true, "Fprint": true, "Fprintln": true, "Fprintf": true}
 	fset := token.NewFileSet()
 	for _, file := range files {

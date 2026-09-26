@@ -9,8 +9,8 @@ import (
 	"sync"
 
 	"connectrpc.com/connect"
-	pb "github.com/retail-cortex/code_puppy/internal/gen/codepuppy/v1"
-	"github.com/retail-cortex/code_puppy/internal/tools"
+	pb "github.com/retail-cortex/blitz/internal/gen/blitz/v1"
+	"github.com/retail-cortex/blitz/internal/tools"
 )
 
 // The broker turns the agent's approval requests and questions, which the

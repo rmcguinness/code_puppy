@@ -14,10 +14,10 @@ import (
 	"time"
 
 	"github.com/anthropics/anthropic-sdk-go/option"
-	"github.com/retail-cortex/code_puppy/internal/agents"
-	"github.com/retail-cortex/code_puppy/internal/config"
-	"github.com/retail-cortex/code_puppy/internal/skills"
-	"github.com/retail-cortex/code_puppy/internal/tools"
+	"github.com/retail-cortex/blitz/internal/agents"
+	"github.com/retail-cortex/blitz/internal/config"
+	"github.com/retail-cortex/blitz/internal/skills"
+	"github.com/retail-cortex/blitz/internal/tools"
 	"google.golang.org/adk/v2/model"
 	"google.golang.org/adk/v2/session"
 	"google.golang.org/genai"
@@ -336,7 +336,7 @@ func TestModelNameResolution(t *testing.T) {
 			t.Errorf("%s: ModelName = %q, want %q", provider, got, want)
 		}
 	}
-	cfg.CodePuppy.DefaultModel = "claude-sonnet-5"
+	cfg.Blitz.DefaultModel = "claude-sonnet-5"
 	if cfg.ModelName() != "claude-sonnet-5" {
 		t.Error("default_model should override the provider model")
 	}

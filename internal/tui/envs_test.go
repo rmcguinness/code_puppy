@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/retail-cortex/code_puppy/internal/tools"
+	"github.com/retail-cortex/blitz/internal/tools"
 )
 
 func TestEnvsListPruneRemove(t *testing.T) {
@@ -26,13 +26,13 @@ func TestEnvsListPruneRemove(t *testing.T) {
 		t.Fatal(err)
 	}
 	envs := local(app).Tools().SkillScripts().Envs()
-	dir := filepath.Join(home, ".code_puppy", "envs")
+	dir := filepath.Join(home, ".blitz", "envs")
 	mk := func(key string, marker bool, deps ...string) {
 		os.MkdirAll(filepath.Join(dir, key, "lib"), 0o700)
 		os.WriteFile(filepath.Join(dir, key, "lib", "pkg.py"), make([]byte, 4096), 0o600)
 		if marker {
 			b, _ := json.Marshal(map[string]any{"key": key, "deps": deps, "skills": []string{"s"}, "last_used": time.Now()})
-			os.WriteFile(filepath.Join(dir, key, ".code-puppy-env.json"), b, 0o600)
+			os.WriteFile(filepath.Join(dir, key, ".blitz-env.json"), b, 0o600)
 		}
 	}
 	needed := envs.Key(python, []string{"six==1.16.0"})

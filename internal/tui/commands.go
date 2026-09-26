@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"strings"
 
-	core "github.com/retail-cortex/code_puppy/internal/app"
-	"github.com/retail-cortex/code_puppy/internal/i18n"
+	core "github.com/retail-cortex/blitz/internal/app"
+	"github.com/retail-cortex/blitz/internal/i18n"
 )
 
 // ErrExit is returned by HandleCommand when the user asks to quit.

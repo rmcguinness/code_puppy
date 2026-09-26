@@ -7,7 +7,7 @@ import (
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
-	"github.com/retail-cortex/code_puppy/internal/config"
+	"github.com/retail-cortex/blitz/internal/config"
 	"google.golang.org/adk/v2/model"
 	"google.golang.org/adk/v2/tool"
 	"google.golang.org/adk/v2/tool/mcptoolset"
@@ -195,7 +195,7 @@ func TestMCPToolsetsForAgents(t *testing.T) {
 		primary bool
 		want    string
 	}{
-		{"code-puppy", true, "mcp:primary-only,mcp:everyone"},
+		{"blitz", true, "mcp:primary-only,mcp:everyone"},
 		{"qa-kitten", false, "mcp:kitten,mcp:everyone"},
 		{"qa-kitten", true, "mcp:primary-only,mcp:kitten,mcp:everyone"},
 		{"helios", false, "mcp:everyone"},

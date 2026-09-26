@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"net/url"
 
-	"github.com/retail-cortex/code_puppy/internal/audit"
+	"github.com/retail-cortex/blitz/internal/audit"
 )
 
 // ErrNoSearch is returned by Registry.WebSearch when no search provider is

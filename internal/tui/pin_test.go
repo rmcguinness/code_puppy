@@ -7,9 +7,9 @@ import (
 	"strings"
 	"testing"
 
-	core "github.com/retail-cortex/code_puppy/internal/app"
-	"github.com/retail-cortex/code_puppy/internal/config"
-	"github.com/retail-cortex/code_puppy/internal/runtime"
+	core "github.com/retail-cortex/blitz/internal/app"
+	"github.com/retail-cortex/blitz/internal/config"
+	"github.com/retail-cortex/blitz/internal/runtime"
 	"google.golang.org/adk/v2/model"
 )
 
@@ -79,9 +79,9 @@ func TestPinModelAndUnpin(t *testing.T) {
 func TestModelCommandNotesAPinnedActiveAgent(t *testing.T) {
 	app := pinApp(t)
 	ctx := context.Background()
-	captureStdout(t, func() { HandleCommand(ctx, "/pin_model code-puppy anthropic/claude-sonnet-5", app) })
+	captureStdout(t, func() { HandleCommand(ctx, "/pin_model blitz anthropic/claude-sonnet-5", app) })
 	out := captureStdout(t, func() { HandleCommand(ctx, "/model gemini-3.5-flash-lite", app) })
-	if !strings.Contains(out, "code-puppy is pinned to claude-sonnet-5") {
+	if !strings.Contains(out, "blitz is pinned to claude-sonnet-5") {
 		t.Fatalf("no note that the active agent keeps its pin:\n%s", out)
 	}
 	if local(app).Engine().ModelName() != "claude-sonnet-5" {
@@ -92,7 +92,7 @@ func TestModelCommandNotesAPinnedActiveAgent(t *testing.T) {
 // An agent that declares default_model goes back to it on /unpin.
 func TestUnpinRestoresTheAgentsOwnDefault(t *testing.T) {
 	app := pinApp(t, func(home string) {
-		dir := filepath.Join(home, ".code_puppy", "agents")
+		dir := filepath.Join(home, ".blitz", "agents")
 		os.MkdirAll(dir, 0o700)
 		os.WriteFile(filepath.Join(dir, "reviewer.md"), []byte("---\nname: reviewer\ndisplay_name: Reviewer\ndescription: reviews\ntools: [read_file]\ndefault_model: anthropic/claude-haiku-4-5\n---\nYou review code.\n"), 0o600)
 	})

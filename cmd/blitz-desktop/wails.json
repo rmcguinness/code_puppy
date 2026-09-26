@@ -1,0 +1,16 @@
+{
+  "$schema": "https://wails.io/schemas/config.v2.json",
+  "name": "blitz-desktop",
+  "outputfilename": "Blitz",
+  "frontend:dir": "../../web/desktop",
+  "frontend:install": "pnpm install --frozen-lockfile",
+  "frontend:build": "pnpm run build",
+  "frontend:dev:watcher": "pnpm run dev",
+  "frontend:dev:serverUrl": "auto",
+  "build:dir": "../../build/desktop",
+  "info": {
+    "productName": "Blitz",
+    "productVersion": "0.1.0",
+    "copyright": "Copyright 2026 Ryan McGuinness. Apache License 2.0."
+  }
+}

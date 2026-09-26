@@ -7,9 +7,9 @@ import (
 	"sync"
 
 	"connectrpc.com/connect"
-	"github.com/retail-cortex/code_puppy/internal/app"
-	pb "github.com/retail-cortex/code_puppy/internal/gen/codepuppy/v1"
-	"github.com/retail-cortex/code_puppy/internal/images"
+	"github.com/retail-cortex/blitz/internal/app"
+	pb "github.com/retail-cortex/blitz/internal/gen/blitz/v1"
+	"github.com/retail-cortex/blitz/internal/images"
 )
 
 // sessionService implements SessionService.

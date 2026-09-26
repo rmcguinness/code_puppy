@@ -1,10 +1,10 @@
 import { create } from "@bufbuild/protobuf";
 import { describe, expect, it } from "vitest";
-import { TurnEventSchema, type TurnEvent } from "./gen/codepuppy/v1/turn_pb";
+import { TurnEventSchema, type TurnEvent } from "./gen/blitz/v1/turn_pb";
 import { applyEvent, failed, summarizeArgs, type Entry } from "./turns";
 
 const text = (t: string, opts: { partial?: boolean; repeat?: boolean; thought?: boolean } = {}): TurnEvent =>
-  create(TurnEventSchema, { author: "code-puppy", kind: { case: "text", value: { text: t, ...opts } } });
+  create(TurnEventSchema, { author: "blitz", kind: { case: "text", value: { text: t, ...opts } } });
 const call = (id: string, name: string, args = {}, partial = false): TurnEvent =>
   create(TurnEventSchema, { kind: { case: "toolCall", value: { id, name, args, partial } } });
 const result = (id: string, name: string, res = {}): TurnEvent =>
@@ -20,8 +20,8 @@ describe("applyEvent", () => {
   it("shows streamed text once", () => {
     const got = run([text("Hel", { partial: true }), text("lo", { partial: true }), text("Hello", { repeat: true }), text(" again")]);
     expect(got).toEqual([
-      { kind: "model", text: "Hello", author: "code-puppy", open: false },
-      { kind: "model", text: " again", author: "code-puppy", open: false },
+      { kind: "model", text: "Hello", author: "blitz", open: false },
+      { kind: "model", text: " again", author: "blitz", open: false },
     ]);
   });
 
@@ -39,7 +39,7 @@ describe("applyEvent", () => {
   it("ends a turn by closing open text and noting an error", () => {
     const got = run([text("partial", { partial: true }), finished("the run reached its cost limit")]);
     expect(got).toEqual([
-      { kind: "model", text: "partial", author: "code-puppy", open: false },
+      { kind: "model", text: "partial", author: "blitz", open: false },
       { kind: "notice", text: "the run reached its cost limit", tone: "error" },
     ]);
   });

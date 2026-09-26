@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/retail-cortex/code_puppy/internal/config"
-	"github.com/retail-cortex/code_puppy/internal/skills"
+	"github.com/retail-cortex/blitz/internal/config"
+	"github.com/retail-cortex/blitz/internal/skills"
 )
 
 const scriptSkill = `---
@@ -99,7 +99,7 @@ func newScriptFixture(t *testing.T, tier string, approve bool, edit func(*config
 	}
 	hooks, reqs := approverHooks(approve)
 	r := NewSkillScripts(prov, policy, ws, hooks, NewPyEnvs(filepath.Join(t.TempDir(), "envs"), policy.Packages),
-		ScriptBoxConfig{Mode: os.Getenv("CODE_PUPPY_PYENV_SANDBOX"), Blocked: ws.Blocked(), StateDir: t.TempDir()})
+		ScriptBoxConfig{Mode: os.Getenv("BLITZ_PYENV_SANDBOX"), Blocked: ws.Blocked(), StateDir: t.TempDir()})
 	if _, err := r.Box(); err != nil {
 		t.Skipf("no script sandbox: %v", err)
 	}
@@ -211,10 +211,10 @@ func TestActivateSkillListsScripts(t *testing.T) {
 }
 
 // The whole path with packages: approval, build, and a run that imports
-// them. Needs the network: CODE_PUPPY_PYENV_TESTS=1.
+// them. Needs the network: BLITZ_PYENV_TESTS=1.
 func TestRunSkillScriptInstallsPackages(t *testing.T) {
-	if os.Getenv("CODE_PUPPY_PYENV_TESTS") != "1" {
-		t.Skip("set CODE_PUPPY_PYENV_TESTS=1 (needs the network)")
+	if os.Getenv("BLITZ_PYENV_TESTS") != "1" {
+		t.Skip("set BLITZ_PYENV_TESTS=1 (needs the network)")
 	}
 	f := newScriptFixture(t, "", true, nil)
 	out := f.runner.Run(context.Background(), RunSkillScriptInput{Skill: "demo", Script: "needs-pkgs"})

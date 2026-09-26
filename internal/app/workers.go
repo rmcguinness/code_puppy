@@ -12,11 +12,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/retail-cortex/code_puppy/internal/config"
-	"github.com/retail-cortex/code_puppy/internal/runtime"
-	"github.com/retail-cortex/code_puppy/internal/session"
-	"github.com/retail-cortex/code_puppy/internal/tools"
-	"github.com/retail-cortex/code_puppy/internal/workers"
+	"github.com/retail-cortex/blitz/internal/config"
+	"github.com/retail-cortex/blitz/internal/runtime"
+	"github.com/retail-cortex/blitz/internal/session"
+	"github.com/retail-cortex/blitz/internal/tools"
+	"github.com/retail-cortex/blitz/internal/workers"
 )
 
 // Workers: scheduled workflows the workspace defines in
@@ -58,7 +58,7 @@ var ErrWorkersDisabled = errors.New("workers are disabled")
 
 // defaultWorkerStore is where enabled workers are recorded.
 func defaultWorkerStore() (*workers.Store, error) {
-	return workers.OpenStore(config.ExpandHome("~/.code_puppy/workers.json"))
+	return workers.OpenStore(config.ExpandHome("~/.blitz/workers.json"))
 }
 
 // workerRoots are the directories holding the workspace's workers.

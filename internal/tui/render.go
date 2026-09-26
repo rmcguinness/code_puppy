@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/retail-cortex/code_puppy/internal/i18n"
-	"github.com/retail-cortex/code_puppy/internal/textutil"
+	"github.com/retail-cortex/blitz/internal/i18n"
+	"github.com/retail-cortex/blitz/internal/textutil"
 )
 
 // ANSI color codes
@@ -24,7 +24,7 @@ const (
 	BgBlue  = "\033[44m"
 )
 
-// PrintBanner renders the Code Puppy ASCII splash banner.
+// PrintBanner renders the Blitz ASCII splash banner.
 func PrintBanner(version, agent, model string) {
 	banner := `
   __      _
@@ -34,7 +34,7 @@ o'')}____//      __ _ _ _  _ _ __ _  _
                             |_|   |__/
 `
 	fmt.Printf("%s%s%s", Cyan, banner, Reset)
-	fmt.Printf("🐶 %sCode Puppy Go%s (%s) %sv%s%s\n", Bold, Reset, i18n.T("banner.edition"), Yellow, version, Reset)
+	fmt.Printf("🐶 %sBlitz Go%s (%s) %sv%s%s\n", Bold, Reset, i18n.T("banner.edition"), Yellow, version, Reset)
 	fmt.Printf("🐕 %s: %s%s%s | %s: %s%s%s\n", i18n.T("banner.agent"), Green, agent, Reset, i18n.T("banner.model"), Blue, model, Reset)
 	fmt.Printf("💡 %s\n\n", i18n.T("banner.hint", "help", Bold+"/help"+Reset, "key", Dim+"Ctrl+C"+Reset))
 }

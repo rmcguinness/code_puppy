@@ -11,9 +11,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/retail-cortex/code_puppy/internal/config"
-	"github.com/retail-cortex/code_puppy/internal/images"
-	"github.com/retail-cortex/code_puppy/internal/runtime"
+	"github.com/retail-cortex/blitz/internal/config"
+	"github.com/retail-cortex/blitz/internal/images"
+	"github.com/retail-cortex/blitz/internal/runtime"
 	"google.golang.org/genai"
 )
 
@@ -37,7 +37,7 @@ func newImageApp(t *testing.T, replies ...string) (*App, *runtime.MockLLM) {
 	}
 	llm := runtime.NewMockLLM("gemini-3.8-flash", contents...)
 	app := openApp(t, cfg, llm)
-	local(app).Storage().CreateSession("", "t", "code-puppy")
+	local(app).Storage().CreateSession("", "t", "blitz")
 	return app, llm
 }
 

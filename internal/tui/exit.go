@@ -6,9 +6,9 @@ import (
 	"os"
 	"strings"
 
-	"github.com/retail-cortex/code_puppy/internal/i18n"
-	"github.com/retail-cortex/code_puppy/internal/textutil"
-	"github.com/retail-cortex/code_puppy/internal/tools"
+	"github.com/retail-cortex/blitz/internal/i18n"
+	"github.com/retail-cortex/blitz/internal/textutil"
+	"github.com/retail-cortex/blitz/internal/tools"
 )
 
 // ExitPrompt configures ConfirmExit.
@@ -20,7 +20,7 @@ type ExitPrompt struct {
 	AllowCancel bool
 }
 
-// ConfirmExit decides whether Code Puppy may exit while background processes
+// ConfirmExit decides whether Blitz may exit while background processes
 // are running. Nothing is left running either way: the user chooses to kill
 // them now or wait for them to finish, and a further Ctrl+C (or EOF) at the
 // prompt or while waiting force-quits, killing them. Returns false only when

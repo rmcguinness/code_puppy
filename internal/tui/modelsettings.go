@@ -8,9 +8,9 @@ import (
 	"strconv"
 	"strings"
 
-	core "github.com/retail-cortex/code_puppy/internal/app"
-	"github.com/retail-cortex/code_puppy/internal/config"
-	"github.com/retail-cortex/code_puppy/internal/i18n"
+	core "github.com/retail-cortex/blitz/internal/app"
+	"github.com/retail-cortex/blitz/internal/config"
+	"github.com/retail-cortex/blitz/internal/i18n"
 )
 
 // cmdModelSettings shows or changes per-model generation settings:

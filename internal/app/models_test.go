@@ -10,7 +10,7 @@ import (
 func TestAgentsAndModel(t *testing.T) {
 	w := openTest(t)
 	ctx := context.Background()
-	if a := w.ActiveAgent(); a.Name != "code-puppy" || !a.Active || a.DisplayName == "" {
+	if a := w.ActiveAgent(); a.Name != "blitz" || !a.Active || a.DisplayName == "" {
 		t.Fatalf("active agent %+v", a)
 	}
 	if i := slices.IndexFunc(w.ListAgents(), func(a AgentInfo) bool { return a.Name == "qa-kitten" }); i < 0 {
@@ -26,7 +26,7 @@ func TestAgentsAndModel(t *testing.T) {
 	if _, err := w.SetModel(ctx, "broken"); err == nil {
 		t.Error("switched to a model that failed to build")
 	}
-	if pin, err := w.SetModel(ctx, "openai/gpt-5"); err != nil || pin != "" || w.Model().Name != "gpt-5" || w.Config().CodePuppy.DefaultModel != "openai/gpt-5" {
+	if pin, err := w.SetModel(ctx, "openai/gpt-5"); err != nil || pin != "" || w.Model().Name != "gpt-5" || w.Config().Blitz.DefaultModel != "openai/gpt-5" {
 		t.Fatalf("set model: %q %v %+v", pin, err, w.Model())
 	}
 	// The active agent's pin still decides what it runs on.
@@ -82,7 +82,7 @@ func TestUpdateModelSettings(t *testing.T) {
 		t.Errorf("saved %+v", s)
 	}
 	info, _ := w.ModelSettings("gpt-5")
-	if info.Settings.TopP != nil || info.GlobalTemperature != w.Config().CodePuppy.Temperature {
+	if info.Settings.TopP != nil || info.GlobalTemperature != w.Config().Blitz.Temperature {
 		t.Errorf("info %+v", info)
 	}
 	if res, _ := w.UpdateModelSettings("gpt-5", true, nil); !res.Settings.IsZero() || len(w.AllModelSettings()) != 0 {
@@ -104,7 +104,7 @@ func TestSetChangesSettings(t *testing.T) {
 		t.Fatalf("set: %q %v", key, err)
 	}
 	w.Set(ctx, "owner_name", "Sam")
-	if s := w.Settings(); s.Agency != "high" || s.OwnerName != "Sam" || s.Agent != "code-puppy" || s.Locale == "" {
+	if s := w.Settings(); s.Agency != "high" || s.OwnerName != "Sam" || s.Agent != "blitz" || s.Locale == "" {
 		t.Errorf("settings %+v", s)
 	}
 }

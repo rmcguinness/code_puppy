@@ -7,13 +7,13 @@ import (
 	"iter"
 	"log/slog"
 
-	"github.com/retail-cortex/code_puppy/internal/breaker"
+	"github.com/retail-cortex/blitz/internal/breaker"
 	"google.golang.org/adk/v2/model"
 )
 
 // FallbackFromKey is set in a response's CustomMetadata when a fallback
 // model answered; its value is the name of the model that failed first.
-const FallbackFromKey = "code_puppy_fallback_from"
+const FallbackFromKey = "blitz_fallback_from"
 
 // modelFailThreshold: SDK retries have already run by the time a call
 // fails, so one failure is enough to prefer the next model for a while.

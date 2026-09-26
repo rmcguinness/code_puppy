@@ -8,7 +8,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/retail-cortex/code_puppy/internal/config"
+	"github.com/retail-cortex/blitz/internal/config"
 )
 
 // ErrWorkspaceBusy reports a workspace another process (or another
@@ -21,9 +21,9 @@ var ErrWorkspaceBusy = errors.New("the workspace is open elsewhere")
 type workspaceLock struct{ f *os.File }
 
 // lockWorkspace locks dir (canonical) through a file under
-// ~/.code_puppy/locks named after it.
+// ~/.blitz/locks named after it.
 func lockWorkspace(dir string) (*workspaceLock, error) {
-	locks := config.ExpandHome("~/.code_puppy/locks")
+	locks := config.ExpandHome("~/.blitz/locks")
 	if err := os.MkdirAll(locks, 0o700); err != nil {
 		return nil, fmt.Errorf("workspace lock: %w", err)
 	}

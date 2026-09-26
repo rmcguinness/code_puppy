@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/retail-cortex/code_puppy/internal/textutil"
+	"github.com/retail-cortex/blitz/internal/textutil"
 )
 
 // cappedBuffer is a concurrency-safe io.Writer that keeps at most limit bytes
