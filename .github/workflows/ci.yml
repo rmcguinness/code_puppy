@@ -50,14 +50,14 @@ jobs:
           echo "RUNSC_PATH=$RUNNER_TEMP/gvisor/runsc" >> "$GITHUB_ENV"
       # Fails when gofmt lists a file. (`… | (! read)` fails under macOS's
       # bash 3.2 with -e even when nothing is listed.)
-      - run: test -z "$(gofmt -l cmd pkg | tee /dev/stderr)"
+      - run: test -z "$(gofmt -l cmd internal | tee /dev/stderr)"
       - run: go vet ./...
       - run: go test -race ./...
       - name: Sandbox enforcement must not be skipped
-        run: go test -count=1 -v -run TestOSSandboxEnforcement ./pkg/tools/ | tee out.txt && ! grep -q -- '--- SKIP' out.txt
+        run: go test -count=1 -v -run TestOSSandboxEnforcement ./internal/tools/ | tee out.txt && ! grep -q -- '--- SKIP' out.txt
       - name: gVisor script sandbox must not be skipped
         if: runner.os == 'Linux'
-        run: go test -count=1 -v -run 'TestGVisor' ./pkg/tools/ | tee gv.txt && ! grep -q -- '--- SKIP' gv.txt
+        run: go test -count=1 -v -run 'TestGVisor' ./internal/tools/ | tee gv.txt && ! grep -q -- '--- SKIP' gv.txt
       - run: make cross-compile
       # The reproducible job compares these across runners.
       - run: (cd bin && shasum -a 256 code-puppy-*) > sums-${{ runner.os }}.txt

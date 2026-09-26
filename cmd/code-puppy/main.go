@@ -11,9 +11,9 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/retail-cortex/code_puppy/pkg/config"
-	"github.com/retail-cortex/code_puppy/pkg/i18n"
-	"github.com/retail-cortex/code_puppy/pkg/tui"
+	"github.com/retail-cortex/code_puppy/internal/config"
+	"github.com/retail-cortex/code_puppy/internal/i18n"
+	"github.com/retail-cortex/code_puppy/internal/tui"
 	"github.com/spf13/cobra"
 )
 

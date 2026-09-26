@@ -107,11 +107,11 @@ graph LR
 
 **1. Agent definitions**
 - **Python**: Agent definitions were hardcoded Python classes (`BaseAgent` subclasses) mixed with string templates and dynamic class imports. Adding or customizing an agent required editing Python source files or dealing with loose JSON schemas.
-- **Go**: Personas are standardized as **Markdown files with YAML frontmatter** (`pkg/agents/builtin/*.md`). They are baked directly into the binary at compile time via Go's `//go:embed`, yet can also be dynamically dropped into `./agents/*.md` or `~/.code_puppy/agents/*.md` without recompilation.
+- **Go**: Personas are standardized as **Markdown files with YAML frontmatter** (`internal/agents/builtin/*.md`). They are baked directly into the binary at compile time via Go's `//go:embed`, yet can also be dynamically dropped into `./agents/*.md` or `~/.code_puppy/agents/*.md` without recompilation.
 
 **2. Configuration and secrets**
 - **Python**: Configuration relied on raw `os.environ` reads, extensive monkey patching, and complex credential stores (`secret_store.py`).
-- **Go**: Driven by **`retail-cortex/modenv`** (`pkg/config/config.go`), enabling hierarchical environment cascading (`.env.toml` -> `.env.<runtime>.toml` -> `.env.local.toml`) and native decryption of `cloud://`, `pks://`, and `simple://` secret URIs.
+- **Go**: Driven by **`retail-cortex/modenv`** (`internal/config/config.go`), enabling hierarchical environment cascading (`.env.toml` -> `.env.<runtime>.toml` -> `.env.local.toml`) and native decryption of `cloud://`, `pks://`, and `simple://` secret URIs.
 
 **3. Tool execution and schemas**
 - **Python**: Used `pydantic-ai` with heavy runtime introspection and multiple monkey patches (`pydantic_patches.py` was 26 KB).

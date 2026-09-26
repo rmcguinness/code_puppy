@@ -25,19 +25,20 @@ Roadmap items 1–22 are done and committed; each has its own commit:
 | `155d595b`, `a5f34180`, `e2f02959` | Item 22: Castor skill definitions and `[skills.policy]`; the gVisor/OS script sandbox; environments, `run_skill_script`, `/envs` |
 | (the commit removing `python/`) | Go-only repository: Python removed (tag `python-final`), Go at the root, workflows `ci.yml` and `release.yml`, Apache 2.0 with `NOTICE`, planning docs in `.agents/` |
 | `1370b80f` | Side questions (`/btw`) |
-| (the commit adding `pkg/session/title_test.go`) | Session names from the first prompt, `/rename`, terminal title, resume hint on exit |
+| `56a870a4`, `dce9baa9`, (the commit moving `pkg/` to `internal/`) | Dependabot and a macOS release note; pinned release tools, `GOTOOLCHAIN=local`, a cross-host reproducibility check; project-layout with code in `internal/` |
+| (the commit adding `internal/session/title_test.go`) | Session names from the first prompt, `/rename`, terminal title, resume hint on exit |
 
 `go vet ./...` and `go test -race ./...` pass.
 
 ## Dated reminders
 
-- **2027-01-01: update the `gemini-3.8-flash` price** in `pkg/config/features.go` (`DefaultPricing`) from the introductory $0.75 / $3.75 / $0.075 to $1.50 / $7.50 / $0.15 per 1M tokens. Until then, `/cost` shows about half the real cost for this model. Check https://ai.google.dev/gemini-api/docs/pricing first.
+- **2027-01-01: update the `gemini-3.8-flash` price** in `internal/config/features.go` (`DefaultPricing`) from the introductory $0.75 / $3.75 / $0.075 to $1.50 / $7.50 / $0.15 per 1M tokens. Until then, `/cost` shows about half the real cost for this model. Check https://ai.google.dev/gemini-api/docs/pricing first.
 
 ## Open work, in suggested order
 
 1. **Manual verification (needs a person).** Nothing in `MANUAL_VERIFICATION.md` has been run yet. It covers real providers (💲 = paid calls), terminal behavior, the macOS and Linux sandboxes, MCP, steering, fallback and pinning. Record results in the file; any failure becomes the next task.
 2. **Optional: notarize the macOS binaries** (needs an Apple Developer account). Until then, the release notes (GoReleaser `release.footer`) and the README explain clearing the quarantine flag. Dependabot (`.github/dependabot.yml`) keeps the pinned action SHAs current. `~/.gnupg/gpg-agent.conf` now points at GPG Suite's `pinentry-mac`; the next tag will show whether signing works.
-3. **Linux sandbox startup cost.** Before every sandboxed command, `expandBlocked` (`pkg/tools/bwrap.go`) scans the writable roots, including the temp and cache directories (e.g. the Go build cache), for blocked names, up to 50,000 entries. Measured in a Linux container: about 0.1 s per command normally, 3.4 s under `-race`. Worth reducing (e.g. skip cache directories for name patterns, or reuse a recent scan), keeping in mind that a file created between scans could then escape masking. CI's parallel-cap test runs with the sandbox off because of this.
+3. **Linux sandbox startup cost.** Before every sandboxed command, `expandBlocked` (`internal/tools/bwrap.go`) scans the writable roots, including the temp and cache directories (e.g. the Go build cache), for blocked names, up to 50,000 entries. Measured in a Linux container: about 0.1 s per command normally, 3.4 s under `-race`. Worth reducing (e.g. skip cache directories for name patterns, or reuse a recent scan), keeping in mind that a file created between scans could then escape masking. CI's parallel-cap test runs with the sandbox off because of this.
 4. **Upgrade the pinned actions' majors** soon: GitHub warns that checkout v4 and setup-go v5 target Node.js 20, which is deprecated and already forced onto Node.js 24.
 5. **Skill scripts, follow-ups** (ROADMAP item 22 is done: Castor definitions, `[skills.policy]`, the gVisor/OS `ScriptBox`, environments, `run_skill_script`, `/envs`):
    - TypeScript scripts;
@@ -46,7 +47,7 @@ Roadmap items 1–22 are done and committed; each has its own commit:
    - `storage_uri` and resources;
    - running the opt-in real-install tests in CI (`CODE_PUPPY_PYENV_TESTS=1`);
    - adding a network field to Castor's proto, instead of `custom_hints.network`.
-6. **Optional: reasoning settings per model.** Python's `/model_settings` also sets `reasoning_effort`, extended thinking and budgets. The Go wrapper (`pkg/runtime/settings.go`) is where they'd go, mapped to genai `ThinkingConfig`, which each adapter translates differently.
+6. **Optional: reasoning settings per model.** Python's `/model_settings` also sets `reasoning_effort`, extended thinking and budgets. The Go wrapper (`internal/runtime/settings.go`) is where they'd go, mapped to genai `ThinkingConfig`, which each adapter translates differently.
 7. **Optional, from the Antigravity review (ROADMAP, "Antigravity CLI review"):** `/copy` (last reply to the clipboard, with OSC 52 over SSH), `--add-dir <path>` at startup, `/grill-me` (the agent interviews you before coding), and `/fork [n]` (branch a new session from an earlier turn).
 
 ## Decisions already made (don't redo without a reason)
@@ -54,7 +55,7 @@ Roadmap items 1–22 are done and committed; each has its own commit:
 - **No shared event bus.** Considered for steering and dropped: audit, hooks and traces are fed from engine callbacks, and steering didn't need a bus.
 - **Steering rides on tool results** (`message_from_user`), because ADK model callbacks can't add session events (`Session()` returns nil there).
 - **Each turn is its own trace root.** Turns are linked to the previous turn and tagged `gen_ai.conversation.id`; the previous turn's traceparent is kept in session metadata as `last_turn`. A session is never one long trace.
-- **Content is never exported by default.** The ADK puts tool arguments and results on every `execute_tool` span, so `pkg/observability` filters them before export. OTel providers are built here, not with `adk/telemetry.New`, which adds its own unfiltered exporter.
+- **Content is never exported by default.** The ADK puts tool arguments and results on every `execute_tool` span, so `internal/observability` filters them before export. OTel providers are built here, not with `adk/telemetry.New`, which adds its own unfiltered exporter.
 - **The Python implementation is gone** (2026-09-26): the Go code is the repository root, and `python-final` tags the last commit with Python. Don't reintroduce a second implementation.
 - **Not ported from Python:** `/cd` (the workspace is the sandbox root; use `-d`), `/truncate` (use `/compact`) and `/tutorial`. Reasons are in ROADMAP item 14.
 - **`fallback_models` switches only before any output** and never on cancellation. Breakers are asked just before each attempt (regression tests guard this).

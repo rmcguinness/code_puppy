@@ -1,10 +1,10 @@
 # Translating Code Puppy
 
-Each language is one JSON file. The shipped catalogs live in [`pkg/i18n/locales/`](../pkg/i18n/locales): `en-US.json` is the source, and every key must exist there.
+Each language is one JSON file. The shipped catalogs live in [`internal/i18n/locales/`](../internal/i18n/locales): `en-US.json` is the source, and every key must exist there.
 
 ## Add or fix a language without rebuilding
 
-1. Copy [`en-US.json`](../pkg/i18n/locales/en-US.json) to `~/.code_puppy/locales/<code>.json`, for example `de.json`. The directory is set by `[ui] locales_dir`.
+1. Copy [`en-US.json`](../internal/i18n/locales/en-US.json) to `~/.code_puppy/locales/<code>.json`, for example `de.json`. The directory is set by `[ui] locales_dir`.
 2. Set `meta.locale` to a BCP 47 code (`de`, `pt-BR`). You can leave `name` and `english_name` empty; they default to the CLDR names ("Deutsch", "German").
 3. Translate the values, then run `/locale de`.
 
@@ -19,7 +19,7 @@ You don't have to translate everything: missing keys fall back to the parent lan
 
 ## Checking a catalog
 
-To ship a catalog, add it to `pkg/i18n/locales/`; the build embeds it. `go test ./pkg/i18n` then checks every shipped catalog: no missing keys, no unknown keys, matching placeholders, and answer letters intact. For a file in `~/.code_puppy/locales`, run `/locale <code>` and look through `/help`, `/cost` and an approval prompt.
+To ship a catalog, add it to `internal/i18n/locales/`; the build embeds it. `go test ./internal/i18n` then checks every shipped catalog: no missing keys, no unknown keys, matching placeholders, and answer letters intact. For a file in `~/.code_puppy/locales`, run `/locale <code>` and look through `/help`, `/cost` and an approval prompt.
 
 To find text that was never moved into a catalog, use the pseudo-locale: `/locale en-XA`. It shows every catalog string accented and in brackets (`⟦Éxít çáñçélléd.⟧`), so any plain English left on screen was never moved into a catalog. `TestNoUntranslatedOutput` catches most of these in CI.
 

@@ -12,7 +12,7 @@ Each item lists the problem, the approach, where the change lands, how it is tes
 
 **Problem.** `llm.provider = "anthropic"` was accepted by config but `runtime.NewModel` had no Anthropic branch, so startup failed. The ADK ships no Anthropic model.
 
-**Approach.** A `model.LLM` adapter over the official `anthropic-sdk-go` (`pkg/runtime/anthropic.go`):
+**Approach.** A `model.LLM` adapter over the official `anthropic-sdk-go` (`internal/runtime/anthropic.go`):
 - genai ⇄ Messages API translation: system instruction → cached `system` block; function declarations → tools (JSON Schema, including conversion of genai `Schema` enums); `FunctionCall`/`FunctionResponse` ⇄ `tool_use`/`tool_result` (parallel results merged into one user turn); thinking blocks round-tripped unchanged (text + signature in `Thought`/`ThoughtSignature`).
 - Streaming (partial text events, then one aggregated final event, matching the Gemini path) and non-streaming.
 - Usage mapped to genai usage metadata (cache reads counted as cached input) so `/cost` works.
@@ -42,7 +42,7 @@ Also fixed: the model name now resolves per provider (`code_puppy.default_model`
 
 **Approach.** Investigate whether the ADK exposes a compaction entry point outside the runner. If not: run `compaction.LLMSummarizer` over the session's events and append an event carrying `EventActions.Compaction` via the session service (the runner already honours these on replay). Add `/compact [focus text]` and a `--compact` flag for resumed sessions.
 
-**Files.** `pkg/runtime/engine.go` (new `Engine.Compact`), `pkg/tui/commands_extra.go`.
+**Files.** `internal/runtime/engine.go` (new `Engine.Compact`), `internal/tui/commands_extra.go`.
 **Tests.** Mock LLM summarizer; assert the next request's contents shrink and contain the summary; persisted sessions replay the compaction.
 **Outcome.** The ADK only honours compaction events when the runner has a compaction config, so one is now always set (with an unreachable threshold when automatic compaction is off). The cut is made at a user-turn boundary so a tool call is never separated from its result, and earlier summaries are fed to the summarizer so rolling compactions don't lose history. No `--compact` flag was added; `/compact` covers resumed sessions.
 
@@ -56,7 +56,7 @@ Also fixed: the model name now resolves per provider (`code_puppy.default_model`
 - Per-server `agents = ["code-puppy", "qa-kitten"]` (default: primary agent only) — pass the matching toolsets to `newLLMAgent` for sub-agents and `InvokeSubagent`.
 - Per-server `prefix = "gh"`: wrap each MCP tool in a delegating tool that renames it (`gh__create_issue`). Needs the ADK's function-tool interfaces (`Declaration()`, `Run()`); confirm they're implementable outside the module, otherwise build the declaration from the MCP tool schema and call the MCP client directly.
 
-**Files.** `pkg/tools/mcp.go`, `pkg/runtime/engine.go`, `pkg/config/features.go`.
+**Files.** `internal/tools/mcp.go`, `internal/runtime/engine.go`, `internal/config/features.go`.
 **Tests.** In-memory MCP servers: sub-agent sees tools; prefixed names route to the right server; approvals keyed by the original name.
 
 ---
@@ -101,7 +101,7 @@ Also fixed: the model name now resolves per provider (`code_puppy.default_model`
 
 **Problem.** No application log (warnings only reached stderr) and no tracing. The ADK already creates OpenTelemetry spans for agents, model calls and tools, but no provider was installed, so they were discarded.
 
-**Approach.** `pkg/observability`:
+**Approach.** `internal/observability`:
 - **Log:** `slog` JSON lines to `~/.code_puppy/logs`. `Write` never blocks: records go into a bounded channel, and a single writer goroutine appends them, flushing once per batch. Drops are counted and reported. Secrets are masked, and trace and span IDs are added. It is the process's `slog` default and is forwarded to OTel when telemetry is on.
 - **Telemetry:** off by default; `[telemetry]` or `CODE_PUPPY_TELEMETRY=1`. Code Puppy builds the OTLP/HTTP trace and log providers itself rather than calling `adk/telemetry.New`, which would add its own unfiltered exporter from `OTEL_*` variables. The ADK attaches tool arguments and results to every `execute_tool` span even with content capture off, so a filtering exporter removes content attributes (or masks secrets in them with `capture_content`) on the batch goroutine before export. `OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT` is forced off unless content capture is on. The default endpoint is `http://localhost:4318` (the Go exporter would use https). Shutdown is bounded to 3 s.
 - **Spans:** `turn` (in `Engine.Execute`: agent, model, tokens, cost), `approval` (separates user wait from tool time), `hook <event>`, `compact`.
@@ -133,7 +133,7 @@ Also fixed: the model name now resolves per provider (`code_puppy.default_model`
 - The ADK runs all tool calls of a response at once, with no upper limit.
 
 **Changes.**
-- **Model requests** (`pkg/runtime/httpclient.go`): one retry budget for all providers (`llm.max_retries`, default 3). Gemini gets `HTTPRetryOptions` (backoff from 1 s up to 30 s); the other two SDKs keep their own backoff and `Retry-After` handling. A shared HTTP client sets 30 s dial and 15 s TLS timeouts, and a stall timeout (`llm.stall_timeout_seconds`, default 600) on response headers and on gaps between body reads, so steady streams are never cut off.
+- **Model requests** (`internal/runtime/httpclient.go`): one retry budget for all providers (`llm.max_retries`, default 3). Gemini gets `HTTPRetryOptions` (backoff from 1 s up to 30 s); the other two SDKs keep their own backoff and `Retry-After` handling. A shared HTTP client sets 30 s dial and 15 s TLS timeouts, and a stall timeout (`llm.stall_timeout_seconds`, default 600) on response headers and on gaps between body reads, so steady streams are never cut off.
 - **MCP**: a stdio transport that starts a fresh guarded process on each connect and kills the previous one. A circuit breaker per server: it opens after 2 consecutive failures, skips the server for 15 s doubling to 5 min, then allows one trial call. Tool errors reported by the server don't count against it. Listing times out after 30 s, calls after `timeout_seconds` (default 300). Warnings go out on the first failure, on pause and on recovery.
 - **Parallel tool cap**: an ADK `TaskRunner` caps each batch of tool calls (`tools.max_parallel`, default 8). The cap is per batch, so a sub-agent's calls running inside a parent's call can't deadlock.
 - **Hook worker**: a panic is contained to one event and logged.
@@ -150,7 +150,7 @@ Also fixed: the model name now resolves per provider (`code_puppy.default_model`
 
 **Approach.**
 - **Delivery (`runtime.Engine.Steer`):** messages are queued per session and attached to the next tool result as `message_from_user`. The obvious alternative, adding a user message in a before-model callback, doesn't work: ADK callback contexts return nil from `Session()`, so the message would reach one request and then vanish from history. Tool results are recorded by the ADK in order, so a steer is seen by every later call, survives compaction and `--resume`, and avoids provider rules about message order. A failed tool's error is kept. Sub-agent tools (other sessions) don't take the parent's messages. Anything left when the turn ends is returned by `TakeSteers`.
-- **Keyboard (`pkg/tui/keywatch*.go`):** the line editor can't abandon a read, so a key watcher owns the terminal between prompts during a turn. It switches off line buffering and echo but keeps signals, so Ctrl+C works as before, and disables macOS's Ctrl+T STATUS key. It uses `select(2)` with a 50 ms timeout, since `poll(2)` doesn't work on macOS terminals. Typing or Ctrl+T opens a steer prompt pre-filled with what was typed, with printer output held back until Enter. The spinner returns only if it was showing. Approval and question prompts pause the watcher, and an open steer prompt finishes first. The editor only reads stdin when a prompt asks, so the two never race. Other platforms: the watcher exits and turns behave as before.
+- **Keyboard (`internal/tui/keywatch*.go`):** the line editor can't abandon a read, so a key watcher owns the terminal between prompts during a turn. It switches off line buffering and echo but keeps signals, so Ctrl+C works as before, and disables macOS's Ctrl+T STATUS key. It uses `select(2)` with a 50 ms timeout, since `poll(2)` doesn't work on macOS terminals. Typing or Ctrl+T opens a steer prompt pre-filled with what was typed, with printer output held back until Enter. The spinner returns only if it was showing. Approval and question prompts pause the watcher, and an open steer prompt finishes first. The editor only reads stdin when a prompt asks, so the two never race. Other platforms: the watcher exits and turns behave as before.
 - **REPL:** steer messages pass `prompt_submit` hooks and are audited and recorded like prompts. A message that arrives after the model's last tool call is sent as the next prompt, or reported as not sent if the turn was interrupted.
 
 **Not done.** The shared event stream proposed alongside this: steering didn't need it, and audit, hooks and traces are already fed from engine callbacks.
@@ -182,7 +182,7 @@ Also fixed: the model name now resolves per provider (`code_puppy.default_model`
 
 **Approach.** `NewModel` builds the primary and wraps it in a `fallbackModel` when fallbacks are configured, so `/model <name>` keeps the chain. A fallback that can't be built (e.g. no credentials) is logged and left out; `doctor` shows why.
 - **When to switch:** only on an error before any output, and never on cancellation. Errors aren't classified further, because SDK error types differ and failures such as unknown-model 404s or schema quirks are provider-specific. An error after output was yielded ends the call as before.
-- **Breakers:** each model gets a circuit breaker (threshold 1, since SDK retries already ran). It's moved from `pkg/tools` to `pkg/breaker` so MCP and models share it, with `Abandon` added for cancelled trials. `Allow` is asked just before each attempt, because asking all breakers up front would reserve and strand a half-open trial on a model never tried. If every breaker is open, all models are tried rather than none.
+- **Breakers:** each model gets a circuit breaker (threshold 1, since SDK retries already ran). It's moved from `internal/tools` to `internal/breaker` so MCP and models share it, with `Abandon` added for cancelled trials. `Allow` is asked just before each attempt, because asking all breakers up front would reserve and strand a half-open trial on a model never tried. If every breaker is open, all models are tried rather than none.
 - **Responses:** a fallback's responses carry `ModelVersion` and `code_puppy_fallback_from`. The engine prices usage by the answering model and sends one notice on switching and one on recovery (`WithNotice`).
 - **`doctor`:** checks the primary and each fallback on its own, since the chain would make a dead primary look healthy. A broken fallback is a warning.
 
@@ -244,7 +244,7 @@ Also fixed: the model name now resolves per provider (`code_puppy.default_model`
 
 **`/search session <terms>`.** `session.Search` matches words and "quoted phrases" case-insensitively in the stored transcript, which keeps what compaction dropped from the model's context. Earlier `/search` lines are skipped. It ranks by distinct terms, then recency, keeps 12, and sends them oldest first with ±300-character excerpts cut at rune boundaries. With no match, the agent is still asked, with that stated.
 
-**Both** run as read-only turns (`runtime.WithReadOnly("search")`: plan mode's tool list, with its own refusal message). `doctor` reports the provider, or why it can't be used, and `--online` runs a test search. Prompt builders live in `pkg/runtime` (`WebSearchPrompt`, `SessionSearchPrompt`) beside `PlanPrompt`.
+**Both** run as read-only turns (`runtime.WithReadOnly("search")`: plan mode's tool list, with its own refusal message). `doctor` reports the provider, or why it can't be used, and `--online` runs a test search. Prompt builders live in `internal/runtime` (`WebSearchPrompt`, `SessionSearchPrompt`) beside `PlanPrompt`.
 
 **Not done.** Google search charges aren't in `/cost`. Search Suggestions (Google's HTML widget) aren't shown in the terminal. Vertex AI (project/location, no API key) isn't supported for search.
 
@@ -366,11 +366,11 @@ deny           = ["*-nightly"]
   - **Tier 0:** a granted bypass, audited as such.
 
   A mode where scripts write the workspace directly would need workspace-wide snapshots; it's left for later.
-- **`PyEnvs`** (`pkg/tools/pyenv.go`). The key is a hash of the interpreter's real path, the sorted and deduplicated requirements, the index and wheels-only. The environment is built inside the `ScriptBox`: network on, writable only the environment and a shared cache.
+- **`PyEnvs`** (`internal/tools/pyenv.go`). The key is a hash of the interpreter's real path, the sorted and deduplicated requirements, the index and wheels-only. The environment is built inside the `ScriptBox`: network on, writable only the environment and a shared cache.
   - **With `uv`:** `uv venv` and `uv pip install --index-url … [--only-binary :all:] -- <deps>`, with `UV_NO_CONFIG=1` (the user's `uv.toml` can't redirect it) and `UV_PYTHON_DOWNLOADS=never`. Without `uv`: `venv` and `pip`.
   - **Markers.** A marker file, written atomically and last, marks an environment usable; one without a marker is deleted and rebuilt. The marker also records the skills using the environment and when it was last used.
   - **Mounts.** `MountsFor` adds the interpreter's prefix when it lives outside `/usr` (e.g. Homebrew, a uv-managed Python).
-- **`run_skill_script`** (`pkg/tools/skillscript.go`):
+- **`run_skill_script`** (`internal/tools/skillscript.go`):
   - **Order of checks:** the policy verdict, then the tier approval, then a separate install approval (`ActionNetwork`, key `pyenv:<key>`, showing the exact install command), then the run.
   - **Where the script comes from.** A script on disk is located through `Skill.ScriptPath` (`os.Root`, so no `..` or symlink escapes) and its skill directory is mounted, so it can import its neighbours. Built-in and inline scripts are copied to a temporary directory.
   - **Environment:** `PYTHONDONTWRITEBYTECODE=1`, `PYTHONNOUSERSITE=1`, `$SKILL_DIR`, `$SKILL_OUTPUT`, the passed host variables and the script's own variables. `entry_point` runs the module under `__skill__` through `runpy` and calls the function; its return value is the exit code.
@@ -414,7 +414,7 @@ deny           = ["*-nightly"]
 - **Not yet:** anything that uses it. That's step 3.
 
 *Step 1 outcome.*
-- **Types, not a dependency.** Castor publishes only `.proto` source. Its Go code is generated by Bazel and not committed; its v1.1.0 tag declares the old module path (`github.com/retail-cortex/skills`); and the module pulls in gin, gorm and Postgres. So `pkg/skills/definition.go` mirrors `skill.proto` (Castor commit `1ce880f5`) with the proto field names as YAML keys.
+- **Types, not a dependency.** Castor publishes only `.proto` source. Its Go code is generated by Bazel and not committed; its v1.1.0 tag declares the old module path (`github.com/retail-cortex/skills`); and the module pulls in gin, gorm and Postgres. So `internal/skills/definition.go` mirrors `skill.proto` (Castor commit `1ce880f5`) with the proto field names as YAML keys.
 - **Tiers use names, not numbers.** The proto numbers its tiers one higher (tier 2 is enum value 3), so bare numbers are refused as ambiguous. The Go constants match the proto values, so an omitted tier is `TierUnspecified`, never a bypass. An early draft got this wrong; a test now guards it.
 - **Validation.** A problem (a `relative_path` escaping the skill directory, not exactly one source, a duplicate or invalid name, an unsupported `storage_uri`, a missing language, a bad environment variable name) keeps the skill's instructions loaded but blocks its scripts. A skill whose frontmatter doesn't parse is now reported instead of silently skipped.
 - **Content hash.** `ContentHash`: SHA-256 over every regular file in the skill's directory (path, size, content, in order); symbolic links skipped; 64 MB cap; built-in skills included. Castor's declared `compiled_reference.sha256_hash` is shown but not enforced, since its algorithm isn't specified.

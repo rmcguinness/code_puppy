@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 
-	"github.com/retail-cortex/code_puppy/pkg/runtime"
+	"github.com/retail-cortex/code_puppy/internal/runtime"
 )
 
 // Exit codes are stable so scripts can react to them.

@@ -11,12 +11,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/retail-cortex/code_puppy/pkg/agents"
-	"github.com/retail-cortex/code_puppy/pkg/config"
-	"github.com/retail-cortex/code_puppy/pkg/runtime"
-	"github.com/retail-cortex/code_puppy/pkg/session"
-	"github.com/retail-cortex/code_puppy/pkg/skills"
-	"github.com/retail-cortex/code_puppy/pkg/tools"
+	"github.com/retail-cortex/code_puppy/internal/agents"
+	"github.com/retail-cortex/code_puppy/internal/config"
+	"github.com/retail-cortex/code_puppy/internal/runtime"
+	"github.com/retail-cortex/code_puppy/internal/session"
+	"github.com/retail-cortex/code_puppy/internal/skills"
+	"github.com/retail-cortex/code_puppy/internal/tools"
 	"google.golang.org/genai"
 )
 

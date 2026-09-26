@@ -10,7 +10,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/retail-cortex/code_puppy/pkg/runtime"
+	"github.com/retail-cortex/code_puppy/internal/runtime"
 	"google.golang.org/genai"
 )
 

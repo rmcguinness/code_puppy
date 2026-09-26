@@ -182,7 +182,7 @@ prefix = "fs"
 - [ ] `/locale ja` 💲 **Expected:** a note that menus stay in English; replies come in Japanese.
 - [ ] Put a `de.json` with a few keys in `~/.code_puppy/locales/` (see `docs/TRANSLATING.md`), then `/locale de`. **Expected:** those keys in German, the rest in English.
 - [ ] `/locale en-XA` **Expected:** accented ⟦…⟧ text everywhere; note any plain English you see.
-- [ ] **Native-speaker review:** someone fluent reads `pkg/i18n/locales/es.json` and `fr-CA.json` (tone, terminology, Québec typography for fr-CA) and runs a short session in each.
+- [ ] **Native-speaker review:** someone fluent reads `internal/i18n/locales/es.json` and `fr-CA.json` (tone, terminology, Québec typography for fr-CA) and runs a short session in each.
 - [ ] `/locale en-US` to switch back.
 
 ## 21. Images 💲
