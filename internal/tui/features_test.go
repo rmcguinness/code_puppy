@@ -10,10 +10,9 @@ import (
 	"testing"
 	"time"
 
+	core "github.com/retail-cortex/code_puppy/internal/app"
 	"github.com/retail-cortex/code_puppy/internal/config"
 	"github.com/retail-cortex/code_puppy/internal/runtime"
-	"google.golang.org/adk/v2/model"
-	sessionsdk "google.golang.org/adk/v2/session"
 	"google.golang.org/genai"
 )
 
@@ -52,25 +51,23 @@ func TestMarkdownStreamRendersProgressively(t *testing.T) {
 	}
 }
 
-func textEvent(text string, partial bool) *sessionsdk.Event {
-	ev := &sessionsdk.Event{}
-	ev.LLMResponse = model.LLMResponse{Content: genai.NewContentFromText(text, genai.RoleModel), Partial: partial}
-	return ev
+func textEvent(text string, partial, repeat bool) core.Event {
+	return core.Event{Text: &core.Text{Text: text, Partial: partial, Repeat: repeat}}
 }
 
 func TestPrinterStreamingDedup(t *testing.T) {
 	var out bytes.Buffer
 	p := NewPrinter(PrinterOptions{Out: &out})
-	p.Handle(textEvent("Hel", true))
-	p.Handle(textEvent("lo", true))
-	p.Handle(textEvent("Hello", false)) // final aggregate repeats streamed text
-	p.Handle(textEvent(" again", false))
+	p.Handle(textEvent("Hel", true, false))
+	p.Handle(textEvent("lo", true, false))
+	p.Handle(textEvent("Hello", false, true)) // final aggregate repeats streamed text
+	p.Handle(textEvent(" again", false, false))
 	if out.String() != "Hello again" {
 		t.Errorf("printed %q, want streamed text once", out.String())
 	}
 	// Control sequences in model text are neutralised.
 	out.Reset()
-	p.Handle(textEvent("\x1b]52;c;x\x07ok", false))
+	p.Handle(textEvent("\x1b]52;c;x\x07ok", false, false))
 	if strings.ContainsRune(out.String(), '\x1b') {
 		t.Errorf("escape leaked: %q", out.String())
 	}

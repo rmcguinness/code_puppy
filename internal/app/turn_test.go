@@ -9,13 +9,14 @@ import (
 
 	"github.com/retail-cortex/code_puppy/internal/config"
 	"github.com/retail-cortex/code_puppy/internal/runtime"
+	"google.golang.org/adk/v2/model"
 	adksession "google.golang.org/adk/v2/session"
 	"google.golang.org/genai"
 )
 
 func text(s string) *genai.Content { return genai.NewContentFromText(s, genai.RoleModel) }
 
-func ignore(*adksession.Event) error { return nil }
+func ignore(Event) {}
 
 // transcript returns the active session's messages as "role: text".
 func transcript(t *testing.T, w *Workspace) []string {
@@ -47,7 +48,7 @@ func TestRunRecordsBothSidesAndOmitsThoughts(t *testing.T) {
 	accepted := 0
 	var seen int
 	res, err := w.Run(context.Background(), sid, Turn{Text: "hi", OnAccepted: func() { accepted++ }},
-		func(*adksession.Event) error { seen++; return nil })
+		func(Event) { seen++ })
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -148,4 +149,41 @@ func lastUserText(m *runtime.MockLLM) string {
 		}
 	}
 	return ""
+}
+
+func adkText(text string, partial, thought bool) *adksession.Event {
+	ev := &adksession.Event{Author: "code-puppy"}
+	ev.LLMResponse = model.LLMResponse{Content: &genai.Content{Role: genai.RoleModel, Parts: []*genai.Part{{Text: text, Thought: thought}}}, Partial: partial}
+	return ev
+}
+
+// Streamed chunks are delivered as they come; the final event that repeats
+// them is marked, and only final answer text reaches the transcript.
+func TestRelayMarksRepeatedText(t *testing.T) {
+	var got []Event
+	r := &relay{on: func(e Event) { got = append(got, e) }}
+	r.handle(adkText("thinking…", true, true))
+	r.handle(adkText("Hel", true, false))
+	r.handle(adkText("lo", true, false))
+	r.handle(adkText("Hello", false, false))  // repeats the chunks
+	r.handle(adkText(" again", false, false)) // not streamed
+	r.handle(&adksession.Event{})             // no content
+	if len(got) != 5 {
+		t.Fatalf("got %d events", len(got))
+	}
+	var shown strings.Builder
+	for _, e := range got {
+		if e.Author != "code-puppy" || e.Text == nil {
+			t.Fatalf("event %+v", e)
+		}
+		if !e.Text.Thought && (e.Text.Partial || !e.Text.Repeat) {
+			shown.WriteString(e.Text.Text)
+		}
+	}
+	if shown.String() != "Hello again" || !got[3].Text.Repeat || got[4].Text.Repeat {
+		t.Errorf("shown %q, events %+v", shown.String(), got)
+	}
+	if r.output.String() != "Hello again" {
+		t.Errorf("transcript text %q", r.output.String())
+	}
 }

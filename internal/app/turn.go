@@ -70,11 +70,12 @@ type BlockedError struct{ Reason string }
 
 func (e *BlockedError) Error() string { return "prompt blocked by hook: " + e.Reason }
 
-// Run sends one prompt to the agent in the session and streams its events to
-// on. It runs prompt_submit hooks, audits the prompt, starts a checkpoint for
-// /undo and records both sides in the transcript. A refused prompt is a
-// *BlockedError. A turn that fails part way still returns what it produced.
-func (w *Workspace) Run(ctx context.Context, sessionID string, t Turn, on runtime.EventHandler) (TurnResult, error) {
+// Run sends one prompt to the agent in the session and passes its events to
+// on as they happen. It runs prompt_submit hooks, audits the prompt, starts
+// a checkpoint for /undo and records both sides in the transcript. A
+// refused prompt is a *BlockedError. A turn that fails part way still
+// returns what it produced.
+func (w *Workspace) Run(ctx context.Context, sessionID string, t Turn, on func(Event)) (TurnResult, error) {
 	if !t.Accepted {
 		if err := w.accept(ctx, sessionID, t.Text); err != nil {
 			return TurnResult{}, err
@@ -98,17 +99,8 @@ func (w *Workspace) Run(ctx context.Context, sessionID string, t Turn, on runtim
 		}
 	}
 
-	var output strings.Builder
-	handler := func(ev *adksession.Event) error {
-		if ev.Content != nil && !ev.Partial {
-			for _, p := range ev.Content.Parts {
-				if p.Text != "" && !p.Thought {
-					output.WriteString(p.Text)
-				}
-			}
-		}
-		return on(ev)
-	}
+	r := &relay{on: on}
+	handler := r.handle
 
 	res := TurnResult{Before: w.engine.Usage(sessionID)}
 	if len(t.FetchGrants) > 0 {
@@ -137,7 +129,7 @@ func (w *Workspace) Run(ctx context.Context, sessionID string, t Turn, on runtim
 		t.OnFinished()
 	}
 	res.After = w.engine.Usage(sessionID)
-	res.Output = output.String()
+	res.Output = r.output.String()
 
 	if !t.Aside {
 		if res.Output != "" {
@@ -189,4 +181,30 @@ func AttachmentNote(imgs []*images.Image) string {
 		names[i] = img.Name
 	}
 	return "\n[images: " + strings.Join(names, ", ") + "]"
+}
+
+// relay passes a turn's ADK events on as Events, marking final text that
+// repeats streamed chunks and collecting the transcript's model text.
+type relay struct {
+	on       func(Event)
+	streamed bool // answer text arrived in partial chunks since the last final event
+	output   strings.Builder
+}
+
+func (r *relay) handle(ev *adksession.Event) error {
+	for _, e := range events(ev) {
+		if t := e.Text; t != nil && !t.Thought {
+			if t.Partial {
+				r.streamed = true
+			} else {
+				t.Repeat = r.streamed
+				r.output.WriteString(t.Text)
+			}
+		}
+		r.on(e)
+	}
+	if !ev.Partial {
+		r.streamed = false
+	}
+	return nil
 }

@@ -15,7 +15,6 @@ import (
 	"github.com/retail-cortex/code_puppy/internal/runtime"
 	"github.com/retail-cortex/code_puppy/internal/tui"
 	"golang.org/x/term"
-	adksession "google.golang.org/adk/v2/session"
 )
 
 // Output formats for non-interactive runs.
@@ -76,7 +75,7 @@ func runOneShot(ctx context.Context, w *app.Workspace, o oneShotOptions) error {
 	out := o.stdout
 	sid := o.sessionID
 
-	var handler runtime.EventHandler
+	var handler func(app.Event)
 	var printer *tui.Printer
 	var calls []toolCallJSON
 	var enc *json.Encoder
@@ -147,44 +146,32 @@ func runOneShot(ctx context.Context, w *app.Workspace, o oneShotOptions) error {
 }
 
 // streamJSONHandler writes one JSON line per event.
-func streamJSONHandler(enc *json.Encoder) runtime.EventHandler {
-	return func(ev *adksession.Event) error {
-		if ev.Content == nil {
-			return nil
+func streamJSONHandler(enc *json.Encoder) func(app.Event) {
+	return func(ev app.Event) {
+		switch {
+		case ev.Text != nil && !ev.Text.Thought:
+			_ = enc.Encode(map[string]any{"type": "text", "text": ev.Text.Text, "partial": ev.Text.Partial, "author": ev.Author})
+		case ev.ToolCall != nil:
+			_ = enc.Encode(map[string]any{"type": "tool_call", "name": ev.ToolCall.Name, "args": ev.ToolCall.Args})
+		case ev.ToolResult != nil:
+			_ = enc.Encode(map[string]any{"type": "tool_result", "name": ev.ToolResult.Name, "result": ev.ToolResult.Result})
 		}
-		for _, p := range ev.Content.Parts {
-			switch {
-			case p.Text != "" && !p.Thought:
-				_ = enc.Encode(map[string]any{"type": "text", "text": p.Text, "partial": ev.Partial, "author": ev.Author})
-			case p.FunctionCall != nil:
-				_ = enc.Encode(map[string]any{"type": "tool_call", "name": p.FunctionCall.Name, "args": p.FunctionCall.Args})
-			case p.FunctionResponse != nil:
-				_ = enc.Encode(map[string]any{"type": "tool_result", "name": p.FunctionResponse.Name, "result": p.FunctionResponse.Response})
-			}
-		}
-		return nil
 	}
 }
 
 // collectHandler gathers tool calls for json output.
-func collectHandler(calls *[]toolCallJSON) runtime.EventHandler {
+func collectHandler(calls *[]toolCallJSON) func(app.Event) {
 	pending := map[string]int{}
-	return func(ev *adksession.Event) error {
-		if ev.Content == nil || ev.Partial {
-			return nil
-		}
-		for _, p := range ev.Content.Parts {
-			switch {
-			case p.FunctionCall != nil:
-				pending[p.FunctionCall.ID+p.FunctionCall.Name] = len(*calls)
-				*calls = append(*calls, toolCallJSON{Name: p.FunctionCall.Name, Args: p.FunctionCall.Args})
-			case p.FunctionResponse != nil:
-				if i, ok := pending[p.FunctionResponse.ID+p.FunctionResponse.Name]; ok {
-					(*calls)[i].Result = p.FunctionResponse.Response
-				}
+	return func(ev app.Event) {
+		switch {
+		case ev.ToolCall != nil && !ev.ToolCall.Partial:
+			pending[ev.ToolCall.ID+ev.ToolCall.Name] = len(*calls)
+			*calls = append(*calls, toolCallJSON{Name: ev.ToolCall.Name, Args: ev.ToolCall.Args})
+		case ev.ToolResult != nil:
+			if i, ok := pending[ev.ToolResult.ID+ev.ToolResult.Name]; ok {
+				(*calls)[i].Result = ev.ToolResult.Result
 			}
 		}
-		return nil
 	}
 }
 

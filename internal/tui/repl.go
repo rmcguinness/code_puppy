@@ -15,7 +15,6 @@ import (
 	"github.com/retail-cortex/code_puppy/internal/i18n"
 	"github.com/retail-cortex/code_puppy/internal/images"
 	"github.com/retail-cortex/code_puppy/internal/runtime"
-	sessionsdk "google.golang.org/adk/v2/session"
 )
 
 // App is the REPL's state: the workspace it drives and the terminal.
@@ -41,12 +40,11 @@ type App struct {
 // Printer renders agent events: model text (optionally as Markdown), tool
 // activity, and a spinner while waiting.
 type Printer struct {
-	out      io.Writer
-	pause    *pausableWriter
-	respin   bool // Resume restarts the spinner (it was showing at Pause)
-	md       *markdownStream
-	spin     *Spinner
-	streamed bool // partial text was printed since the last final event
+	out    io.Writer
+	pause  *pausableWriter
+	respin bool // Resume restarts the spinner (it was showing at Pause)
+	md     *markdownStream
+	spin   *Spinner
 }
 
 // PrinterOptions configure a Printer.
@@ -152,39 +150,23 @@ func (p *Printer) flushText() {
 	}
 }
 
-// Handle is a runtime.EventHandler.
-func (p *Printer) Handle(ev *sessionsdk.Event) error {
-	if ev.Content == nil {
-		return nil
-	}
-	for _, part := range ev.Content.Parts {
-		if part.Text != "" && !part.Thought {
-			switch {
-			case ev.Partial:
-				p.text(part.Text)
-				p.streamed = true
-			case p.streamed:
-				// Final event repeating text already streamed.
-			default:
-				p.text(part.Text)
-			}
+// Handle renders a turn's event.
+func (p *Printer) Handle(ev core.Event) {
+	switch {
+	case ev.Text != nil:
+		if !ev.Text.Thought && !ev.Text.Repeat {
+			p.text(ev.Text.Text)
 		}
-		if part.FunctionCall != nil {
-			p.spin.Stop()
-			p.flushText()
-			fmt.Fprint(p.out, FormatToolCall(part.FunctionCall.Name, part.FunctionCall.Args))
-		}
-		if part.FunctionResponse != nil {
-			p.spin.Stop()
-			summary, ok := SummarizeToolResponse(part.FunctionResponse.Response)
-			fmt.Fprint(p.out, FormatToolResult(part.FunctionResponse.Name, ok, summary))
-			p.spin.Start(i18n.T("spinner.working"))
-		}
+	case ev.ToolCall != nil:
+		p.spin.Stop()
+		p.flushText()
+		fmt.Fprint(p.out, FormatToolCall(ev.ToolCall.Name, ev.ToolCall.Args))
+	case ev.ToolResult != nil:
+		p.spin.Stop()
+		summary, ok := SummarizeToolResponse(ev.ToolResult.Result)
+		fmt.Fprint(p.out, FormatToolResult(ev.ToolResult.Name, ok, summary))
+		p.spin.Start(i18n.T("spinner.working"))
 	}
-	if !ev.Partial {
-		p.streamed = false
-	}
-	return nil
 }
 
 // RunREPL runs the interactive REPL prompt loop until /exit, EOF, or ctx is cancelled.
