@@ -2,7 +2,6 @@ package tui
 
 import (
 	"context"
-	"errors"
 	"time"
 	"unicode"
 	"unicode/utf8"
@@ -24,8 +23,6 @@ type keyTerm interface {
 	ready(timeout time.Duration) (bool, error)
 	read(p []byte) (int, error)
 }
-
-var errKeysUnsupported = errors.New("key watching is not supported on this platform")
 
 // keyWatcher notices typing while a turn runs, so the user can steer the
 // agent. It owns the terminal between prompts: Ctrl+T or any printable key

@@ -4,7 +4,7 @@ VERSION ?= $(shell git describe --tags --match 'v*' --always --dirty 2>/dev/null
 LDFLAGS=-s -w -X main.version=$(VERSION)
 GOFLAGS_BUILD=-trimpath -buildvcs=false
 
-.PHONY: all build install test test-race vet check clean cross-compile tidy snapshot release-check proto proto-check desktop desktop-check
+.PHONY: all build install test test-race vet lint vulncheck check clean cross-compile tidy snapshot release-check proto proto-check desktop desktop-check
 
 all: build
 
@@ -29,7 +29,15 @@ test-race:
 vet:
 	go vet ./...
 
-check: vet test-race
+# staticcheck and govulncheck are pinned in tools/go.mod. Every package's
+# tests also fail on a leaked goroutine (goleak, in each leak_test.go).
+lint:
+	go tool -modfile=tools/go.mod staticcheck ./...
+
+vulncheck:
+	go tool -modfile=tools/go.mod govulncheck ./...
+
+check: vet lint vulncheck test-race
 
 snapshot:
 	goreleaser release --snapshot --clean

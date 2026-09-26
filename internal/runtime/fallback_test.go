@@ -111,7 +111,7 @@ func TestFallbackTakesOverThenPrimaryReturns(t *testing.T) {
 	// After the cooldown the primary gets a trial and takes over again.
 	primary.set(false)
 	clk.advance(breaker.InitialCooldown)
-	text, served, from, _ = call(t, f, ctx)
+	text, _, from, _ = call(t, f, ctx)
 	if text != "from gemini-x" || from != "" || primary.count() != 2 {
 		t.Fatalf("primary not back: %q from=%q calls=%d", text, from, primary.count())
 	}

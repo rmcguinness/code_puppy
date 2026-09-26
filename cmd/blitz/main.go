@@ -74,6 +74,7 @@ Exit codes: 0 success, 1 error, 2 usage, 3 --max-turns reached,
 		},
 	}
 	root.SetFlagErrorFunc(func(c *cobra.Command, err error) error {
+		//lint:ignore ST1005 shown to the user as is, after the flag error
 		return withCode(exitUsage, fmt.Errorf("%w\nRun '%s --help' for usage.", err, c.CommandPath()))
 	})
 

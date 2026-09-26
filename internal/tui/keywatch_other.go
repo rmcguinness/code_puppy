@@ -2,7 +2,12 @@
 
 package tui
 
-import "time"
+import (
+	"errors"
+	"time"
+)
+
+var errKeysUnsupported = errors.New("key watching is not supported on this platform")
 
 // Steering needs raw key input; elsewhere the watcher exits at once and
 // turns behave as before.

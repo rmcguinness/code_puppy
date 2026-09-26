@@ -66,7 +66,7 @@ func looksLikeCron(s string) bool {
 		return false
 	}
 	for _, f := range fields {
-		if strings.Trim(f, "0123456789*/,-?LW#ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz") != "" || !strings.ContainsAny(f, "0123456789*") {
+		if strings.Trim(f, "0123456789*/,-?#ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz") != "" || !strings.ContainsAny(f, "0123456789*") {
 			return false
 		}
 	}

@@ -50,7 +50,7 @@ func ParsePermission(s string) (Permission, error) {
 	}
 	if kind == "write" || kind == "delete" {
 		if strings.HasPrefix(pattern, "/") || strings.Contains("/"+pattern+"/", "/../") {
-			return Permission{}, fmt.Errorf("permission %q: paths are relative to the workspace, without ..", s)
+			return Permission{}, fmt.Errorf("permission %q: paths are relative to the workspace and can't use \"..\"", s)
 		}
 	}
 	if _, err := path.Match(pattern, ""); err != nil {

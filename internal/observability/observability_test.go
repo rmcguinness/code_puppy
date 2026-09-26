@@ -189,7 +189,7 @@ func TestSpansDropContentUnlessCaptured(t *testing.T) {
 
 	got := map[attribute.Key]string{}
 	for _, kv := range exportThrough(t, false, in...) {
-		got[kv.Key] = kv.Value.Emit()
+		got[kv.Key] = kv.Value.String()
 	}
 	if _, ok := got["gcp.vertex.agent.tool_call_args"]; ok {
 		t.Fatal("tool args exported without capture")
@@ -208,7 +208,7 @@ func TestSpansDropContentUnlessCaptured(t *testing.T) {
 
 	got = map[attribute.Key]string{}
 	for _, kv := range exportThrough(t, true, in...) {
-		got[kv.Key] = kv.Value.Emit()
+		got[kv.Key] = kv.Value.String()
 	}
 	if got["gcp.vertex.agent.tool_call_args"] != `{"path":".env"}` {
 		t.Fatalf("captured args missing: %v", got)
@@ -255,8 +255,8 @@ func TestTelemetryLogHandlerMasksSecrets(t *testing.T) {
 		t.Fatalf("want 1 exported log record, got %d", len(logs.recs))
 	}
 	rec := logs.recs[0]
-	text := rec.Body().Emit()
-	rec.WalkAttributes(func(kv attribute.KeyValue) bool { text += " " + kv.Value.Emit(); return true })
+	text := rec.Body().String()
+	rec.WalkAttributes(func(kv attribute.KeyValue) bool { text += " " + kv.Value.String(); return true })
 	if strings.Contains(text, secret) || !strings.Contains(text, "auth failed") {
 		t.Fatalf("log record not masked: %s", text)
 	}

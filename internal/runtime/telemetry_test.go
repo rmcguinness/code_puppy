@@ -64,7 +64,7 @@ func TestTurnTraceNestsADKSpansWithoutContent(t *testing.T) {
 		idName[s.SpanContext.SpanID().String()] = s.Name
 		parent[s.SpanContext.SpanID().String()] = s.Parent.SpanID().String()
 		for _, kv := range s.Attributes {
-			if strings.Contains(kv.Value.Emit(), content) {
+			if strings.Contains(kv.Value.String(), content) {
 				t.Errorf("span %q attribute %s carries file content", s.Name, kv.Key)
 			}
 		}

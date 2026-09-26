@@ -23,7 +23,7 @@ import (
 // outgoing JSON. The markers and images travel in the request context, so
 // nothing is shared between requests.
 
-const imageMarkerPrefix = "⁣blitz-image:"
+const imageMarkerPrefix = "\u2063blitz-image:" // U+2063 INVISIBLE SEPARATOR
 
 type openAIImagesKey struct{}
 
