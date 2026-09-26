@@ -2,7 +2,7 @@
 
 Status key: ✅ done · 🔜 next · 📋 planned · 🔍 needs investigation first
 
-Items 10–17 were added after the first plan and appear before item 9, which stays last because it needs a person. Open work and resume notes: [NEXT_STEPS.md](NEXT_STEPS.md).
+Items 10–18 were added after the first plan and appear before item 9, which stays last because it needs a person. Open work and resume notes: [NEXT_STEPS.md](NEXT_STEPS.md).
 
 Each item lists the problem, the approach, where the change lands, how it is tested, and a rough size (S ≤ half a day, M ≈ 1–2 days, L ≈ 3+ days).
 
@@ -169,7 +169,7 @@ Also fixed: the model name now resolves per provider (`code_puppy.default_model`
 **Not ported, and why.**
 - `/cd`: in Go the workspace is the sandbox root (`os.Root`, Seatbelt/bubblewrap profile, blocked paths), plus project memory and session scoping. Changing it mid-session means rebuilding all of those; `code-puppy -d <dir>` does it safely at start.
 - `/truncate N`: deletes history. `/compact [focus]` shrinks the context without losing what was decided.
-- `/dump_context`, `/load_context`: sessions are already saved and resumable; named snapshots would fit under `/session`, and can be added if wanted.
+- `/dump_context`, `/load_context`: added later as `/session save` and `/session load <name>` (item 18).
 - `/tutorial`, `/add_model`, `/refresh_models`: belong with a model catalog, which isn't planned. (`/pin_model` and `/unpin` came with item 16, `/model_settings` with item 17.)
 
 **Tests.** Plan mode refuses edits and still reads, covers sub-agents (the sub-agent's refused `create_file` is checked, not just the missing file), and leaves normal turns alone. `/plan` usage, goal recording, a goal that starts with `/`, `--plan` in JSON output and its flag validation. `!` runs in the workspace, reports exit codes, and isn't recorded as a prompt. A stale Ctrl+C after `!` must not end the session; this test was confirmed to fail without the fix once input arrives with realistic timing. `/tools` marking and MCP scoping; `/show` equals `/set`.
@@ -219,6 +219,20 @@ Also fixed: the model name now resolves per provider (`code_puppy.default_model`
 **Not done.** Python's reasoning and thinking settings (`reasoning_effort`, `extended_thinking`, `budget_tokens`, …) and per-model retry strategies. There's no per-model way to unset a global value (e.g. to send no temperature to one model while others get 0.2).
 
 **Tests.** Validation ranges, and nothing changes on error. Save, replace and remove with comments and file mode kept, quoted names (`gpt-4.1`, `qwen2.5-coder:7b`), an empty table removed, and a real `Load` through modenv. A fallback chain where each model gets its own settings, the backup keeps the global temperature, and the shared request config is unchanged. That test was confirmed to fail when the wrapper edits the request in place. Passthrough without a lookup or entry. `SettingSupported` per provider. The engine applies startup settings (including a `provider/` key), picks up a change on the next call, and removes settings. A sub-agent called with no run context gets its settings; confirmed to fail without the lookup in `InvokeSubagent`. The real OpenAI adapter sends temperature, top_p and max_output_tokens to an `httptest` server and no seed. REPL: list, set several, provider warning, atomic failure, bad pair, clear one, show with inherited values, reset saved. A hand-written `"openai/gpt-5"` table is edited rather than duplicated, and when both a bare and a prefixed key exist the bare one always wins. Also smoke-tested with the binary against a local fake OpenAI server: the model's temperature replaced the global one, and the seed wasn't sent.
+
+---
+
+## 18. Named session snapshots — ✅ done (S)
+
+**Approach.**
+- **Save:** `/session save <name> [--force]` copies the active session's transcript (`<id>.jsonl`), metadata and the model's event log (`<id>.events.jsonl`) to a new session ID. The new metadata carries `name` and `from` (the source ID). Data files are written first (owner-only, `O_EXCL`) and the metadata last, since the metadata is what makes a session visible, so an interrupted copy is never listed. The source stays active and unchanged. Names follow the ID character rules, are unique across workspaces, and can't start with `session-` or be `latest`, so a name is never mistaken for an ID or for `--resume`'s default. An existing name is refused unless `--force`, which deletes the old snapshot once the new one is written. An empty session is refused. Sessions in the old single-file format can be saved too.
+- **Load:** `Storage.Open` takes an ID or a name. A snapshot, whether given by name or by its ID, is never continued in place. Opening one copies it to a new, unnamed session (`from` = the snapshot) in the current workspace and makes that active. This follows Python, where `/load_context` rotates to a fresh session so the snapshot stays a fixed point. The ADK session service replays the copied event log on first access, so the model sees the snapshot's history, including tool calls and compaction summaries. An ordinary ID resumes in place, as before. `/session load`, `/resume` and `--resume=<name>` all use `Open`.
+- **`--continue` skips snapshots.** Found in the binary smoke test: a snapshot is the newest session in its workspace, so `--continue` resumed it and appended to it.
+- **REPL:** `/session list` marks snapshots with 📸 and their name. `/resume` completion offers snapshot names.
+
+**Not done.** No `/session delete`; `--force` replaces a snapshot, and files can be removed from the sessions directory. Usage and cost (`/cost`) start at zero in a session loaded from a snapshot, as they do after `--resume`.
+
+**Tests.** Copying: files and permissions, name and `from`, the source stays active and keeps growing on its own. Unique names, and `--force` replacing (the old files are gone). Bad names, empty and missing sessions. Opening by name starts a new session with the transcript, and a new `PersistentService` replays the copied events. Continuing that session doesn't touch the snapshot, and a second load starts another session from the same point. A snapshot opened by ID starts a new session; an ordinary ID resumes in place. A legacy source. That the event log copy matters was confirmed by breaking it (the replay test fails). REPL, with a real engine on a persistent session service: the model's request after `/session load` contains the snapshot's turn and not a turn added to the original afterwards; save errors (no session, empty, usage, taken, bad name); list marker; `/resume <name>`; `/resume <id>` in place; `--force`. CLI: `--resume <name>` starts a new session, and `--continue` skips a newer snapshot. Both regression tests were confirmed to fail without their fixes. Binary smoke test against a local fake OpenAI server: save from a piped REPL, continue the original, then `--resume=fruit` twice. Both requests contained only the snapshot's history.
 
 ---
 

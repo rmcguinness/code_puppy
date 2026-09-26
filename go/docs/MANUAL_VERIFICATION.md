@@ -1,6 +1,6 @@
 # Manual Verification Checklist
 
-Everything here needs a person, a real terminal, real credentials, or GitHub. The automated suite (362 tests on macOS and Linux) covers the logic behind each item; this list checks the parts it can't. Each item has an **expected** result — if you see something else, note it next to the item.
+Everything here needs a person, a real terminal, real credentials, or GitHub. The automated suite (370 tests on macOS and Linux) covers the logic behind each item; this list checks the parts it can't. Each item has an **expected** result — if you see something else, note it next to the item.
 
 Setup for most items: `make build`, then use `./bin/code-puppy` (or put `bin/` on your `PATH`). Use a scratch Git repository as the workspace so edits are safe.
 
@@ -268,3 +268,12 @@ Set `fallback_models = ["anthropic/claude-sonnet-5"]` with a working Anthropic k
 - [ ] With an OpenAI key: `/model_settings openai/gpt-5 seed=1`, `/model openai/gpt-5`, ask something. **Expected:** a warning when setting; the answer works (the seed isn't sent).
 - [ ] `/model_settings gemini-3.8-flash temperature=5`. **Expected:** "Nothing changed: temperature must be a number in [0, 2]".
 - [ ] Restart. **Expected:** `/model_settings` still lists the settings. `/model_settings gemini-3.8-flash reset` removes them and the table from the file.
+
+## 29. Session snapshots 💲
+
+- [ ] In a session, ask the agent to remember a word ("pineapple"). `/session save fruit`. **Expected:** "Saved snapshot fruit (2 messages)…"; `/session list` shows 📸 fruit.
+- [ ] Tell it "actually, remember mango". `/session load fruit`, then ask "which word?". **Expected:** "Started session … from snapshot fruit"; it answers pineapple and doesn't know mango.
+- [ ] `/resume <the original session's id>` and ask again. **Expected:** mango.
+- [ ] `/session save fruit`. **Expected:** refused with a hint about `--force`; with `--force` it's replaced and `/session list` shows one 📸 fruit.
+- [ ] Exit. `code-puppy --continue "which word?"`. **Expected:** continues your last ordinary session, not the snapshot. `code-puppy --resume=fruit "which word?"`: pineapple, in a new session.
+- [ ] In a session that used tools (e.g. edited a file), save, load, and ask what it just did. **Expected:** it knows about the tool calls, not only the chat text.

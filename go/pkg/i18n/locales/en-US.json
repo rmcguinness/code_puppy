@@ -32,7 +32,7 @@
     "help.agent": "Switch or show the active agent",
     "help.model": "Switch or show the active LLM model",
     "help.skills": "List or search Agent Skills",
-    "help.session": "Manage saved sessions (/resume <id> also works)",
+    "help.session": "Manage saved sessions; save <name> keeps a snapshot to start from later (/resume <id|name> also works)",
     "help.undo": "Revert the file changes from the last turn",
     "help.checkpoints": "List turns with file changes",
     "help.diff": "Show this session's file changes (or git diff)",
@@ -108,7 +108,7 @@
     "mcp.title": "MCP servers:",
     "mcp.approval_required": "approval required",
     "mcp.auto_approved": "auto-approved",
-    "resume.usage": "Usage: /resume <session-id>   (see /session list)",
+    "resume.usage": "Usage: /resume <session-id|snapshot-name>   (see /session list)",
     "resume.done": "Resumed session {id} ({title}, {messages})",
     "resume.other_workspace": "This session was started in {workspace}; file references may not match this workspace.",
     "recap.you": "you",
@@ -224,6 +224,11 @@
     "msettings.cleared": "{model} now uses the global settings.",
     "msettings.unsupported": "{provider} doesn't accept {keys} for {model}, so they won't be sent.",
     "msettings.global": "(global: {value})",
-    "msettings.provider_default": "(provider default)"
+    "msettings.provider_default": "(provider default)",
+    "snapshot.usage": "Usage: /session save <name> [--force]   then /session load <name> to start from it",
+    "snapshot.saved": "Saved snapshot {name} ({messages}). /session load {name} starts a new session from it.",
+    "snapshot.taken": "A snapshot named {name} already exists; /session save {name} --force replaces it.",
+    "snapshot.failed": "Could not save the snapshot: {error}",
+    "snapshot.branched": "Started session {id} from snapshot {name} ({messages}); the snapshot stays as saved."
   }
 }

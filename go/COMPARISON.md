@@ -44,7 +44,7 @@ Go measurements were taken on 2026-09-24 on Apple Silicon (arm64), macOS, warm c
 | **Plugins** | ✅ plugin system | ❌ | MCP and hooks cover some of the same ground |
 | **Approvals** | ✅ confirmations | ✅ diff preview; once / session / always | Saved rules scoped per workspace; never override deny rules |
 | **Undo** | ✅ undo manager | ✅ per-turn checkpoints, `/undo`, `/diff` | Refuses to clobber later edits unless forced |
-| **Sessions** | ✅ autosave, browser | ✅ persistent, `--resume` / `--continue` | Scoped per workspace |
+| **Sessions** | ✅ autosave, browser, `/dump_context` / `/load_context` | ✅ persistent, `--resume` / `--continue`, named snapshots (`/session save`, `/session load <name>`) | Scoped per workspace; loading a snapshot starts a new session from it, as Python's `/load_context` does |
 | **Compaction** | ✅ | ✅ automatic + `/compact [focus]` | |
 | **Token / cost tracking** | ✅ | ✅ per turn and session | Cache reads/writes priced; `doctor` flags unpriced models |
 | **Project instructions** | ✅ | ✅ `AGENTS.md` / `PUPPY.md` | |
@@ -53,7 +53,7 @@ Go measurements were taken on 2026-09-24 on Apple Silicon (arm64), macOS, warm c
 | **i18n** | ✅ | ✅ English, Spanish, Canadian French | `/locale`; external JSON catalogs; model replies in the chosen language |
 | **Shell passthrough** | ✅ `!cmd` | ✅ `!cmd` | Runs as the user in the workspace; audited |
 | **Plan mode** | ➖ `/plan` (instructions only) | ✅ `/plan`, `--plan` | Enforced: only read-only tools run, including in sub-agents |
-| **Slash commands** | ✅ many | ➖ | No `/cd` (the workspace is the sandbox root; use `-d`), `/truncate` (use `/compact`), `/dump_context`/`/load_context`, `/tutorial` |
+| **Slash commands** | ✅ many | ➖ | No `/cd` (the workspace is the sandbox root; use `-d`), `/truncate` (use `/compact`), `/tutorial` |
 | **Per-model settings** | ✅ `/model_settings`: sampling, reasoning/thinking, retry strategy | ➖ `/model_settings`, `[model_settings."<model>"]`: temperature, max_tokens, top_p, seed | Reasoning/thinking settings not ported. Each fallback uses its own settings; settings a provider rejects are left out |
 | **Per-agent models** | ✅ `/pin_model`, `/unpin` | ✅ `/pin_model`, `/unpin`, `[agent_models]`, agent `default_model` | Cross-provider; pinned sub-agents priced by their own model |
 | **Steering mid-turn** | ✅ Ctrl+T, injected before the next model call | ✅ type or Ctrl+T; delivered with the next tool result | macOS and Linux; late messages become the next prompt |

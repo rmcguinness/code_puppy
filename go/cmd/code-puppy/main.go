@@ -82,7 +82,7 @@ Exit codes: 0 success, 1 error, 2 usage, 3 --max-turns reached,
 	f.StringVar(&o.global.agency, "agency", "", "Agency level (low, medium, high, extreme)")
 	f.BoolVar(&o.global.trustWorkspace, "trust-workspace", false, "Load agents and skills from the workspace (./agents, ./skills, .agents/skills)")
 	f.BoolVarP(&o.version, "version", "v", false, "Print Code Puppy version")
-	f.StringVarP(&o.resume, "resume", "r", "", "Resume a saved session by ID (no ID: the most recent)")
+	f.StringVarP(&o.resume, "resume", "r", "", "Resume a saved session by ID (no ID: the most recent), or start a new one from a snapshot by name")
 	f.Lookup("resume").NoOptDefVal = "latest"
 	f.BoolVarP(&o.cont, "continue", "C", false, "Continue the most recent session")
 	f.StringVar(&o.outputFormat, "output-format", formatText, "Output for one-shot runs: text, json, or stream-json")
@@ -230,7 +230,11 @@ func runRoot(cmd *cobra.Command, o *rootOptions, args []string) (err error) {
 		warnFn(i18n.T("resume.other_workspace_id", "id", sess.ID, "workspace", sess.Workspace))
 	}
 	if resumed {
-		fmt.Printf("%s▶️  %s%s\n", tui.Green, i18n.T("resume.starting", "id", sess.ID, "messages", i18n.N("session.messages", sess.MessageCount)), tui.Reset)
+		msg := i18n.T("resume.starting", "id", sess.ID, "messages", i18n.N("session.messages", sess.MessageCount))
+		if o.resume != "" && o.resume != "latest" && o.resume != sess.ID { // a snapshot name
+			msg = i18n.T("snapshot.branched", "id", sess.ID, "name", o.resume, "messages", i18n.N("session.messages", sess.MessageCount))
+		}
+		fmt.Printf("%s▶️  %s%s\n", tui.Green, msg, tui.Reset)
 		tui.PrintRecap(sess.Messages, 3)
 		fmt.Println()
 	}
@@ -313,7 +317,7 @@ func newCompleter(e *env) *tui.Completer {
 		c.Command(cmd)
 	}
 	c.Command("skills", "list", "search")
-	c.Command("session", "list", "new", "load")
+	c.Command("session", "list", "new", "load", "save")
 	c.Command("memory", "show", "reload", "add")
 	c.Command("approvals", "revoke", "clear")
 	c.Command("diff", "git")
@@ -373,6 +377,13 @@ func newCompleter(e *env) *tui.Completer {
 					break
 				}
 				ids = append(ids, s.ID)
+			}
+		}
+		if all, err := e.storage.List(); err == nil {
+			for _, s := range all {
+				if s.Name != "" {
+					ids = append(ids, s.Name)
+				}
 			}
 		}
 		return ids

@@ -32,7 +32,7 @@
     "help.agent": "Cambia o muestra el agente activo",
     "help.model": "Cambia o muestra el modelo LLM activo",
     "help.skills": "Lista o busca Agent Skills",
-    "help.session": "Gestiona las sesiones guardadas (/resume <id> también funciona)",
+    "help.session": "Gestiona las sesiones guardadas; save <nombre> guarda una instantánea para retomarla después (/resume <id|nombre> también funciona)",
     "help.undo": "Revierte los cambios de archivos del último turno",
     "help.checkpoints": "Lista los turnos con cambios de archivos",
     "help.diff": "Muestra los cambios de archivos de esta sesión (o git diff)",
@@ -108,7 +108,7 @@
     "mcp.title": "Servidores MCP:",
     "mcp.approval_required": "requiere aprobación",
     "mcp.auto_approved": "aprobado automáticamente",
-    "resume.usage": "Uso: /resume <id-de-sesión>   (consulta /session list)",
+    "resume.usage": "Uso: /resume <id-de-sesión|nombre-de-instantánea>   (consulta /session list)",
     "resume.done": "Sesión {id} reanudada ({title}, {messages})",
     "resume.other_workspace": "Esta sesión se inició en {workspace}; las referencias a archivos pueden no coincidir con este espacio de trabajo.",
     "recap.you": "tú",
@@ -224,6 +224,11 @@
     "msettings.cleared": "{model} ahora usa los ajustes globales.",
     "msettings.unsupported": "{provider} no acepta {keys} para {model}, así que no se enviarán.",
     "msettings.global": "(global: {value})",
-    "msettings.provider_default": "(valor del proveedor)"
+    "msettings.provider_default": "(valor del proveedor)",
+    "snapshot.usage": "Uso: /session save <nombre> [--force]   y luego /session load <nombre> para partir de ella",
+    "snapshot.saved": "Instantánea {name} guardada ({messages}). /session load {name} inicia una sesión nueva a partir de ella.",
+    "snapshot.taken": "Ya existe una instantánea llamada {name}; /session save {name} --force la reemplaza.",
+    "snapshot.failed": "No se pudo guardar la instantánea: {error}",
+    "snapshot.branched": "Sesión {id} iniciada a partir de la instantánea {name} ({messages}); la instantánea no cambia."
   }
 }

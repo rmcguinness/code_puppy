@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/retail-cortex/code_puppy/pkg/agents"
 	"github.com/retail-cortex/code_puppy/pkg/config"
@@ -181,6 +182,24 @@ func TestSelectSession(t *testing.T) {
 	}
 	if _, _, err := selectSession(st, "no-such-session", false, "", ""); exitCodeFor(err) != exitUsage {
 		t.Errorf("unknown id: %v", err)
+	}
+	// --resume <name> starts a new session from the snapshot.
+	snap, err := st.Snapshot(first.ID, "greeting", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	branch, resumed, err := selectSession(st, "greeting", false, "", "")
+	if err != nil || !resumed || branch.ID == first.ID || branch.ID == snap.ID || branch.From != snap.ID || len(branch.Messages) != 1 {
+		t.Errorf("resume by name: %+v %v %v", branch, resumed, err)
+	}
+	// --continue skips snapshots even when one is the newest session.
+	time.Sleep(10 * time.Millisecond)
+	if _, err := st.Snapshot(branch.ID, "newest", false); err != nil {
+		t.Fatal(err)
+	}
+	cont, _, err := selectSession(st, "", true, "", "")
+	if err != nil || cont.ID != branch.ID {
+		t.Errorf("--continue picked %s, want %s: %v", cont.ID, branch.ID, err)
 	}
 }
 

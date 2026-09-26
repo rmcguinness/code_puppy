@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 
@@ -349,9 +350,9 @@ func modelErrorSummary(err error, cfg *config.Config) string {
 	return r.String(msg)
 }
 
-// selectSession picks the session to use: an explicit --resume ID, the most
-// recent one in this workspace for --continue/--resume without an ID, or a
-// new session.
+// selectSession picks the session to use: an explicit --resume ID, a new
+// session copied from the snapshot --resume names, the most recent one in
+// this workspace for --continue/--resume without an ID, or a new session.
 func selectSession(st *session.Storage, resume string, cont bool, title, agent string) (*session.SessionRecord, bool, error) {
 	if resume == "" && !cont {
 		rec, err := st.CreateSession("", title, agent)
@@ -362,12 +363,14 @@ func selectSession(st *session.Storage, resume string, cont bool, title, agent s
 		if err != nil {
 			return nil, false, err
 		}
+		// Snapshots are saved copies, not conversations to carry on.
+		list = slices.DeleteFunc(list, func(r *session.SessionRecord) bool { return r.Name != "" })
 		if len(list) == 0 {
 			return nil, false, withCode(exitUsage, fmt.Errorf("no saved sessions for %s (use --resume <id> for a session from another directory)", st.Workspace()))
 		}
 		resume = list[0].ID
 	}
-	rec, err := st.Load(resume)
+	rec, _, err := st.Open(resume) // an ID, or a snapshot name to start from
 	if err != nil {
 		return nil, false, withCode(exitUsage, err)
 	}

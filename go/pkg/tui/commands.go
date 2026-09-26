@@ -169,7 +169,7 @@ func printHelp() {
 		{"/unpin <agent>", "help.unpin"},
 		{"/model_settings [<model> [key=value…|reset]]", "help.model_settings"},
 		{"/skills list|search <q>", "help.skills"},
-		{"/session list [--all]|new|load <id>", "help.session"},
+		{"/session list [--all]|new|load <id|name>|save <name>", "help.session"},
 		{"/undo [--force]", "help.undo"},
 		{"/checkpoints", "help.checkpoints"},
 		{"/diff [git]", "help.diff"},
@@ -267,7 +267,11 @@ func handleSessionCommand(args []string, app *App) {
 		}
 		fmt.Printf("\n%s📁 %s:%s\n", Bold, title, Reset)
 		for _, s := range list {
-			fmt.Printf("  • %s%s%s (%s): %s [%s]\n", Bold, safe(s.ID), Reset, safe(s.Agent), safe(s.Title), i18n.N("session.messages", s.MessageCount))
+			snapshot := ""
+			if s.Name != "" {
+				snapshot = " " + Cyan + "📸 " + safe(s.Name) + Reset
+			}
+			fmt.Printf("  • %s%s%s (%s): %s [%s]%s\n", Bold, safe(s.ID), Reset, safe(s.Agent), safe(s.Title), i18n.N("session.messages", s.MessageCount), snapshot)
 			if all {
 				ws := s.Workspace
 				if ws == "" {
@@ -283,6 +287,9 @@ func handleSessionCommand(args []string, app *App) {
 
 	case "load", "resume":
 		cmdSessionLoad(args[1:], app)
+
+	case "save":
+		cmdSessionSave(args[1:], app)
 
 	case "new":
 		rec, err := storage.CreateSession(session.NewSessionID(), i18n.T("session.new_title"), app.Engine.ActiveAgent())

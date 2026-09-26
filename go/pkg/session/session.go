@@ -47,6 +47,11 @@ type SessionRecord struct {
 	// LastTurn identifies the trace of the most recent turn so the next one,
 	// even in a later process, can link to it. Empty with telemetry off.
 	LastTurn *TurnRef `json:"last_turn,omitempty"`
+	// Name labels a snapshot saved with /session save; "" otherwise.
+	Name string `json:"name,omitempty"`
+	// From is the session this one was copied from: the saved session for
+	// a snapshot, the snapshot for a session started from one.
+	From string `json:"from,omitempty"`
 	// Messages is populated by Load and for the active session; List leaves it
 	// empty and reports MessageCount instead.
 	Messages []Message `json:"messages,omitempty"`

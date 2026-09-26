@@ -32,7 +32,7 @@
     "help.agent": "Changer ou afficher l’agent actif",
     "help.model": "Changer ou afficher le modèle LLM actif",
     "help.skills": "Lister ou rechercher des Agent Skills",
-    "help.session": "Gérer les sessions enregistrées (/resume <id> fonctionne aussi)",
+    "help.session": "Gérer les sessions enregistrées; save <nom> garde un instantané d’où repartir plus tard (/resume <id|nom> fonctionne aussi)",
     "help.undo": "Annuler les modifications de fichiers du dernier tour",
     "help.checkpoints": "Lister les tours ayant modifié des fichiers",
     "help.diff": "Afficher les modifications de fichiers de cette session (ou git diff)",
@@ -108,7 +108,7 @@
     "mcp.title": "Serveurs MCP :",
     "mcp.approval_required": "approbation requise",
     "mcp.auto_approved": "approuvé automatiquement",
-    "resume.usage": "Utilisation : /resume <id-de-session>   (voir /session list)",
+    "resume.usage": "Utilisation : /resume <id-de-session|nom-d’instantané>   (voir /session list)",
     "resume.done": "Session {id} reprise ({title}, {messages})",
     "resume.other_workspace": "Cette session a été démarrée dans {workspace}; les références de fichiers peuvent ne pas correspondre à cet espace de travail.",
     "recap.you": "vous",
@@ -224,6 +224,11 @@
     "msettings.cleared": "{model} utilise maintenant les réglages globaux.",
     "msettings.unsupported": "{provider} n’accepte pas {keys} pour {model}; ces réglages ne seront pas envoyés.",
     "msettings.global": "(global : {value})",
-    "msettings.provider_default": "(valeur du fournisseur)"
+    "msettings.provider_default": "(valeur du fournisseur)",
+    "snapshot.usage": "Utilisation : /session save <nom> [--force]   puis /session load <nom> pour repartir de là",
+    "snapshot.saved": "Instantané {name} enregistré ({messages}). /session load {name} démarre une nouvelle session à partir de celui-ci.",
+    "snapshot.taken": "Un instantané nommé {name} existe déjà; /session save {name} --force le remplace.",
+    "snapshot.failed": "Impossible d’enregistrer l’instantané : {error}",
+    "snapshot.branched": "Session {id} démarrée à partir de l’instantané {name} ({messages}); l’instantané reste tel quel."
   }
 }

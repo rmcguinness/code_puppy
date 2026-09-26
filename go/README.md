@@ -30,6 +30,7 @@ git diff | code-puppy review this change     # piped input becomes part of the p
 code-puppy -p - < task.md                    # prompt from stdin
 code-puppy --continue "now add docs"         # continue this directory's most recent session
 code-puppy --resume session-2026…            # resume a specific session (or -r for this directory's latest)
+code-puppy --resume=before-refactor          # start a new session from a snapshot saved with /session save
 code-puppy --output-format json "…"          # one JSON result object on stdout
 code-puppy --output-format stream-json "…"   # one JSON object per event, then the result
 code-puppy --max-turns 20 "…"                # cap model calls in a one-shot run
@@ -67,7 +68,8 @@ Subcommands: `doctor [--online]`, `config init|show|path`, `completion bash|zsh|
 | `/compact [focus]` | Summarize everything before the latest turn now; the focus says what to keep |
 | `/memory [reload\|add <note>]` | Project instructions (`AGENTS.md`, `PUPPY.md`) |
 | `/approvals [revoke <n>\|clear]` | Remembered approval rules |
-| `/session list [--all]\|new\|load <id>`, `/resume <id>` | Saved sessions — scoped to the current workspace; `--all` shows every directory |
+| `/session list [--all]\|new\|load <id\|name>`, `/resume <id\|name>` | Saved sessions — scoped to the current workspace; `--all` shows every directory |
+| `/session save <name> [--force]` | Save a snapshot of this session (📸 in `/session list`). Loading it by name starts a new session from that point and leaves the snapshot unchanged, so you can return to it again. `--continue` skips snapshots |
 | `/agents`, `/agent <name>`, `/model <name>` | Personas and models; `/model anthropic/claude-sonnet-5` can switch provider |
 | `/pin_model [<agent> <model>]`, `/unpin <agent>` | Run an agent on its own model (e.g. qa-kitten on a cheaper one); saved under `[agent_models]` |
 | `/model_settings [<model> [key=value…\|reset]]` | Show or set one model's temperature, max_tokens, top_p or seed (`key=` clears one); saved under `[model_settings."<model>"]` |

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os/exec"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -497,9 +498,14 @@ func cmdSessionLoad(args []string, app *App) {
 		fmt.Println(i18n.T("resume.usage"))
 		return
 	}
-	rec, err := app.Storage.Load(args[0])
+	rec, branched, err := app.Storage.Open(args[0])
 	if err != nil {
 		fmt.Printf("%s❌ %v%s\n", Red, err, Reset)
+		return
+	}
+	if branched {
+		fmt.Printf("%s▶️  %s%s\n", Green, i18n.T("snapshot.branched", "id", safe(rec.ID), "name", safe(args[0]), "messages", i18n.N("session.messages", rec.MessageCount)), Reset)
+		PrintRecap(rec.Messages, 3)
 		return
 	}
 	fmt.Printf("%s▶️  %s%s\n", Green, i18n.T("resume.done", "id", safe(rec.ID), "title", safe(rec.Title), "messages", i18n.N("session.messages", rec.MessageCount)), Reset)
@@ -507,6 +513,32 @@ func cmdSessionLoad(args []string, app *App) {
 		fmt.Printf("%s⚠️  %s%s\n", Yellow, i18n.T("resume.other_workspace", "workspace", safe(rec.Workspace)), Reset)
 	}
 	PrintRecap(rec.Messages, 3)
+}
+
+// cmdSessionSave saves the active session as a named snapshot, to return
+// to later with /session load <name>. --force replaces a snapshot of that name.
+func cmdSessionSave(args []string, app *App) {
+	force := slices.Contains(args, "--force")
+	args = slices.DeleteFunc(slices.Clone(args), func(a string) bool { return a == "--force" })
+	if len(args) != 1 {
+		fmt.Printf("%s%s%s\n", Yellow, i18n.T("snapshot.usage"), Reset)
+		return
+	}
+	active := app.Storage.Active()
+	if active == nil {
+		fmt.Println(i18n.T("session.none_active"))
+		return
+	}
+	name := args[0]
+	rec, err := app.Storage.Snapshot(active.ID, name, force)
+	switch {
+	case errors.Is(err, session.ErrNameTaken):
+		fmt.Printf("%s⚠️  %s%s\n", Yellow, i18n.T("snapshot.taken", "name", safe(name)), Reset)
+	case err != nil:
+		fmt.Printf("%s❌ %s%s\n", Red, i18n.T("snapshot.failed", "error", safe(err.Error())), Reset)
+	default:
+		fmt.Printf("%s📸 %s%s\n", Green, i18n.T("snapshot.saved", "name", safe(name), "messages", i18n.N("session.messages", rec.MessageCount)), Reset)
+	}
 }
 
 // PrintRecap shows the last n messages of a resumed session.
