@@ -348,4 +348,8 @@ Set `fallback_models = ["anthropic/claude-sonnet-5"]` with a working Anthropic k
 
 - [ ] `make desktop`, open `build/desktop/bin/code-puppy-desktop.app` with no service running. **Expected:** it offers to install the service; accepting runs `code-puppy service install` and the app continues.
 - [ ] With the service running: open a workspace with "+". **Expected:** a tab named after the directory, showing the active agent and model (or why the model is unavailable).
-- [ ] 💲 Once turns are in the app (phase 9b): a turn's text appears as it streams, not only at the end. **This checks that WebKit streams responses through Wails's asset server**, which the tests can't: they exercise the proxy over plain HTTP.
+- [ ] 💲 A turn in the app: its text appears as it streams, not only at the end. **This checks that WebKit streams responses through Wails's asset server**, which the tests can't: they exercise the proxy over plain HTTP.
+- [ ] 💲 A turn that edits a file with approvals on. **Expected:** the approval shows the diff; "Allow once" edits the file; "Deny" doesn't, and the agent says so.
+- [ ] 💲 While a turn runs, type a message and press Steer. **Expected:** "Queued for the agent", and the agent takes it into account at its next tool call; Stop ends the turn with "Interrupted."
+- [ ] 💲 An `ask_user_question`. **Expected:** the question with its options; the answer reaches the agent.
+- [ ] Two workspace tabs, a turn in each at once. **Expected:** both stream independently.

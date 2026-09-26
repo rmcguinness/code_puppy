@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { workspaces } from "./api";
+import { Conversation } from "./Conversation";
 import { chooseWorkspace, installService, serviceStatus, type ServiceStatus } from "./desktop";
 
 // One tab per workspace directory; the service holds each workspace.
@@ -72,7 +73,6 @@ export function App() {
 
 function Workspace({ dir }: { dir: string }) {
   const [info, setInfo] = useState("");
-  const [error, setError] = useState("");
   useEffect(() => {
     (async () => {
       try {
@@ -83,7 +83,7 @@ function Workspace({ dir }: { dir: string }) {
         const agent = agents.agents.find((a) => a.active);
         setInfo(`${agent?.displayName ?? "?"} on ${model.name}` + (model.unavailable ? ` (model unavailable: ${model.unavailable})` : ""));
       } catch (e) {
-        setError(String(e));
+        setInfo(String(e));
       }
     })();
   }, [dir]);
@@ -93,7 +93,7 @@ function Workspace({ dir }: { dir: string }) {
         <strong>{dir}</strong>
         <span>{info}</span>
       </header>
-      {error && <p className="error">{error}</p>}
+      <Conversation dir={dir} />
     </section>
   );
 }

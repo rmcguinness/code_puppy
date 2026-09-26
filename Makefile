@@ -81,5 +81,5 @@ desktop: web/desktop/node_modules
 	cd cmd/code-puppy-desktop && CGO_CFLAGS=-mmacosx-version-min=13.0 CGO_LDFLAGS=-mmacosx-version-min=13.0 $(WAILS) build -clean
 
 desktop-check: web/desktop/node_modules
-	cd web/desktop && pnpm run build
+	cd web/desktop && pnpm test && pnpm run build
 	cd cmd/code-puppy-desktop && go vet . && go test -race ./...
