@@ -1,3 +1,0 @@
-# Build outputs: binaries are produced by `make build` / GoReleaser, not committed.
-/bin/
-/dist/

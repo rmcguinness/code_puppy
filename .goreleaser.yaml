@@ -1,0 +1,63 @@
+# GoReleaser config for Code Puppy. Test locally with `make snapshot`.
+version: 2
+project_name: code-puppy
+
+# python-final marks the last commit with the Python code; it isn't a release.
+git:
+  ignore_tags:
+    - python-final
+
+before:
+  hooks:
+    - go mod tidy
+    - go vet ./...
+
+builds:
+  - id: code-puppy
+    main: ./cmd/code-puppy
+    binary: code-puppy
+    env: [CGO_ENABLED=0]
+    goos: [darwin, linux, windows]
+    goarch: [amd64, arm64]
+    ignore:
+      - goos: windows
+        goarch: arm64
+    flags: [-trimpath]
+    ldflags: ["-s -w -X main.version={{ .Version }}"]
+    mod_timestamp: "{{ .CommitTimestamp }}" # reproducible builds
+
+archives:
+  - formats: [tar.gz]
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    files: [README.md, LICENSE, NOTICE]
+
+checksum:
+  name_template: checksums.txt
+
+# SPDX SBOM per archive (requires syft).
+sboms:
+  - artifacts: archive
+
+# Keyless signing of the checksum file with Sigstore cosign v3 (requires the
+# workflow's id-token: write permission). The bundle holds the signature,
+# certificate and transparency-log proof. Verify with:
+#   cosign verify-blob --bundle checksums.txt.sigstore.json \
+#     --certificate-identity-regexp '^https://github.com/rmcguinness/code_puppy/\.github/workflows/release\.yml@refs/tags/v' \
+#     --certificate-oidc-issuer https://token.actions.githubusercontent.com checksums.txt
+signs:
+  - cmd: cosign
+    artifacts: checksum
+    signature: "${artifact}.sigstore.json"
+    args: ["sign-blob", "--bundle=${signature}", "${artifact}", "--yes"]
+
+changelog:
+  use: github
+  sort: asc
+  filters:
+    exclude: ["^docs:", "^test:", "^chore:"]
+
+release:
+  draft: true
