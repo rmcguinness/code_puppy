@@ -308,6 +308,56 @@ The same gVisor backend could later run `run_shell_command` and stdio MCP server
 
 **Still to check:** an x86_64 GitHub runner (the spike was arm64); how the process guard and cgroups interact with runsc's sandbox processes; Python versions with no wheels for a package.
 
+**Design direction (2026-09-25): Castor skill definitions and host guardrails.**
+
+*gVisor driven from Go.* Use `gvisor.dev/gvisor/sandboxexec/sandbox` (`New` / `Exec` / `Close`). Each script run is a goroutine that owns its sandbox, with a context tied to the turn, a timeout, and a deferred `Close` on success, error, Ctrl+C or timeout. That fixes the orphaned-sandbox problem the spike found. Caveats: the package still starts the `runsc` binary (gVisor's kernel is its own process), so the process guard must still cover it if Code Puppy is killed. The package is untagged, so pin a commit and keep the proven OCI-config route as the fallback.
+
+*Skills declare, the config caps.* Skill frontmatter follows Castor's `castor.skills.v1.SkillDefinition` (https://github.com/retail-cortex/castor/blob/main/docs/content/architecture/skill.proto.md). For any setting, the stricter of the skill's request and the host config applies; a skill can never widen what the config permits.
+
+| Castor field | Declared by the skill | Capped by the host config |
+|---|---|---|
+| `scripts[]` (language, `relative_path`, `entry_point`, `dependencies`, `timeout_seconds`, `environment_variables`) | what runs, with which packages | allowed languages; package allow/deny and index URL; wheels only; required hashes; maximum timeout |
+| `tool_requirements[]` (name, `scopes` like `git:*`, rationale) | tools and command patterns needed | global allow/deny on tools and scopes, fed into the command policy |
+| `execution_hints.environment_variables` | variables it wants | passthrough allowlist; nothing reaches a sandbox unless listed (the scrubbed-variable rules still apply) |
+| `execution_hints.hitl_tier`, `allow_hitl_bypass` | how risky it says it is | a minimum tier; bypass never allowed by default |
+| network (not in the proto yet) | whether scripts need it | off by default; allowlist of skills |
+| `compiled_reference.sha256_hash` | hash of its contents | trust and pin skills by hash; refuse ones changed since approval |
+
+The approval tiers map onto existing mechanisms:
+- **Tier 1 (read-only):** runs automatically and is logged (plan mode's tool list).
+- **Tier 2 (audited write):** runs automatically with a checkpoint (`/undo`) and an audit entry.
+- **Tier 3 (mandatory approval):** asks every time, with no "always allow".
+- **Tier 0 (bypass):** only honoured when the config allows it; otherwise treated as tier 3.
+
+Config sketch (names illustrative):
+```toml
+[skills.policy]
+min_hitl_tier       = 2
+allow_hitl_bypass   = false
+languages           = ["python"]
+sandbox             = "auto"            # gvisor | os | auto
+network             = "none"            # none | allowlist
+network_allow       = ["gh-issues"]
+env_passthrough     = ["GITHUB_TOKEN"]
+max_timeout_seconds = 300
+trusted_hashes      = []
+
+[skills.policy.packages]
+index          = "https://pypi.org/simple"
+wheels_only    = true
+require_hashes = false
+deny           = ["*-nightly"]
+```
+
+*Frontmatter compatibility.* Keep the Agent Skills spec fields unchanged (`name`, `description`, `license`, `compatibility`, `allowed-tools`, `metadata`); today's parser only reads `name`, `description`, `tags`, `version` and `author`. Castor's fields sit alongside under the proto's JSON names. `github.com/retail-cortex/castor` is a public Go module (v1.0.0, v1.1.0), so frontmatter can be decoded into the generated types (YAML to JSON, then `protojson`), keeping Castor the single source of truth. Still to confirm: the generated package is in the v1.1.0 tag, and what its module pulls in.
+
+*Out of scope at first:* remote `storage_uri` (`gs://…`), Gemini Files API resources, TypeScript scripts (they can reuse the environment design later).
+
+*Order.*
+1. Frontmatter parsing, including the spec fields, and `[skills.policy]` with its merge rules, fully unit-tested (S–M).
+2. The gVisor backend through the Go package, with the goroutine lifecycle and cleanup, plus the OS-sandbox fallback (M).
+3. Environments, `run_skill_script`, `/envs` (M).
+
 ---
 
 ## Antigravity CLI review (2026-09-25)
