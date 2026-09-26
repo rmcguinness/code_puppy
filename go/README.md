@@ -95,6 +95,32 @@ Mention an image in a prompt (`what's wrong with @screenshots/login.png?`, or `@
 
 The interface speaks English (`en-US`, the default), Spanish (`es`) and Canadian French (`fr-CA`). `/locale` shows the current language; `/locale es` switches and saves `[ui] locale = "es"` to `~/.code_puppy/.env.toml`. Codes are forgiving: `es-ES`, `es_MX`, `ES-sp`, `spanish` and `español` all work. Any other language (`/locale ja`) changes the language the model replies in, while menus stay in English until someone adds a catalog. Code, paths, commands and tool output are never translated, and `doctor`, `--help` and CLI errors stay in English so they can be shared in bug reports. To add or correct a language, drop a JSON catalog in `~/.code_puppy/locales/` — see [docs/TRANSLATING.md](docs/TRANSLATING.md).
 
+### Search
+
+```text
+/search web how do I wrap errors in Go 1.26        # find pages; the agent reads them and answers
+/search session "circuit breaker"                  # what did we say about it earlier?
+```
+
+**`/search web <terms>`** searches with `web.search_provider` (see [Web search](#-extending) below) and lists the first five results the agent can read. It skips non-web links, PDFs, archives, images and office documents, and duplicates. The agent then fetches those pages and answers from them, citing the URLs it used. You aren't asked to approve the search, since you typed it, or those five pages, since you picked them by running the command. Both are recorded in the audit log.
+
+**`/search session <terms>`** looks through this session's saved transcript for the words or `"quoted phrases"`, ignoring case. The transcript keeps what `/compact` has summarized away. Up to 12 matching messages, with about 300 characters around each match, go to the agent. It says what was said or decided and when. If nothing matches, it's still asked, and says so if the subject never came up.
+
+Both are **read-only turns**: the agent can read files, fetch and search, but edits, commands and MCP tools are refused. To act on the answer, send a normal prompt afterwards. The transcript records the `/search` command, not the prompt built from it.
+
+**Limitations**
+- **Only those five pages are pre-approved.** Any other page the agent wants, including one linked from a result or another page on the same site, asks for approval. A redirect to another host is refused, so the agent has to request the target itself.
+- **Readability is judged from the URL.** A page that turns out to be a PDF or other binary without the file extension, or one that needs JavaScript to show its content, comes back empty or as an error. The agent skips it.
+- **Five links at most.** Ten results are requested so there's room to drop unreadable ones; if fewer than five are readable, fewer are handed over.
+- **Session search is literal.** It matches words and phrases, with no stemming or meaning-based search (`retries` doesn't find `retry`). It covers the current session only, not other sessions or snapshots. The transcript stores your prompts and the agent's replies, not tool calls or their output, so something that appeared only in a file the agent read or a command it ran can't be found.
+- **Google search** (`search_provider = "google"`):
+  - Results are the pages Gemini chose to cite, often fewer than ten, not Google's ranked list. Titles are usually just the site's domain.
+  - Google bills each search query Gemini runs, and one `/search web` can run several: 5,000 a month are free across Gemini 3 models, then $14 per 1,000. These charges aren't in `/cost`.
+  - Google's own links are redirects. Code Puppy resolves them to the real pages, and one that can't be resolved is left out.
+  - Google's Search Suggestions widget (HTML) isn't shown in the terminal. Check that Google's terms for grounding with Google Search fit your use.
+  - Only a Gemini API key works: Vertex AI credentials (`project_id`/`location` without a key) aren't supported for search.
+- **SearXNG**: most public instances turn off the JSON output Code Puppy needs, so run your own. Its Google engine scrapes results and can be rate-limited or blocked under heavy use.
+
 ---
 
 ## 🛡️ Safety Model
@@ -113,11 +139,11 @@ On Linux, install `bubblewrap` and allow unprivileged user namespaces. Ubuntu 24
 
 **Secrets.** Child processes don't inherit credential variables (`sandbox.scrub_env`, default `*_API_KEY`, `*_SECRET`, …). The audit log masks secrets. Sessions, history, approvals and audit files are owner-only.
 
-**Audit log.** `~/.code_puppy/audit/audit-YYYY-MM-DD.jsonl` records prompts, tool calls and results, approvals, denials, hook decisions, and undos.
+**Audit log.** `~/.code_puppy/audit/audit-YYYY-MM-DD.jsonl` records prompts, tool calls and results, approvals, denials, hook decisions, and undos, plus your `!` commands and `/search web` queries (`user_shell`, `user_search`). A page fetched through a `/search web` grant is logged as an approval with decision `user-selected`.
 
 **Diagnostic log.** `~/.code_puppy/logs/code-puppy-YYYY-MM-DD.jsonl` (owner-only, secrets masked, kept `log.retain_days` = 14) records warnings, failed turns and errors, with trace IDs when telemetry is on. `log.level` (or `CODE_PUPPY_LOG_LEVEL`) is `debug`, `info`, `warn`, `error` or `off`. A background goroutine writes it, so logging never waits on the disk.
 
-**Web.** `web_fetch` only reaches public addresses (checked after DNS resolution and on every redirect — no `localhost`, private ranges, or cloud metadata), needs approval per host unless in `web.allow_domains`, and caps response size.
+**Web.** `web_fetch` only reaches public addresses (checked after DNS resolution and on every redirect — no `localhost`, private ranges, or cloud metadata), needs approval per host unless in `web.allow_domains`, and caps response size. The agent's `web_search` asks before each query leaves your machine (rememberable per provider). Your own `/search web` doesn't ask. It pre-approves exactly the five URLs it hands to the agent, for that turn only; every other fetch still asks, and the turn can't edit files or run commands.
 
 ---
 
@@ -157,7 +183,7 @@ command = "grep -qv 'password' || { echo 'no secrets' >&2; exit 2; }"
 - `searxng` (`web.search_url`): open source and self-hosted; it can include Google results without an API key. Enable the JSON format in its `settings.yml` (`search: formats: [html, json]`).
 - `brave` or `tavily`: key in `web.search_api_key` or `BRAVE_API_KEY` / `TAVILY_API_KEY`.
 
-(Google's Custom Search JSON API isn't supported: it's closed to new customers and shuts down on 2027-01-01.) The agent's `web_search` asks for approval (rememberable per provider) because the query leaves your machine; your own `/search web` doesn't. Results from `web.deny_domains` are dropped. `code-puppy doctor --online` runs a test search.
+(Google's Custom Search JSON API isn't supported: it's closed to new customers and shuts down on 2027-01-01.) The agent's `web_search` asks for approval (rememberable per provider) because the query leaves your machine; your own `/search web` doesn't. Results from `web.deny_domains` are dropped. `code-puppy doctor --online` runs a test search. See [Search](#search) for `/search` and its limitations.
 
 **Forged tools** — tools built by `universal_constructor` are saved with a manifest in `~/.code_puppy/uc_tools` and reloaded on start; `action: "delete"` removes one.
 

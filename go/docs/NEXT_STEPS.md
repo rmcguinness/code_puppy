@@ -21,7 +21,7 @@ Roadmap items 1–19 are done and committed; each has its own commit:
 | `b652f263` | Per-model settings (`[model_settings]`, `/model_settings`) |
 | `36c2758b` | Removed the committed editor swap file; `*.swp` ignored |
 | `957c08b9` | Named session snapshots (`/session save`, `/session load <name>`, `--resume=<name>`) |
-| (the commit adding `pkg/tui/search.go`) | Google search via Gemini grounding; `/search web`, `/search session` |
+| `9eeab5e6` | Google search via Gemini grounding; `/search web`, `/search session` |
 
 `go vet ./...` and `go test -race ./...` pass.
 

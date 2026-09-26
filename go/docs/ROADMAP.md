@@ -274,3 +274,7 @@ Not automatable here; run once and record results in this file:
 - Shell commands can read anything outside `blocked_paths`.
 - On Linux, a blocked-name file created by a command is visible to that same command (bubblewrap masks paths that exist at start).
 - File-tool symlink checks are resolved at call time; a concurrent swap between check and open is theoretically possible (`os.Root` still prevents escaping the roots).
+- `/search web` pre-approves the five URLs it hands over for one turn; a page that redirects to another host is refused, and the agent must request the target (with approval).
+- `/search web` judges readability from the URL; a document or script-rendered page without a telling extension fails at fetch time and is skipped by the agent.
+- `/search session` is a literal, case-insensitive match over the current session's transcript, which holds prompts and replies but not tool calls or their output.
+- Google search (Gemini grounding) returns the pages Gemini cited, not Google's ranked list; its per-query charges aren't in `/cost`; Search Suggestions aren't rendered; Vertex AI credentials aren't supported for search.
