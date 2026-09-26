@@ -155,8 +155,8 @@ prefix = "fs"
 
 - [x] `git rm -r --cached go/bin` and commit (bin is now ignored). *Done: `go/bin` isn't tracked.*
 - [x] Pin the actions in `.github/workflows/go-*.yml` to commit SHAs. *Done 2026-09-25, at the latest release of each action's current major: checkout v4.4.0, setup-go v5.6.0, cosign-installer v3.10.1, sbom-action v0.24.2, goreleaser-action v6.4.0. Newer majors exist (checkout v7, setup-go v7, cosign-installer v4, goreleaser-action v7); upgrade them separately and re-run a release.*
-- [ ] Push; both `go-ci` jobs pass; the Linux job's "Sandbox enforcement must not be skipped" step passes.
-- [ ] Tag `v0.1.0` and push the tag. **Expected:** `go-release` creates a **draft** release with 5 archives, 5 SBOMs, `checksums.txt`, `checksums.txt.sigstore.json`.
+- [x] Push; both `go-ci` jobs pass; the Linux job's "Sandbox enforcement must not be skipped" step passes. *Done 2026-09-26 (`0c68c453`, `4e008b41`), after fixing the macOS gofmt check and the Linux parallel-cap test.*
+- [x] Tag `v0.1.0` and push the tag. **Expected:** `go-release` creates a **draft** release with 5 archives, 5 SBOMs, `checksums.txt`, `checksums.txt.sigstore.json`. *Done 2026-09-26: unsigned tag on `4e008b41`, since GPG signing wasn't available; the draft had all 12 assets.*
 - [ ] Download the assets and verify:
   ```bash
   cosign verify-blob --bundle checksums.txt.sigstore.json \
@@ -165,6 +165,8 @@ prefix = "fs"
   shasum -a 256 --ignore-missing -c checksums.txt
   ```
   **Expected:** `Verified OK` and every file `OK`. Then publish the draft.
+  *Verified 2026-09-26 with cosign v3.1.3 (the bundle was made by cosign v2 in CI), using the exact identity `https://github.com/rmcguinness/code_puppy/.github/workflows/go-release.yml@refs/tags/v0.1.0`: `Verified OK`. A tampered `checksums.txt` and a wrong identity were both rejected. All 10 files `OK`. The SBOMs are SPDX 2.3 with 96 Go modules (95 in the binary's build info). The darwin/arm64 binary reports `0.1.0` and `vcs.revision=4e008b41`, and `doctor` runs. Draft assets need authentication: `gh api repos/<owner>/<repo>/releases/<id>/assets`, then download each asset with `Accept: application/octet-stream`. Not yet published.*
+- [ ] Publish the draft. Binaries aren't Apple-notarized: on macOS, a copy downloaded in a browser gets the quarantine flag, and Gatekeeper refuses to run it until it's cleared (`xattr -d com.apple.quarantine code-puppy`) or opened through Finder's context menu. Document this in the release notes, or notarize later.
 
 ## 19. Cost sanity 💲
 
