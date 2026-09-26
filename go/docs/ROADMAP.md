@@ -254,7 +254,7 @@ Also fixed: the model name now resolves per provider (`code_puppy.default_model`
 
 ## 20. Side questions (`/btw`) — ✅ done (S/M)
 
-From a review of Google's Antigravity CLI (`docs/AGY.md`): ask something without adding it to the conversation.
+From the Antigravity CLI review (below): ask something without adding it to the conversation.
 
 **Approach.** `Engine.Aside` copies the session's events (through JSON, so nothing is shared) into a new in-memory session service and runs the question there with the same agent tree, through a separate runner. Compaction summaries in the copy are honoured, but the copy never compacts. The copy is dropped afterwards, so neither the persistent event log nor the next turn sees the question. The run state carries the real session ID, so usage is billed to it and hooks see it. It is read-only (`btw is read-only` refusals, via plan mode's tool list). In the REPL, `runTurn` with `aside` skips the transcript, checkpoints and steering, and leaves `/attach` images for the next real prompt. `prompt_submit` hooks and the audit log still see the question.
 
@@ -271,6 +271,45 @@ Also from the Antigravity review. Every interactive session used to be titled "I
 **Approach.** `CreateSession` with an empty title leaves it empty, and `AddMessage` names the session after the first user prompt (`session.TitleFrom`: its first non-empty line, whitespace collapsed, at most 60 characters). This applies to the REPL, `/session new` and one-shot runs; an explicit title is kept. `/rename <name>` sets it (`Storage.Rename`, saved to the metadata). Unnamed sessions show as "(untitled)". With `ui.terminal_title` (default on, TTY only), the REPL sets the window title to "🐶 <name>" before each prompt when it changes, with control characters removed, and clears it on exit. Leaving a session that has messages prints `code-puppy --resume=<id>`. The unused `session.interactive_title` / `session.new_title` strings and `firstLine` are gone.
 
 **Tests.** `TitleFrom` (blank lines, whitespace, long UTF-8). Naming from the first user prompt only, an explicit title kept, rename saved and reloaded, an empty name refused. REPL: "(untitled)", the prompt-derived name with escape characters removed, `/rename` usage and result, the window-title sequences and their reset, and the resume hint; none of them when the title is off and the session is empty.
+
+---
+
+## Antigravity CLI review (2026-09-25)
+
+Google's Antigravity CLI (`agy`) was compared feature by feature with Code Puppy Go, from a feature summary of its docs (https://antigravity.google/docs/cli/features/). The summary read as AI-generated, so its descriptions were treated as approximate.
+
+**Already covered.**
+
+| Antigravity | Code Puppy Go |
+|---|---|
+| `-c`, `--conversation <id>`, `/resume` | `-C`, `-r`/`--resume`, `/resume`, `/session load` |
+| `-p` (run a prompt, stay open) | `-p "…" -i` |
+| `--agent`, `/agents`, `/skills`, `/mcp`, `/plan` | same commands |
+| `/diff`, `/context` (overlays) | `/diff`, `/context` (text) |
+| `/codesearch` | the `grep` tool |
+| `/config`, `/permissions` | `/set`, `/approvals`, `.env.toml` |
+| `/rewind` for files | `/undo`, `/checkpoints` |
+| `/goal` (full autonomy) | `/set agency=extreme` |
+| `/clear`/`/new`, `/quit` | `/session new`, `/exit` |
+| terminal sandbox | Seatbelt / bubblewrap (`sandbox.shell`) |
+| routing across Gemini/Claude/GPT | `fallback_models`, per-agent pins |
+
+**Adopted.** `/btw` (item 20); `/rename`, the terminal title (`/title`) and the resume command printed on exit (item 21).
+
+**Candidates, in order of value.**
+1. `/copy`: the last reply to the clipboard (`pbcopy`, `wl-copy`, `xclip`, `clip.exe`, or OSC 52, which also works over SSH). S.
+2. `--add-dir <path>`: an extra writable directory for one run, at startup only. Adding one mid-session has the same problem as `/cd`: the file roots and OS sandbox profile are built once. S.
+3. `/grill-me <task>`: a prompt mode like `/plan` in which the agent asks clarifying questions (`ask_user_question`) before writing anything. S.
+4. `/fork [n]`: a new session branched from an earlier turn, the non-destructive form of a conversation rewind; `/session save` only branches from the current point. M.
+
+**Rejected.**
+- Full-screen overlays (`/config`, `/keybindings`, `/statusline`, interactive `/diff` and `/context` graphs): the REPL is line-based, and these need a different UI framework.
+- `/boost`, `/teamwork-preview`: vaguely described multi-agent modes; `invoke_agent` covers delegation.
+- `--dangerously-skip-permissions`: `code_puppy.auto_approve` does this deliberately; a one-word flag makes it too easy to enable by accident.
+- Automatic model routing by task complexity: hard to predict and to cost; ordered fallbacks and pins are explicit.
+- `/open <path>`: `!$EDITOR <path>` does it.
+- `/usage` (built-in manual): `/help` and the README.
+- Not applicable: desktop app sync and export, `/credits`, `/logout`, Gemini CLI migration, SSH sign-in tunnelling.
 
 ---
 
