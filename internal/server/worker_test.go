@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -160,5 +161,41 @@ func TestWorkersRunOnSchedule(t *testing.T) {
 			s.sched.mu.Unlock()
 			t.Fatalf("no scheduled run happened; %d workers scheduled", n)
 		}
+	}
+}
+
+// A worker behind schedule waits for a slot once, not once per missed
+// tick, and stopping the scheduler releases the wait.
+func TestSchedulerWaitsOncePerWorkerAndStops(t *testing.T) {
+	s := New(nil, WithScheduler(SchedulerConfig{MaxConcurrent: 1}))
+	sc := s.sched
+	sc.slots <- struct{}{} // every slot busy
+
+	waited := make(chan error, 1)
+	go func() { waited <- sc.acquire("/w", "deps", false) }()
+	for deadline := time.Now().Add(5 * time.Second); ; time.Sleep(time.Millisecond) {
+		sc.mu.Lock()
+		w := sc.waiting[key("/w", "deps")]
+		sc.mu.Unlock()
+		if w {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("the scheduled run never waited")
+		}
+	}
+	if err := sc.acquire("/w", "deps", false); !errors.Is(err, app.ErrRunInProgress) {
+		t.Errorf("second wait for the same worker: %v", err)
+	}
+	if code, info := errorReason(t, sc.acquire("/w", "other", true)); code != connect.CodeResourceExhausted || info.Reason != "TOO_MANY_RUNS" {
+		t.Errorf("manual run with no slot: %v %v", code, info)
+	}
+
+	s.Close()
+	if err := <-waited; !errors.Is(err, errStopped) {
+		t.Errorf("waiting run after Close: %v", err)
+	}
+	if sc.track() {
+		t.Error("a stopped scheduler started a run")
 	}
 }

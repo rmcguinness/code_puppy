@@ -44,28 +44,36 @@ func WithScheduler(c SchedulerConfig) Option {
 		if c.Rescan <= 0 {
 			c.Rescan = time.Minute
 		}
+		base, cancel := context.WithCancel(context.Background())
 		s.sched = &scheduler{
 			s: s, cfg: c, cron: cron.New(), slots: make(chan struct{}, c.MaxConcurrent),
-			entries: map[string]entry{}, live: map[string]*liveRun{},
+			base: base, cancel: cancel,
+			entries: map[string]entry{}, live: map[string]*liveRun{}, waiting: map[string]bool{},
 		}
 	}
 }
 
-// StartScheduler runs workers on their schedules until ctx is done. It
-// does nothing without WithScheduler.
+// StartScheduler runs workers on their schedules until ctx is done, which
+// also stops the runs going then (as Close does). It does nothing without
+// WithScheduler.
 func (s *Server) StartScheduler(ctx context.Context) {
-	if s.sched == nil {
+	sc := s.sched
+	if sc == nil {
 		return
 	}
-	s.sched.cron.Start()
+	context.AfterFunc(ctx, sc.cancel)
+	sc.cron.Start()
+	if !sc.track() {
+		return
+	}
 	go func() {
-		t := time.NewTicker(s.sched.cfg.Rescan)
+		defer sc.wg.Done()
+		t := time.NewTicker(sc.cfg.Rescan)
 		defer t.Stop()
 		for {
-			s.sched.rescan(ctx)
+			sc.rescan(sc.base)
 			select {
-			case <-ctx.Done():
-				<-s.sched.cron.Stop().Done()
+			case <-sc.base.Done():
 				return
 			case <-t.C:
 			}
@@ -80,9 +88,39 @@ type scheduler struct {
 	cron  *cron.Cron
 	slots chan struct{} // one per run allowed at once
 
+	// base is cancelled when the scheduler stops, which stops every run;
+	// wg counts the goroutines stop waits for.
+	base   context.Context
+	cancel context.CancelFunc
+	wg     sync.WaitGroup
+
 	mu      sync.Mutex
 	entries map[string]entry    // by workspace and worker
 	live    map[string]*liveRun // runs going now, by ID
+	waiting map[string]bool     // scheduled runs waiting for a slot, by workspace and worker
+}
+
+var errStopped = errors.New("the worker scheduler has stopped")
+
+// track counts a goroutine about to start, unless the scheduler has
+// stopped (checked under mu, so stop's Wait never races an Add).
+func (sc *scheduler) track() bool {
+	sc.mu.Lock()
+	defer sc.mu.Unlock()
+	if sc.base.Err() != nil {
+		return false
+	}
+	sc.wg.Add(1)
+	return true
+}
+
+// stop cancels every run and waits for them, and for cron's jobs, to end.
+func (sc *scheduler) stop() {
+	sc.mu.Lock()
+	sc.cancel()
+	sc.mu.Unlock()
+	<-sc.cron.Stop().Done()
+	sc.wg.Wait()
 }
 
 // entry is a worker registered with cron, as registered.
@@ -153,7 +191,7 @@ func (sc *scheduler) register(dir string, info app.WorkerInfo) {
 	}
 	name := info.Name
 	id := sc.cron.Schedule(cronSchedule{sched}, cron.FuncJob(func() {
-		if _, err := sc.start(context.Background(), dir, name, false); err != nil && !errors.Is(err, app.ErrRunInProgress) {
+		if _, err := sc.start(sc.base, dir, name, false); err != nil && !errors.Is(err, app.ErrRunInProgress) && !errors.Is(err, errStopped) {
 			slog.Warn("workers: run failed to start", "workspace", dir, "worker", name, "error", err)
 		}
 	}))
@@ -162,8 +200,11 @@ func (sc *scheduler) register(dir string, info app.WorkerInfo) {
 	slog.Info("workers: scheduled", "workspace", dir, "worker", name, "cron", info.Cron, "next", sched.Next(time.Now()))
 
 	if !had && info.CatchUp == "once" {
-		if last := sc.cfg.Runs.Last(dir, name); !last.IsZero() && sched.Next(last).Before(time.Now()) {
-			go sc.start(context.Background(), dir, name, false)
+		if last := sc.cfg.Runs.Last(dir, name); !last.IsZero() && sched.Next(last).Before(time.Now()) && sc.track() {
+			go func() {
+				defer sc.wg.Done()
+				sc.start(sc.base, dir, name, false)
+			}()
 		}
 	}
 }
@@ -191,28 +232,28 @@ func (lr *liveRun) add(ev *pb.TurnEvent, done bool) {
 
 // start runs a worker in the background once a slot is free, and returns
 // its record as it starts. A manual run fails at once when every slot is
-// busy; a scheduled one waits.
+// busy; a scheduled one waits, unless the same worker is already waiting
+// (a worker that falls behind runs once, not once per missed tick).
 func (sc *scheduler) start(ctx context.Context, dir, name string, manual bool) (workers.Run, error) {
 	w, err := sc.s.workspace(ctx, dir)
 	if err != nil {
 		return workers.Run{}, err
 	}
-	if manual {
-		select {
-		case sc.slots <- struct{}{}:
-		default:
-			return workers.Run{}, apiError(connect.CodeResourceExhausted, "TOO_MANY_RUNS", fmt.Errorf("%d worker runs are already going", cap(sc.slots)))
-		}
-	} else {
-		sc.slots <- struct{}{}
+	if err := sc.acquire(dir, name, manual); err != nil {
+		return workers.Run{}, err
+	}
+	if !sc.track() {
+		<-sc.slots
+		return workers.Run{}, errStopped
 	}
 
 	started := make(chan workers.Run, 1)
 	failed := make(chan error, 1)
 	go func() {
+		defer sc.wg.Done()
 		defer func() { <-sc.slots }()
 		var lr *liveRun
-		run, err := w.RunWorker(context.Background(), name, app.RunOptions{
+		run, err := w.RunWorker(sc.base, name, app.RunOptions{
 			Manual: manual,
 			OnStart: func(r workers.Run) {
 				lr = &liveRun{run: r, changed: make(chan struct{})}
@@ -224,6 +265,9 @@ func (sc *scheduler) start(ctx context.Context, dir, name string, manual bool) (
 			OnEvent: func(e app.Event) { lr.add(eventMsg(e), false) },
 		})
 		if lr == nil { // never started
+			if err == nil {
+				err = fmt.Errorf("worker %q did not start", name)
+			}
 			failed <- err
 			return
 		}
@@ -245,6 +289,37 @@ func (sc *scheduler) start(ctx context.Context, dir, name string, manual bool) (
 		return r, nil
 	case err := <-failed:
 		return workers.Run{}, err
+	}
+}
+
+// acquire takes a run slot. See start.
+func (sc *scheduler) acquire(dir, name string, manual bool) error {
+	if manual {
+		select {
+		case sc.slots <- struct{}{}:
+			return nil
+		default:
+			return apiError(connect.CodeResourceExhausted, "TOO_MANY_RUNS", fmt.Errorf("%d worker runs are already going", cap(sc.slots)))
+		}
+	}
+	k := key(dir, name)
+	sc.mu.Lock()
+	if sc.waiting[k] {
+		sc.mu.Unlock()
+		return app.ErrRunInProgress
+	}
+	sc.waiting[k] = true
+	sc.mu.Unlock()
+	defer func() {
+		sc.mu.Lock()
+		delete(sc.waiting, k)
+		sc.mu.Unlock()
+	}()
+	select {
+	case sc.slots <- struct{}{}:
+		return nil
+	case <-sc.base.Done():
+		return errStopped
 	}
 }
 

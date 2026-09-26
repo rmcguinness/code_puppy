@@ -64,6 +64,9 @@ func (s *Server) Handler() http.Handler {
 
 // Close closes every workspace.
 func (s *Server) Close() error {
+	if s.sched != nil {
+		s.sched.stop() // runs use their workspace until they end
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	var errs []error
