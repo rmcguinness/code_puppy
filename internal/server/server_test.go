@@ -3,11 +3,13 @@ package server
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"slices"
+	"sync/atomic"
 	"testing"
 
 	"connectrpc.com/connect"
@@ -15,6 +17,7 @@ import (
 	"github.com/retail-cortex/blitz/internal/config"
 	pb "github.com/retail-cortex/blitz/internal/gen/blitz/v1"
 	"github.com/retail-cortex/blitz/internal/gen/blitz/v1/blitzv1connect"
+	"github.com/retail-cortex/blitz/internal/images"
 	"github.com/retail-cortex/blitz/internal/runtime"
 	"google.golang.org/adk/v2/model"
 	"google.golang.org/genai"
@@ -219,5 +222,78 @@ func TestWorkspacesAreKeptAndClosed(t *testing.T) {
 	}
 	if got := s.openDirs(); len(got) != 1 {
 		t.Errorf("after close: %v", got)
+	}
+}
+
+// A slow open holds up only its own workspace; callers for it share one
+// open; and nothing opens once the server is closed.
+func TestWorkspacesOpenIndependently(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("MODENV_PREFIX", "")
+	slow, fast := t.TempDir(), t.TempDir()
+	slow, _ = filepath.EvalSymlinks(slow)
+	release := make(chan struct{})
+	var opens atomic.Int32
+	s := New(func(ctx context.Context, dir string) (*app.Workspace, error) {
+		if dir == slow {
+			opens.Add(1)
+			<-release
+		}
+		cfg := config.DefaultConfig()
+		cfg.Tools.WorkspaceDir = dir
+		cfg.Session.StorageDir = t.TempDir()
+		return app.Open(ctx, cfg, app.Options{Model: runtime.NewMockLLM("m")})
+	})
+	ctx := context.Background()
+
+	got := make(chan *workspace, 2)
+	for range 2 {
+		go func() {
+			w, err := s.workspace(ctx, slow)
+			if err != nil {
+				t.Error(err)
+			}
+			got <- w
+		}()
+	}
+	if _, err := s.workspace(ctx, fast); err != nil {
+		t.Fatalf("another workspace waited on a slow open: %v", err)
+	}
+	gone, cancel := context.WithCancel(ctx)
+	cancel()
+	if _, err := s.workspace(gone, slow); connect.CodeOf(err) != connect.CodeCanceled {
+		t.Errorf("a caller that gives up: %v", err)
+	}
+	close(release)
+	if a, b := <-got, <-got; a == nil || a != b || opens.Load() != 1 {
+		t.Errorf("shared open: %p %p, %d opens", a, b, opens.Load())
+	}
+
+	s.Close()
+	if code, info := errorReason(t, func() error { _, err := s.workspace(ctx, fast); return err }()); code != connect.CodeUnavailable || info.Reason != "SHUTTING_DOWN" {
+		t.Errorf("after Close: %v %v", code, info)
+	}
+}
+
+// A workspace keeps only its most recently used images.
+func TestKeptImagesAreBounded(t *testing.T) {
+	w := &workspace{images: map[string]*images.Image{}}
+	for i := range keptImages + 1 {
+		w.keepImage(&images.Image{SHA256: fmt.Sprint(i)})
+		if i == 0 {
+			continue
+		}
+		if _, err := w.image("0"); err != nil { // keep the first in use
+			t.Fatal(err)
+		}
+	}
+	if len(w.images) != keptImages || len(w.order) != keptImages {
+		t.Fatalf("kept %d images, %d in order", len(w.images), len(w.order))
+	}
+	if _, err := w.image("0"); err != nil {
+		t.Error("the image in use was forgotten")
+	}
+	if _, err := w.image("1"); err == nil {
+		t.Error("the least recently used image was kept")
 	}
 }

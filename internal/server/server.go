@@ -34,7 +34,25 @@ type Server struct {
 
 	mu         sync.Mutex
 	workspaces map[string]*workspace // by canonical directory
+	opening    map[string]*opening   // workspaces being opened, by canonical directory
+	closed     bool
 }
+
+// opening is a workspace being opened; done is closed when w or err is set.
+type opening struct {
+	done chan struct{}
+	w    *workspace
+	err  error
+}
+
+const (
+	// keptImages is how many images a workspace keeps for later turns
+	// (each at most images.MaxEncodedBytes); older ones are forgotten.
+	keptImages = 16
+	// maxRequestBytes bounds a request message: an added image (up to
+	// images.DefaultMaxInput) is the largest.
+	maxRequestBytes = 32 << 20
+)
 
 // workspace is an open workspace and what the server keeps for it.
 type workspace struct {
@@ -42,11 +60,12 @@ type workspace struct {
 
 	mu     sync.Mutex
 	images map[string]*images.Image // for Turn.image_ids, by ID
+	order  []string                 // images' IDs, least recently used first
 }
 
 // New returns a server that opens workspaces with open.
 func New(open Opener, opts ...Option) *Server {
-	s := &Server{open: open, broker: newBroker(), workspaces: map[string]*workspace{}}
+	s := &Server{open: open, broker: newBroker(), workspaces: map[string]*workspace{}, opening: map[string]*opening{}}
 	for _, o := range opts {
 		o(s)
 	}
@@ -56,26 +75,31 @@ func New(open Opener, opts ...Option) *Server {
 // Handler serves every service.
 func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
-	mux.Handle(blitzv1connect.NewSessionServiceHandler(sessionService{s}))
-	mux.Handle(blitzv1connect.NewWorkspaceServiceHandler(workspaceService{s}))
-	mux.Handle(blitzv1connect.NewWorkerServiceHandler(workerService{s}))
+	limit := connect.WithReadMaxBytes(maxRequestBytes)
+	mux.Handle(blitzv1connect.NewSessionServiceHandler(sessionService{s}, limit))
+	mux.Handle(blitzv1connect.NewWorkspaceServiceHandler(workspaceService{s}, limit))
+	mux.Handle(blitzv1connect.NewWorkerServiceHandler(workerService{s}, limit))
 	return mux
 }
 
-// Close closes every workspace.
+// Close closes every workspace; none opens after it.
 func (s *Server) Close() error {
 	if s.sched != nil {
 		s.sched.stop() // runs use their workspace until they end
 	}
 	s.mu.Lock()
-	defer s.mu.Unlock()
+	s.closed = true
+	open := s.workspaces
+	s.workspaces = map[string]*workspace{}
+	s.mu.Unlock()
 	var errs []error
-	for dir, w := range s.workspaces {
+	for _, w := range open {
 		errs = append(errs, w.Close())
-		delete(s.workspaces, dir)
 	}
 	return errors.Join(errs...)
 }
+
+var errServerClosed = errors.New("the service is shutting down")
 
 // canonical is the key a workspace is kept under: its absolute directory
 // with symlinks resolved, so two spellings share one workspace.
@@ -96,24 +120,57 @@ func (s *Server) workspace(ctx context.Context, dir string) (*workspace, error) 
 	if err != nil {
 		return nil, apiError(connect.CodeInvalidArgument, "INVALID_WORKSPACE", err, "workspace", dir)
 	}
+	// Opening can be slow (models, MCP servers): other workspaces don't
+	// wait for it, and callers for the same one share it.
 	s.mu.Lock()
-	defer s.mu.Unlock()
+	if s.closed {
+		s.mu.Unlock()
+		return nil, apiError(connect.CodeUnavailable, "SHUTTING_DOWN", errServerClosed)
+	}
 	if w, ok := s.workspaces[key]; ok {
+		s.mu.Unlock()
 		return w, nil
 	}
-	aw, err := s.open(ctx, key)
-	if errors.Is(err, app.ErrWorkspaceBusy) {
-		return nil, apiError(connect.CodeFailedPrecondition, "WORKSPACE_BUSY", err, "workspace", key)
+	op, ok := s.opening[key]
+	if !ok {
+		op = &opening{done: make(chan struct{})}
+		s.opening[key] = op
+		go s.openWorkspace(key, op)
 	}
-	if err != nil {
-		return nil, apiError(connect.CodeFailedPrecondition, "OPEN_FAILED", err, "workspace", key)
+	s.mu.Unlock()
+	select {
+	case <-op.done:
+		return op.w, op.err
+	case <-ctx.Done():
+		return nil, connect.NewError(connect.CodeCanceled, ctx.Err())
+	}
+}
+
+// openWorkspace opens the workspace for key and settles op. It doesn't use
+// the first caller's context: others may be waiting on it.
+func (s *Server) openWorkspace(key string, op *opening) {
+	defer close(op.done)
+	aw, err := s.open(context.Background(), key)
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	delete(s.opening, key)
+	switch {
+	case errors.Is(err, app.ErrWorkspaceBusy):
+		op.err = apiError(connect.CodeFailedPrecondition, "WORKSPACE_BUSY", err, "workspace", key)
+		return
+	case err != nil:
+		op.err = apiError(connect.CodeFailedPrecondition, "OPEN_FAILED", err, "workspace", key)
+		return
+	case s.closed:
+		aw.Close()
+		op.err = apiError(connect.CodeUnavailable, "SHUTTING_DOWN", errServerClosed)
+		return
 	}
 	// Approvals and questions go to the client running the turn.
 	aw.Tools().Hooks().SetApprover(s.broker.approve)
 	aw.Tools().Hooks().SetUserPrompter(s.broker.question)
-	w := &workspace{Workspace: aw, images: map[string]*images.Image{}}
-	s.workspaces[key] = w
-	return w, nil
+	op.w = &workspace{Workspace: aw, images: map[string]*images.Image{}}
+	s.workspaces[key] = op.w
 }
 
 // closeWorkspace closes and forgets the workspace for dir, if open.
@@ -148,6 +205,11 @@ func (s *Server) openDirs() []string {
 func (w *workspace) keepImage(img *images.Image) *pb.Image {
 	w.mu.Lock()
 	w.images[img.SHA256] = img
+	w.touchImage(img.SHA256)
+	for len(w.order) > keptImages {
+		delete(w.images, w.order[0])
+		w.order = w.order[1:]
+	}
 	w.mu.Unlock()
 	return imageMsg(img)
 }
@@ -160,7 +222,14 @@ func (w *workspace) image(id string) (*images.Image, error) {
 	if !ok {
 		return nil, apiError(connect.CodeNotFound, "UNKNOWN_IMAGE", fmt.Errorf("no image %q: load or add it first", id), "id", id)
 	}
+	w.touchImage(id)
 	return img, nil
+}
+
+// touchImage makes id the most recently used image. w.mu is held.
+func (w *workspace) touchImage(id string) {
+	w.order = slices.DeleteFunc(w.order, func(o string) bool { return o == id })
+	w.order = append(w.order, id)
 }
 
 // apiError is a Connect error with an ErrorInfo detail. kv are metadata
