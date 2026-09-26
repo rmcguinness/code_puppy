@@ -56,7 +56,10 @@ func parallelShellTurn(t *testing.T, maxParallel int) time.Duration {
 	for range 4 {
 		calls = append(calls, &genai.Part{FunctionCall: &genai.FunctionCall{Name: "run_shell_command", Args: map[string]any{"command": "sleep 0.3"}}})
 	}
-	f := newEngineWith(t, fixtureOpts{cfg: func(c *config.Config) { c.Tools.MaxParallel = maxParallel }},
+	// The OS sandbox is off: this measures scheduling, and on Linux each
+	// sandboxed command first scans for blocked paths, which under -race
+	// takes seconds and swamps the sleeps.
+	f := newEngineWith(t, fixtureOpts{cfg: func(c *config.Config) { c.Tools.MaxParallel = maxParallel; c.Sandbox.Shell = "off" }},
 		&genai.Content{Role: genai.RoleModel, Parts: calls}, textContent("done"))
 	start := time.Now()
 	got, err := functionResponses(t, f.eng, "s", "run four sleeps")

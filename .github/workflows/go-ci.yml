@@ -34,7 +34,9 @@ jobs:
           sudo apt-get install -y bubblewrap
           # Ubuntu 24.04 restricts unprivileged user namespaces via AppArmor.
           sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true
-      - run: gofmt -l cmd pkg | tee /dev/stderr | (! read)
+      # Fails when gofmt lists a file. (`… | (! read)` fails under macOS's
+      # bash 3.2 with -e even when nothing is listed.)
+      - run: test -z "$(gofmt -l cmd pkg | tee /dev/stderr)"
       - run: go vet ./...
       - run: go test -race ./...
       - name: Sandbox enforcement must not be skipped
