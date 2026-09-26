@@ -2,7 +2,7 @@
 
 Status key: ✅ done · 🔜 next · 📋 planned · 🔍 needs investigation first
 
-Items 10–21 were added after the first plan and appear before item 9, which stays last because it needs a person. Open work and resume notes: [NEXT_STEPS.md](NEXT_STEPS.md).
+Items 10–22 were added after the first plan and appear before item 9, which stays last because it needs a person. Open work and resume notes: [NEXT_STEPS.md](NEXT_STEPS.md).
 
 Each item lists the problem, the approach, where the change lands, how it is tested, and a rough size (S ≤ half a day, M ≈ 1–2 days, L ≈ 3+ days).
 
@@ -271,6 +271,42 @@ Also from the Antigravity review. Every interactive session used to be titled "I
 **Approach.** `CreateSession` with an empty title leaves it empty, and `AddMessage` names the session after the first user prompt (`session.TitleFrom`: its first non-empty line, whitespace collapsed, at most 60 characters). This applies to the REPL, `/session new` and one-shot runs; an explicit title is kept. `/rename <name>` sets it (`Storage.Rename`, saved to the metadata). Unnamed sessions show as "(untitled)". With `ui.terminal_title` (default on, TTY only), the REPL sets the window title to "🐶 <name>" before each prompt when it changes, with control characters removed, and clears it on exit. Leaving a session that has messages prints `code-puppy --resume=<id>`. The unused `session.interactive_title` / `session.new_title` strings and `firstLine` are gone.
 
 **Tests.** `TitleFrom` (blank lines, whitespace, long UTF-8). Naming from the first user prompt only, an explicit title kept, rename saved and reloaded, an empty name refused. REPL: "(untitled)", the prompt-derived name with escape characters removed, `/rename` usage and result, the window-title sequences and their reset, and the resume hint; none of them when the title is off and the session is empty.
+
+---
+
+## 22. Isolated Python environments, sandboxed by gVisor — 📋 planned (M–L); spike done
+
+**Goal.** Skills that ship Python scripts, and forged Python tools, get their own dependencies (`requirements.txt` / `pyproject.toml`) without touching the system Python. Where available, installs and runs happen inside gVisor, whose user-space kernel protects against kernel exploits, which bubblewrap and Seatbelt don't.
+
+**Spike (2026-09-25, gVisor `release-20260921.0`, Ubuntu 24.04 arm64 VM, rootless).**
+- **Install:** releases are now a tarball (`gvisor.tar.bz2`/`.zstd` plus `.sha512`) holding `runsc` and a `gvisor-bin/` directory that must stay beside it. The old per-binary URLs return 404.
+- **`runsc do` is unusable:** it's documented as for testing only. It wraps every mount, volumes included, in an in-memory overlay (`Overlay: all:memory`), so workspace writes never reach the host. A volume's destination must already exist on the host, and mounting over a secret directory doesn't hide it.
+- **`runsc --rootless run` with a generated OCI config works** (rootless `create` isn't supported, but `run` is). The working layout:
+  - The root is an empty per-run skeleton directory, with `--overlay2=root:memory`. `/usr`, `/etc`, `/bin`, `/lib`, `/lib64`, `/sbin` and the environment are bound read-only; `/tmp` is a tmpfs; only the workspace (run) or the environment and `uv` cache (install) are bound read-write.
+  - Home directories and secrets aren't mounted at all, so they don't exist inside. `/etc/shadow` is refused, and nothing written elsewhere reached the host.
+  - Using the host's `/` as the root doesn't work: a read-only root made the workspace bind read-only too, and a writable root let writes escape to the host.
+- **Network:** rootless allows only `none` or `host`; gVisor's isolated network needs root. With `host`, the config must drop the `network` namespace that `runsc spec` adds, or the sandbox gets an empty namespace ("Network is unreachable").
+- **Timings:**
+  - Sandbox start: 40–70 ms.
+  - `uv venv` plus a wheels-only install of numpy and requests: 2.6 s from a cold cache, 0.31 s warm (0.06 s without a sandbox).
+  - Running a script that imports numpy: about 280 ms versus about 90 ms bare. Almost all of it is file access during imports (185 ms versus 68 ms); computation runs at native speed.
+  - `uv` downloaded a managed Python 3.13 inside the sandbox in 3.2 s, leaving the system Python untouched.
+- **Enforced at run time:** the environment was read-only ("Read-only file system") and the network was off.
+- **Cleanup:** state doesn't accumulate after normal exits, and killing `runsc run` stops its sandbox, leaving only a "stopped" record until `runsc delete`. **But** the sandbox processes aren't children of `runsc`: when only the parent that started `runsc` died, the sandbox kept running. The process guard must reach them (their process group or a cgroup), or use `runsc kill` / `delete` on exit and timeout.
+- **`runsc bwrap`** (bubblewrap-compatible CLI) exists, but it lacks `--dev-bind`, `--remount-ro` and `--die-with-parent`, and rootless it needs `newuidmap` (the `uidmap` package). It's not a drop-in for Code Puppy's bubblewrap arguments.
+- **`runsc sandboxexec`** takes a `SandboxOptions` proto, and there's a Go package (`gvisor.dev/gvisor/sandboxexec/sandbox`, untagged, still needs `runsc`). Not tried; the OCI route is enough.
+
+**Plan.**
+1. Environments in `~/.code_puppy/envs/<hash of requirements and Python version>` via `uv` (managed Python for `requires-python`), falling back to `python3 -m venv` and `pip`.
+2. Installs are wheels-only by default (`--only-binary :all:`, so no package code runs at install), with an approval that shows the package list, and hash-checked when requirements are pinned.
+3. A sandbox backend interface with gVisor (Linux, when `runsc` is found and a test run passes) and the existing Seatbelt/bubblewrap, selected by `python.sandbox = auto | gvisor | os`. `doctor` reports which is active.
+4. `run_skill_script(skill, script, args)` for skills, and a `requirements` field for forged tools.
+5. `/envs` and `/envs prune`.
+6. CI installs `runsc` on the Linux job.
+
+The same gVisor backend could later run `run_shell_command` and stdio MCP servers (`sandbox.shell = "gvisor"`). macOS and Windows keep the OS sandbox.
+
+**Still to check:** an x86_64 GitHub runner (the spike was arm64); how the process guard and cgroups interact with runsc's sandbox processes; Python versions with no wheels for a package.
 
 ---
 
