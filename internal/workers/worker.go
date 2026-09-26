@@ -74,6 +74,10 @@ type Worker struct {
 
 var validName = regexp.MustCompile(`^[a-z0-9][a-z0-9_-]{0,63}$`)
 
+// ValidName reports whether name can be a worker's: lowercase letters,
+// digits, - and _. Names become file names, so nothing else is looked up.
+func ValidName(name string) bool { return validName.MatchString(name) }
+
 // Load reads the worker in dir (a directory holding WORKER.md). The
 // directory's name is the worker's name; a name in the frontmatter must
 // match it.

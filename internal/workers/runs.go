@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -66,9 +67,14 @@ type RunLog struct {
 // OpenRunLog keeps runs under dir.
 func OpenRunLog(dir string) *RunLog { return &RunLog{dir: dir} }
 
-func (l *RunLog) file(workspace, worker string) string {
+// file is where a worker's runs are kept; the name must be valid, since
+// it is part of the file name.
+func (l *RunLog) file(workspace, worker string) (string, error) {
+	if !ValidName(worker) {
+		return "", fmt.Errorf("%q isn't a worker name", worker)
+	}
 	sum := sha256.Sum256([]byte(workspace))
-	return filepath.Join(l.dir, hex.EncodeToString(sum[:8])+"-"+worker+".jsonl")
+	return filepath.Join(l.dir, hex.EncodeToString(sum[:8])+"-"+worker+".jsonl"), nil
 }
 
 // Append records a finished run.
@@ -77,12 +83,16 @@ func (l *RunLog) Append(r Run) error {
 	if err != nil {
 		return err
 	}
+	name, err := l.file(r.Workspace, r.Worker)
+	if err != nil {
+		return err
+	}
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	if err := os.MkdirAll(l.dir, 0o700); err != nil {
 		return err
 	}
-	f, err := os.OpenFile(l.file(r.Workspace, r.Worker), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600)
+	f, err := os.OpenFile(name, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600)
 	if err != nil {
 		return err
 	}
@@ -93,9 +103,13 @@ func (l *RunLog) Append(r Run) error {
 
 // List returns a worker's runs, newest first, at most limit (0: all).
 func (l *RunLog) List(workspace, worker string, limit int) ([]Run, error) {
+	name, err := l.file(workspace, worker)
+	if err != nil {
+		return nil, err
+	}
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	runs, err := readRuns(l.file(workspace, worker))
+	runs, err := readRuns(name)
 	slices.Reverse(runs)
 	if limit > 0 && len(runs) > limit {
 		runs = runs[:limit]

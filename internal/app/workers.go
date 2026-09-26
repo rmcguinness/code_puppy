@@ -142,6 +142,9 @@ func (w *Workspace) worker(name string) (*workers.Worker, error, error) {
 	if !w.cfg.Workers.Enabled {
 		return nil, nil, ErrWorkersDisabled
 	}
+	if !workers.ValidName(name) { // it names a directory: nothing else is looked up
+		return nil, nil, fmt.Errorf("%w: %q", ErrUnknownWorker, name)
+	}
 	for _, root := range w.workerRoots() {
 		dir := filepath.Join(root, name)
 		wk, loadErr := workers.Load(dir)
@@ -310,6 +313,9 @@ func (w *Workspace) RunWorker(ctx context.Context, name string, o RunOptions) (w
 
 // WorkerRuns returns a worker's recorded runs, newest first.
 func (w *Workspace) WorkerRuns(name string, limit int) ([]workers.Run, error) {
+	if !workers.ValidName(name) {
+		return nil, fmt.Errorf("%w: %q", ErrUnknownWorker, name)
+	}
 	return w.runLog.List(w.Dir(), name, limit)
 }
 

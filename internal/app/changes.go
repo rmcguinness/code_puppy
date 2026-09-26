@@ -57,15 +57,41 @@ func (w *Workspace) SessionDiff() string { return w.tools.Checkpoints().SessionD
 
 // GitDiff runs git diff (stat and patch) in the workspace. color keeps
 // git's terminal colours. On failure the output holds git's message.
+//
+// The agent can write the repository's .git/config, and git diff would run
+// commands named there (fsmonitor, external diff, textconv and filter
+// drivers) outside the sandbox. They are all switched off.
 func (w *Workspace) GitDiff(ctx context.Context, color bool) (string, error) {
 	ui := "never"
 	if color {
 		ui = "always"
 	}
-	cmd := exec.CommandContext(ctx, "git", "-c", "color.ui="+ui, "diff", "--stat", "--patch")
+	args := []string{"-c", "color.ui=" + ui, "-c", "core.fsmonitor=false"}
+	args = append(args, noFilters(ctx, w.Dir())...)
+	args = append(args, "diff", "--no-ext-diff", "--no-textconv", "--stat", "--patch")
+	cmd := exec.CommandContext(ctx, "git", args...)
 	cmd.Dir = w.Dir()
 	out, err := cmd.CombinedOutput()
 	return string(out), err
+}
+
+// noFilters returns git options that blank every filter driver configured
+// for the repository in dir. Reading config runs nothing.
+func noFilters(ctx context.Context, dir string) []string {
+	cmd := exec.CommandContext(ctx, "git", "config", "-z", "--name-only", "--get-regexp", `^filter\..*\.(clean|smudge|process|required)$`)
+	cmd.Dir = dir
+	out, _ := cmd.Output() // none configured: exit status 1
+	var args []string
+	for _, key := range strings.Split(string(out), "\x00") {
+		switch {
+		case key == "":
+		case strings.HasSuffix(key, ".required"):
+			args = append(args, "-c", key+"=false")
+		default:
+			args = append(args, "-c", key+"=")
+		}
+	}
+	return args
 }
 
 // Approval is a standing permission: actions it covers run without asking.

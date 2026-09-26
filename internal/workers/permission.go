@@ -3,6 +3,7 @@ package workers
 import (
 	"fmt"
 	"path"
+	"path/filepath"
 	"strings"
 
 	"github.com/retail-cortex/blitz/internal/tools"
@@ -18,7 +19,11 @@ import (
 //	mcp:github:create_issue an MCP tool, as server:tool (glob)
 //
 // Globs use path.Match, where * doesn't cross "/"; a pattern ending in "/"
-// covers everything under that directory. Reading never needs permission.
+// covers everything under that directory. A shell glob never covers a
+// command that chains, pipes, redirects or substitutes (see shellMeta):
+// "go list *" must not cover "go list x; rm -rf ~". Such a command is
+// covered only by a permission that is exactly it. Reading never needs
+// permission.
 // Anything a worker isn't permitted is refused and recorded.
 type Permission struct {
 	Kind    string // shell, write, delete, web, mcp
@@ -69,9 +74,28 @@ func Allows(perms []Permission, req tools.ApprovalRequest) bool {
 	return true
 }
 
+// shellMeta are the characters that make one shell command several, or
+// run something else: separators, pipes, redirection, substitution,
+// escapes and line breaks.
+const shellMeta = ";&|`$()<>\\\n\r"
+
 func covered(perms []Permission, kind tools.ActionKind, target string) bool {
+	switch kind {
+	case tools.ActionWrite, tools.ActionDelete:
+		target = filepath.ToSlash(target)
+		if target != path.Clean(target) || strings.HasPrefix(target, "/") || target == ".." || strings.HasPrefix(target, "../") {
+			return false // outside the workspace, or not as the tools give it
+		}
+	}
+	chained := kind == tools.ActionCommand && strings.ContainsAny(target, shellMeta)
 	for _, p := range perms {
 		if permissionKinds[p.Kind] != kind {
+			continue
+		}
+		if p.Pattern == target {
+			return true
+		}
+		if chained {
 			continue
 		}
 		if strings.HasSuffix(p.Pattern, "/") && strings.HasPrefix(target, p.Pattern) {

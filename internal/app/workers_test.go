@@ -48,6 +48,15 @@ func TestWorkersLifecycle(t *testing.T) {
 	if _, err := w.EnableWorker("broken", broken.Hash); err == nil {
 		t.Error("an invalid worker was enabled")
 	}
+	// A name is never a path: nothing outside workers/ is looked up.
+	for _, bad := range []string{"../deps", "deps/..", "/etc", "Deps"} {
+		if _, err := w.EnableWorker(bad, "x"); !errors.Is(err, ErrUnknownWorker) {
+			t.Errorf("enable %q: %v", bad, err)
+		}
+		if _, err := w.WorkerRuns(bad, 1); !errors.Is(err, ErrUnknownWorker) {
+			t.Errorf("runs of %q: %v", bad, err)
+		}
+	}
 	if _, err := w.EnableWorker("nope", "x"); !errors.Is(err, ErrUnknownWorker) {
 		t.Errorf("unknown: %v", err)
 	}

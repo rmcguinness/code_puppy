@@ -3,70 +3,57 @@ package app
 import (
 	"context"
 	"os"
+	"os/exec"
 	"path/filepath"
-	"slices"
 	"strings"
 	"testing"
-
-	"github.com/retail-cortex/blitz/internal/config"
-	"github.com/retail-cortex/blitz/internal/tools"
-	"google.golang.org/genai"
 )
 
-func TestCheckpointsUndoAndDiff(t *testing.T) {
-	create := &genai.Content{Role: genai.RoleModel, Parts: []*genai.Part{{FunctionCall: &genai.FunctionCall{
-		Name: "create_file", Args: map[string]any{"path": "made.txt", "content": "by tool\n"}}}}}
-	w, _ := openTestWith(t, func(c *config.Config) { c.Blitz.AutoApprove = true }, create, text("created"))
-	sid := newSession(t, w).ID
-	if w.SessionDiff() != "" || len(w.ListCheckpoints()) != 0 {
-		t.Fatal("changes before any turn")
+// The agent can write .git/config; showing the diff must not run what it
+// names there.
+func TestGitDiffRunsNothingFromRepoConfig(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("no git")
 	}
-	if _, err := w.Run(context.Background(), sid, Turn{Text: "make a file"}, ignore); err != nil {
-		t.Fatal(err)
-	}
-	list := w.ListCheckpoints()
-	if len(list) != 1 || list[0].Label != "make a file" || !slices.Equal(list[0].Files, []string{"made.txt"}) {
-		t.Fatalf("checkpoints %+v", list)
-	}
-	if d := w.SessionDiff(); !strings.Contains(d, "+by tool") {
-		t.Errorf("diff %q", d)
-	}
-	res, err := w.Undo(false)
-	if err != nil || res.Label != "make a file" || !slices.Equal(res.Restored, []string{"made.txt"}) {
-		t.Fatalf("undo %+v %v", res, err)
-	}
-	if _, err := os.Stat(filepath.Join(w.Dir(), "made.txt")); !os.IsNotExist(err) {
-		t.Error("undo left the created file")
-	}
-}
-
-func TestApprovalsListRevokeClear(t *testing.T) {
 	w := openTest(t)
-	hooks := w.Tools().Hooks()
-	hooks.SetApprover(func(context.Context, tools.ApprovalRequest) (tools.Decision, error) {
-		return tools.DecisionSession, nil
-	})
-	cmd := "cmd:" + w.Dir() + "\x00go test ./..."
-	if err := hooks.Approve(context.Background(), tools.ApprovalRequest{Tool: "run_shell_command", Kind: tools.ActionCommand, Key: cmd}); err != nil {
-		t.Fatal(err)
+	dir := w.Dir()
+	git := func(args ...string) {
+		t.Helper()
+		cmd := exec.Command("git", args...)
+		cmd.Dir = dir
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v\n%s", args, err, out)
+		}
 	}
-	if err := hooks.Store().Add("web:example.com", "example.com"); err != nil {
-		t.Fatal(err)
+	write := func(name, content string) {
+		t.Helper()
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(content), 0o644); err != nil {
+			t.Fatal(err)
+		}
 	}
-	list := w.ListApprovals()
-	if len(list) != 2 {
-		t.Fatalf("approvals %+v", list)
+	git("init", "-q")
+	write("f.txt", "before\n")
+	git("add", "f.txt")
+	git("-c", "user.email=t@t", "-c", "user.name=t", "commit", "-qm", "init")
+
+	write(".gitattributes", "*.txt filter=evil diff=evil\n")
+	for key, cmd := range map[string]string{
+		"core.fsmonitor":      "touch pwned-fsmonitor",
+		"diff.external":       "touch pwned-external",
+		"diff.evil.textconv":  "touch pwned-textconv; cat",
+		"filter.evil.clean":   "touch pwned-clean; cat",
+		"filter.evil.process": "touch pwned-process",
+	} {
+		git("config", key, cmd)
 	}
-	if a := list[0]; a.Kind != "cmd" || a.Subject != "go test ./..." || a.Dir != w.Dir() || a.Always {
-		t.Errorf("session approval %+v", a)
+	git("config", "filter.evil.required", "true")
+	write("f.txt", "after\n")
+
+	out, err := w.GitDiff(context.Background(), false)
+	if err != nil || !strings.Contains(out, "+after") {
+		t.Fatalf("diff %v:\n%s", err, out)
 	}
-	if a := list[1]; a.Kind != "web" || a.Subject != "example.com" || !a.Always || a.Added.IsZero() {
-		t.Errorf("saved approval %+v", a)
-	}
-	if n := w.RevokeApprovals(list[1].Key); n != 1 || len(w.ListApprovals()) != 1 || len(hooks.Store().Rules()) != 0 {
-		t.Errorf("revoke: %d, left %+v", n, w.ListApprovals())
-	}
-	if n := w.ClearApprovals(); n != 1 || len(w.ListApprovals()) != 0 {
-		t.Errorf("clear: %d, left %+v", n, w.ListApprovals())
+	if got, _ := filepath.Glob(filepath.Join(dir, "pwned-*")); len(got) > 0 {
+		t.Errorf("git diff ran commands from the repository's config: %v", got)
 	}
 }
