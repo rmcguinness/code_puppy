@@ -39,7 +39,7 @@ service WorkspaceService {
   // Changes a model's generation settings and saves them (BAD_MODEL_REF,
   // INVALID_SETTING; nothing changes on error).
   rpc UpdateModelSettings(UpdateModelSettingsRequest) returns (UpdateModelSettingsResponse);
-  // Returns the settings /set changes, plus model, agent and reply language.
+  // Returns the agency level, plus model, agent and reply language.
   rpc GetSettings(GetSettingsRequest) returns (GetSettingsResponse);
   // Changes a setting for the workspace (UNKNOWN_SETTING, INVALID_AGENCY).
   rpc SetSetting(SetSettingRequest) returns (SetSettingResponse);
@@ -258,8 +258,8 @@ message GetSettingsRequest {
 }
 
 message GetSettingsResponse {
-  string puppy_name = 1;
-  string owner_name = 2;
+  reserved 1, 2;
+  reserved "puppy_name", "owner_name";
   string agency = 3;
   string model = 4;
   string provider = 5;
@@ -272,7 +272,7 @@ message GetSettingsResponse {
 
 message SetSettingRequest {
   string workspace = 1;
-  // "agency", "puppy_name" or "owner_name".
+  // "agency".
   string key = 2;
   string value = 3;
 }

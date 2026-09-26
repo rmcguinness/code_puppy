@@ -86,11 +86,11 @@ func TestRemoteOperationsAndTypedErrors(t *testing.T) {
 	if _, err := r.Set(ctx, "agency", "reckless"); !errors.Is(err, app.ErrInvalidAgency) {
 		t.Errorf("agency: %v", err)
 	}
-	res, err := r.PinModel(ctx, "qa-kitten", "anthropic/claude-haiku-4-5")
+	res, err := r.PinModel(ctx, "qa", "anthropic/claude-haiku-4-5")
 	if err != nil || res.Model != "claude-haiku-4-5" || res.Saved.Err != nil {
 		t.Fatalf("pin %+v %v", res, err)
 	}
-	if i := slices.IndexFunc(r.ListAgents(), func(a app.AgentInfo) bool { return a.Name == "qa-kitten" }); i < 0 || r.ListAgents()[i].PinnedModel != "claude-haiku-4-5" {
+	if i := slices.IndexFunc(r.ListAgents(), func(a app.AgentInfo) bool { return a.Name == "qa" }); i < 0 || r.ListAgents()[i].PinnedModel != "claude-haiku-4-5" {
 		t.Error("pin not listed")
 	}
 	if !r.ImagesEnabled() || r.Processes() != nil || len(r.SandboxSummary()) == 0 {

@@ -65,14 +65,14 @@ func cmdUndo(args []string, app *App) {
 	force := len(args) > 0 && (args[0] == "--force" || args[0] == "-f")
 	res, err := app.Workspace.Undo(force)
 	if errors.Is(err, core.ErrUndoConflict) {
-		fmt.Printf("%s⚠️  %v%s\n", Yellow, err, Reset)
+		fmt.Printf("%s!  %v%s\n", Yellow, err, Reset)
 		return
 	}
 	if len(res.Restored) > 0 {
 		fmt.Printf("%s↩️  %s%s\n", Green, i18n.T("undo.done", "label", strconv.Quote(safe(res.Label)), "files", safe(strings.Join(res.Restored, ", "))), Reset)
 	}
 	if err != nil {
-		fmt.Printf("%s❌ %v%s\n", Red, err, Reset)
+		fmt.Printf("%s✗ %v%s\n", Red, err, Reset)
 	}
 }
 
@@ -82,7 +82,7 @@ func cmdCheckpoints(app *App) {
 		fmt.Println(i18n.T("checkpoints.none"))
 		return
 	}
-	fmt.Printf("\n%s📌 %s%s\n", Bold, i18n.T("checkpoints.title"), Reset)
+	fmt.Printf("\n%s%s%s\n", Bold, i18n.T("checkpoints.title"), Reset)
 	for _, c := range list {
 		fmt.Printf("  %s#%d%s %s %s%s%s\n      %s\n", Bold, c.ID, Reset, c.Time.Format("15:04:05"), Dim, safe(c.Label), Reset, safe(strings.Join(c.Files, ", ")))
 	}
@@ -93,7 +93,7 @@ func cmdDiff(ctx context.Context, args []string, app *App) {
 	if len(args) > 0 && args[0] == "git" {
 		out, err := app.Workspace.GitDiff(ctx, true)
 		if err != nil {
-			fmt.Printf("%s❌ %s%s\n%s", Red, i18n.T("diff.git_failed", "error", err), Reset, safe(out))
+			fmt.Printf("%s✗ %s%s\n%s", Red, i18n.T("diff.git_failed", "error", err), Reset, safe(out))
 			return
 		}
 		if out == "" {
@@ -118,7 +118,7 @@ func cmdCost(app *App) {
 		return
 	}
 	active, _ := app.Workspace.ActiveSession()
-	fmt.Printf("\n%s💰 %s%s\n", Bold, i18n.T("cost.title", "id", safe(active.ID)), Reset)
+	fmt.Printf("\n%s%s%s\n", Bold, i18n.T("cost.title", "id", safe(active.ID)), Reset)
 	fmt.Printf("  %s\n", i18n.T("cost.calls", "count", u.Calls))
 	fmt.Printf("  %s\n", i18n.T("cost.input", "input", humanTokens(u.Input), "cached", humanTokens(u.Cached), "written", humanTokens(u.CacheWrite)))
 	fmt.Printf("  %s\n", i18n.T("cost.output", "output", humanTokens(u.Output)))
@@ -136,7 +136,7 @@ func cmdContext(app *App) {
 		fmt.Println(i18n.T("session.none_active"))
 		return
 	}
-	fmt.Printf("\n%s🧠 %s%s %s\n", Bold, i18n.T("context.title"), Reset, i18n.T("context.size", "tokens", humanTokens(c.Tokens)))
+	fmt.Printf("\n%s%s%s %s\n", Bold, i18n.T("context.title"), Reset, i18n.T("context.size", "tokens", humanTokens(c.Tokens)))
 	if c.AutoCompact {
 		pct := float64(c.Tokens) / float64(c.Threshold) * 100
 		fmt.Printf("  %s\n\n", i18n.T("context.threshold", "threshold", humanTokens(int64(c.Threshold)), "percent", fmt.Sprintf("%.0f", pct), "keep", c.Keep))
@@ -151,17 +151,17 @@ func cmdCompact(ctx context.Context, args []string, app *App) {
 		fmt.Println(i18n.T("session.none_active"))
 		return
 	}
-	fmt.Printf("%s🗜️  %s%s\n", Dim, i18n.T("compact.running"), Reset)
+	fmt.Printf("%s%s%s\n", Dim, i18n.T("compact.running"), Reset)
 	res, err := app.Workspace.Compact(ctx, strings.Join(args, " "))
 	if err != nil {
 		if errors.Is(err, core.ErrNothingToCompact) {
 			fmt.Printf("%s%v%s\n", Yellow, err, Reset)
 			return
 		}
-		fmt.Printf("%s❌ %s%s\n", Red, i18n.T("compact.failed", "error", safe(err.Error())), Reset)
+		fmt.Printf("%s✗ %s%s\n", Red, i18n.T("compact.failed", "error", safe(err.Error())), Reset)
 		return
 	}
-	fmt.Printf("%s✅ %s%s\n", Green, i18n.T("compact.done", "events", res.EventsCompacted, "chars", res.SummaryChars), Reset)
+	fmt.Printf("%s✓ %s%s\n", Green, i18n.T("compact.done", "events", res.EventsCompacted, "chars", res.SummaryChars), Reset)
 	if line := UsageLine(res.Before, res.After); line != "" {
 		fmt.Printf("%s%s%s\n", Dim, line, Reset)
 	}
@@ -176,14 +176,14 @@ func cmdMemory(ctx context.Context, args []string, app *App) {
 	case "show", "reload":
 		paths, err := app.Workspace.ReloadMemory(ctx)
 		if err != nil {
-			fmt.Printf("%s❌ %v%s\n", Red, err, Reset)
+			fmt.Printf("%s✗ %v%s\n", Red, err, Reset)
 			return
 		}
 		if len(paths) == 0 {
 			fmt.Println(i18n.T("memory.none", "files", strings.Join(app.Workspace.MemoryFiles(), ", ")))
 			return
 		}
-		fmt.Printf("\n%s📝 %s%s\n", Bold, i18n.T("memory.loaded"), Reset)
+		fmt.Printf("\n%s%s%s\n", Bold, i18n.T("memory.loaded"), Reset)
 		for _, p := range paths {
 			fmt.Printf("  • %s\n", safe(p))
 		}
@@ -191,10 +191,10 @@ func cmdMemory(ctx context.Context, args []string, app *App) {
 	case "add":
 		path, err := app.Workspace.AddMemory(ctx, strings.Join(args[1:], " "))
 		if err != nil {
-			fmt.Printf("%s❌ %v%s\n", Red, err, Reset)
+			fmt.Printf("%s✗ %v%s\n", Red, err, Reset)
 			return
 		}
-		fmt.Printf("%s✅ %s%s\n", Green, i18n.T("memory.added", "path", safe(path)), Reset)
+		fmt.Printf("%s✓ %s%s\n", Green, i18n.T("memory.added", "path", safe(path)), Reset)
 	default:
 		fmt.Println(i18n.T("memory.usage"))
 	}
@@ -203,7 +203,7 @@ func cmdMemory(ctx context.Context, args []string, app *App) {
 func cmdApprovals(args []string, app *App) {
 	list := app.Workspace.ListApprovals()
 	if len(args) >= 1 && args[0] == "clear" {
-		fmt.Printf("%s✅ %s%s\n", Green, i18n.N("approvals.revoked", app.Workspace.ClearApprovals()), Reset)
+		fmt.Printf("%s✓ %s%s\n", Green, i18n.N("approvals.revoked", app.Workspace.ClearApprovals()), Reset)
 		return
 	}
 	if len(args) >= 1 && args[0] == "revoke" {
@@ -212,7 +212,7 @@ func cmdApprovals(args []string, app *App) {
 			fmt.Println(i18n.T("approvals.revoke_usage"))
 			return
 		}
-		fmt.Printf("%s✅ %s%s\n", Green, i18n.N("approvals.revoked", app.Workspace.RevokeApprovals(list[n-1].Key)), Reset)
+		fmt.Printf("%s✓ %s%s\n", Green, i18n.N("approvals.revoked", app.Workspace.RevokeApprovals(list[n-1].Key)), Reset)
 		return
 	}
 
@@ -220,7 +220,7 @@ func cmdApprovals(args []string, app *App) {
 		fmt.Println(i18n.T("approvals.none"))
 		return
 	}
-	fmt.Printf("\n%s🔑 %s%s\n", Bold, i18n.T("approvals.title"), Reset)
+	fmt.Printf("\n%s%s%s\n", Bold, i18n.T("approvals.title"), Reset)
 	for i, a := range list {
 		scope := i18n.T("approvals.scope_session")
 		if a.Always {
@@ -260,7 +260,7 @@ func cmdMCP(app *App) {
 		fmt.Println(i18n.T("mcp.none"))
 		return
 	}
-	fmt.Printf("\n%s🔌 %s%s\n", Bold, i18n.T("mcp.title"), Reset)
+	fmt.Printf("\n%s%s%s\n", Bold, i18n.T("mcp.title"), Reset)
 	for _, s := range servers {
 		approval := i18n.T("mcp.approval_required")
 		if s.AutoApprove {
@@ -281,7 +281,7 @@ func cmdPinModel(ctx context.Context, args []string, app *App) {
 				continue
 			}
 			if !listed {
-				fmt.Printf("\n%s📌 %s%s\n", Bold, i18n.T("pin.title"), Reset)
+				fmt.Printf("\n%s%s%s\n", Bold, i18n.T("pin.title"), Reset)
 				listed = true
 			}
 			fmt.Printf("  %s%-18s%s %s\n", Bold, safe(a.Name), Reset, safe(a.PinnedModel))
@@ -300,7 +300,7 @@ func cmdPinModel(ctx context.Context, args []string, app *App) {
 	if printPinError(err) {
 		return
 	}
-	fmt.Printf("%s📌 %s%s\n", Green, i18n.T("pin.done", "agent", safe(res.Agent), "model", safe(res.Model)), Reset)
+	fmt.Printf("%s%s%s\n", Green, i18n.T("pin.done", "agent", safe(res.Agent), "model", safe(res.Model)), Reset)
 	printSaved(res.Saved)
 }
 
@@ -315,7 +315,7 @@ func cmdUnpin(ctx context.Context, args []string, app *App) {
 	if printPinError(err) {
 		return
 	}
-	fmt.Printf("%s✅ %s%s\n", Green, i18n.T("pin.unpinned", "agent", safe(res.Agent), "model", safe(res.Model)), Reset)
+	fmt.Printf("%s✓ %s%s\n", Green, i18n.T("pin.unpinned", "agent", safe(res.Agent), "model", safe(res.Model)), Reset)
 	printSaved(res.Saved)
 }
 
@@ -324,9 +324,9 @@ func printPinError(err error) bool {
 	var unknown *core.UnknownAgentError
 	switch {
 	case errors.As(err, &unknown):
-		fmt.Printf("%s❌ %s%s\n", Red, i18n.T("pin.unknown_agent", "agent", safe(unknown.Name)), Reset)
+		fmt.Printf("%s✗ %s%s\n", Red, i18n.T("pin.unknown_agent", "agent", safe(unknown.Name)), Reset)
 	case err != nil:
-		fmt.Printf("%s❌ %s%s\n", Red, i18n.T("pin.failed", "error", safe(err.Error())), Reset)
+		fmt.Printf("%s✗ %s%s\n", Red, i18n.T("pin.failed", "error", safe(err.Error())), Reset)
 	default:
 		return false
 	}
@@ -337,7 +337,7 @@ func printPinError(err error) bool {
 // wasn't.
 func printSaved(s core.Saved) {
 	if s.Err != nil {
-		fmt.Printf("%s⚠️  %s%s\n", Yellow, i18n.T("pin.save_failed", "error", safe(s.Err.Error())), Reset)
+		fmt.Printf("%s!  %s%s\n", Yellow, i18n.T("pin.save_failed", "error", safe(s.Err.Error())), Reset)
 	} else {
 		fmt.Printf("%s%s%s\n", Dim, i18n.T("pin.saved", "path", safe(s.Path)), Reset)
 	}
@@ -347,7 +347,7 @@ func printSaved(s core.Saved) {
 // MCP servers offered to it. ● marks tools that stay available in /plan.
 func cmdTools(app *App) {
 	at := app.Workspace.ActiveAgentTools()
-	fmt.Printf("\n%s🧰 %s%s\n", Bold, i18n.T("tools.title", "agent", safe(at.Agent)), Reset)
+	fmt.Printf("\n%s%s%s\n", Bold, i18n.T("tools.title", "agent", safe(at.Agent)), Reset)
 	for _, t := range at.Tools {
 		mark := " "
 		if t.PlanAllowed {
@@ -383,17 +383,17 @@ func cmdSessionLoad(args []string, app *App) {
 	}
 	s, branched, err := app.Workspace.LoadSession(args[0])
 	if err != nil {
-		fmt.Printf("%s❌ %v%s\n", Red, err, Reset)
+		fmt.Printf("%s✗ %v%s\n", Red, err, Reset)
 		return
 	}
 	if branched {
-		fmt.Printf("%s▶️  %s%s\n", Green, i18n.T("snapshot.branched", "id", safe(s.ID), "name", safe(args[0]), "messages", i18n.N("session.messages", s.MessageCount)), Reset)
+		fmt.Printf("%s%s%s\n", Green, i18n.T("snapshot.branched", "id", safe(s.ID), "name", safe(args[0]), "messages", i18n.N("session.messages", s.MessageCount)), Reset)
 		PrintRecap(s.Messages, 3)
 		return
 	}
-	fmt.Printf("%s▶️  %s%s\n", Green, i18n.T("resume.done", "id", safe(s.ID), "title", safe(sessionTitle(s)), "messages", i18n.N("session.messages", s.MessageCount)), Reset)
+	fmt.Printf("%s%s%s\n", Green, i18n.T("resume.done", "id", safe(s.ID), "title", safe(sessionTitle(s)), "messages", i18n.N("session.messages", s.MessageCount)), Reset)
 	if s.Workspace != "" && s.Workspace != app.Workspace.Dir() {
-		fmt.Printf("%s⚠️  %s%s\n", Yellow, i18n.T("resume.other_workspace", "workspace", safe(s.Workspace)), Reset)
+		fmt.Printf("%s!  %s%s\n", Yellow, i18n.T("resume.other_workspace", "workspace", safe(s.Workspace)), Reset)
 	}
 	PrintRecap(s.Messages, 3)
 }
@@ -408,10 +408,10 @@ func cmdRename(args []string, app *App) {
 	}
 	s, err := app.Workspace.RenameSession(name)
 	if err != nil {
-		fmt.Printf("%s❌ %s%s\n", Red, i18n.T("rename.failed", "error", safe(err.Error())), Reset)
+		fmt.Printf("%s✗ %s%s\n", Red, i18n.T("rename.failed", "error", safe(err.Error())), Reset)
 		return
 	}
-	fmt.Printf("%s✅ %s%s\n", Green, i18n.T("rename.done", "title", safe(sessionTitle(s))), Reset)
+	fmt.Printf("%s✓ %s%s\n", Green, i18n.T("rename.done", "title", safe(sessionTitle(s))), Reset)
 }
 
 // sessionTitle is a session's title, or a placeholder until its first
@@ -438,11 +438,11 @@ func cmdSessionSave(args []string, app *App) {
 	case errors.Is(err, core.ErrNoActiveSession):
 		fmt.Println(i18n.T("session.none_active"))
 	case errors.Is(err, core.ErrSnapshotNameTaken):
-		fmt.Printf("%s⚠️  %s%s\n", Yellow, i18n.T("snapshot.taken", "name", safe(name)), Reset)
+		fmt.Printf("%s!  %s%s\n", Yellow, i18n.T("snapshot.taken", "name", safe(name)), Reset)
 	case err != nil:
-		fmt.Printf("%s❌ %s%s\n", Red, i18n.T("snapshot.failed", "error", safe(err.Error())), Reset)
+		fmt.Printf("%s✗ %s%s\n", Red, i18n.T("snapshot.failed", "error", safe(err.Error())), Reset)
 	default:
-		fmt.Printf("%s📸 %s%s\n", Green, i18n.T("snapshot.saved", "name", safe(name), "messages", i18n.N("session.messages", s.MessageCount)), Reset)
+		fmt.Printf("%s%s%s\n", Green, i18n.T("snapshot.saved", "name", safe(name), "messages", i18n.N("session.messages", s.MessageCount)), Reset)
 	}
 }
 
@@ -454,7 +454,7 @@ func PrintRecap(msgs []core.Message, n int) {
 	for _, m := range msgs {
 		who := i18n.T("recap.you")
 		if m.Role != "user" {
-			who = i18n.T("recap.puppy")
+			who = i18n.T("recap.blitz")
 		}
 		fmt.Printf("  %s%s:%s %s\n", Dim, who, Reset, safe(textutil.Ellipsize(strings.Join(strings.Fields(m.Text), " "), 160)))
 	}
@@ -463,7 +463,7 @@ func PrintRecap(msgs []core.Message, n int) {
 func cmdLocale(ctx context.Context, args []string, app *App) {
 	if len(args) == 0 {
 		cur := i18n.Current()
-		fmt.Printf("\n%s🌐 %s%s\n", Bold, i18n.T("locale.current", "name", cur.NativeName(), "tag", cur.Tag()), Reset)
+		fmt.Printf("\n%s%s%s\n", Bold, i18n.T("locale.current", "name", cur.NativeName(), "tag", cur.Tag()), Reset)
 		list, dir := app.Workspace.AvailableLocales()
 		var names []string
 		for _, m := range list {
@@ -479,7 +479,7 @@ func cmdLocale(ctx context.Context, args []string, app *App) {
 	input := strings.Join(args, " ")
 	res, err := app.Workspace.SetLocale(ctx, input)
 	if err != nil {
-		fmt.Printf("%s❌ %s%s\n", Red, i18n.T("locale.unknown", "input", strconv.Quote(safe(input))), Reset)
+		fmt.Printf("%s✗ %s%s\n", Red, i18n.T("locale.unknown", "input", strconv.Quote(safe(input))), Reset)
 		return
 	}
 	// The interface follows the model's reply language.
@@ -490,12 +490,12 @@ func cmdLocale(ctx context.Context, args []string, app *App) {
 	if tag, err := b.Resolve(res.Tag); err == nil {
 		i18n.SetCurrent(b.Localizer(tag))
 	}
-	fmt.Printf("%s✅ %s%s\n", Green, i18n.T("locale.changed", "name", res.NativeName, "tag", res.Tag), Reset)
+	fmt.Printf("%s✓ %s%s\n", Green, i18n.T("locale.changed", "name", res.NativeName, "tag", res.Tag), Reset)
 	if !res.HasCatalog {
 		fmt.Printf("%s%s%s\n", Yellow, i18n.T("locale.no_catalog", "name", res.LanguageName), Reset)
 	}
 	if res.Saved.Err != nil {
-		fmt.Printf("%s⚠️  %s%s\n", Yellow, i18n.T("locale.save_failed", "error", safe(res.Saved.Err.Error())), Reset)
+		fmt.Printf("%s!  %s%s\n", Yellow, i18n.T("locale.save_failed", "error", safe(res.Saved.Err.Error())), Reset)
 	} else if res.Saved.Path != "" {
 		fmt.Printf("%s%s%s\n", Dim, i18n.T("locale.saved", "path", safe(res.Saved.Path)), Reset)
 	}

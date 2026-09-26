@@ -32,7 +32,7 @@ func cmdEnvs(args []string, app *App) {
 			fmt.Println(i18n.T("envs.none"))
 			return
 		}
-		fmt.Printf("\n%s🐍 %s%s\n", Bold, i18n.T("envs.title", "count", len(list)), Reset)
+		fmt.Printf("\n%s%s%s\n", Bold, i18n.T("envs.title", "count", len(list)), Reset)
 		for _, e := range list {
 			state := ""
 			if !e.Ready {
@@ -54,18 +54,18 @@ func cmdEnvs(args []string, app *App) {
 			return
 		}
 		for _, f := range res.Failed {
-			fmt.Printf("%s❌ %s%s\n", Red, i18n.T("envs.remove_failed", "key", f.Key, "error", safe(f.Err.Error())), Reset)
+			fmt.Printf("%s✗ %s%s\n", Red, i18n.T("envs.remove_failed", "key", f.Key, "error", safe(f.Err.Error())), Reset)
 		}
-		fmt.Printf("%s✅ %s%s\n", Green, i18n.T("envs.pruned", "count", res.Removed, "size", sizeLabel(res.Freed)), Reset)
+		fmt.Printf("%s✓ %s%s\n", Green, i18n.T("envs.pruned", "count", res.Removed, "size", sizeLabel(res.Freed)), Reset)
 	case sub == "remove" && len(args) == 2:
 		err := app.Workspace.RemoveEnv(args[1])
 		switch {
 		case errors.Is(err, core.ErrScriptsDisabled):
 			fmt.Println(i18n.T("skills.disabled"))
 		case err != nil:
-			fmt.Printf("%s❌ %s%s\n", Red, i18n.T("envs.remove_failed", "key", safe(args[1]), "error", safe(err.Error())), Reset)
+			fmt.Printf("%s✗ %s%s\n", Red, i18n.T("envs.remove_failed", "key", safe(args[1]), "error", safe(err.Error())), Reset)
 		default:
-			fmt.Printf("%s✅ %s%s\n", Green, i18n.T("envs.removed", "key", safe(args[1])), Reset)
+			fmt.Printf("%s✓ %s%s\n", Green, i18n.T("envs.removed", "key", safe(args[1])), Reset)
 		}
 	default:
 		fmt.Printf("%s%s%s\n", Yellow, i18n.T("envs.usage"), Reset)

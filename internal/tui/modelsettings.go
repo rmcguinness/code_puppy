@@ -29,7 +29,7 @@ func cmdModelSettings(args []string, app *App) {
 			fmt.Println()
 			return
 		}
-		fmt.Printf("\n%s🎛️  %s%s\n", Bold, i18n.T("msettings.title"), Reset)
+		fmt.Printf("\n%s%s%s\n", Bold, i18n.T("msettings.title"), Reset)
 		for _, name := range slices.Sorted(maps.Keys(all)) {
 			fmt.Printf("  %s%-24s%s %s\n", Bold, safe(name), Reset, safe(summarizeSettings(all[name])))
 		}
@@ -66,19 +66,19 @@ func cmdModelSettings(args []string, app *App) {
 		fmt.Printf("%s%s%s\n", Yellow, i18n.T("msettings.usage"), Reset)
 		return
 	case errors.As(err, &invalid):
-		fmt.Printf("%s❌ %s%s\n", Red, i18n.T("msettings.invalid", "error", safe(invalid.Error())), Reset)
+		fmt.Printf("%s✗ %s%s\n", Red, i18n.T("msettings.invalid", "error", safe(invalid.Error())), Reset)
 		return
 	case err != nil:
-		fmt.Printf("%s❌ %s%s\n", Red, safe(err.Error()), Reset)
+		fmt.Printf("%s✗ %s%s\n", Red, safe(err.Error()), Reset)
 		return
 	}
 	if res.Settings.IsZero() {
-		fmt.Printf("%s✅ %s%s\n", Green, i18n.T("msettings.cleared", "model", safe(res.Model)), Reset)
+		fmt.Printf("%s✓ %s%s\n", Green, i18n.T("msettings.cleared", "model", safe(res.Model)), Reset)
 	} else {
-		fmt.Printf("%s✅ %s%s\n", Green, i18n.T("msettings.updated", "model", safe(res.Model), "settings", safe(summarizeSettings(res.Settings))), Reset)
+		fmt.Printf("%s✓ %s%s\n", Green, i18n.T("msettings.updated", "model", safe(res.Model), "settings", safe(summarizeSettings(res.Settings))), Reset)
 	}
 	if len(res.Unsupported) > 0 {
-		fmt.Printf("%s⚠️  %s%s\n", Yellow, i18n.T("msettings.unsupported",
+		fmt.Printf("%s!  %s%s\n", Yellow, i18n.T("msettings.unsupported",
 			"model", safe(res.Model), "provider", res.Provider, "keys", strings.Join(res.Unsupported, ", ")), Reset)
 	}
 	printSaved(res.Saved)
@@ -87,7 +87,7 @@ func cmdModelSettings(args []string, app *App) {
 // showModelSettings lists every setting for one model: its own value, or
 // where the value comes from when it has none.
 func showModelSettings(info core.ModelSettingsInfo) {
-	fmt.Printf("\n%s🎛️  %s%s\n", Bold, safe(info.Model), Reset)
+	fmt.Printf("\n%s%s%s\n", Bold, safe(info.Model), Reset)
 	for _, key := range config.ModelSettingKeys {
 		if v, ok := info.Settings.Get(key); ok {
 			fmt.Printf("  %-12s %s\n", key, v)

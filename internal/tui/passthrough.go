@@ -28,7 +28,7 @@ func runShellPassthrough(ctx context.Context, app *App, command string, interrup
 	if app.Workspace != nil {
 		dir = app.Workspace.Dir()
 	}
-	fmt.Printf("%s🐚 $ %s%s  %s%s%s\n", Bold, safe(command), Reset, Dim, i18n.T("shell.direct"), Reset)
+	fmt.Printf("%s$ %s%s  %s%s%s\n", Bold, safe(command), Reset, Dim, i18n.T("shell.direct"), Reset)
 
 	cmd := userShell(ctx, command)
 	cmd.Dir = dir
@@ -57,13 +57,13 @@ func runShellPassthrough(ctx context.Context, app *App, command string, interrup
 	}
 	switch {
 	case err == nil:
-		fmt.Printf("%s✅ %s%s %s(%s)%s\n\n", Green, i18n.T("shell.done"), Reset, Dim, elapsed, Reset)
+		fmt.Printf("%s✓ %s%s %s(%s)%s\n\n", Green, i18n.T("shell.done"), Reset, Dim, elapsed, Reset)
 	case cmd.ProcessState == nil: // didn't start
-		fmt.Printf("%s❌ %s%s\n\n", Red, i18n.T("shell.error", "error", safe(err.Error())), Reset)
+		fmt.Printf("%s✗ %s%s\n\n", Red, i18n.T("shell.error", "error", safe(err.Error())), Reset)
 	case code < 0: // killed by a signal, e.g. Ctrl+C
-		fmt.Printf("%s⚡ %s%s %s(%s)%s\n\n", Yellow, i18n.T("repl.interrupted"), Reset, Dim, elapsed, Reset)
+		fmt.Printf("%s%s%s %s(%s)%s\n\n", Yellow, i18n.T("repl.interrupted"), Reset, Dim, elapsed, Reset)
 	default:
-		fmt.Printf("%s❌ %s%s %s(%s)%s\n\n", Red, i18n.T("shell.exit_code", "code", code), Reset, Dim, elapsed, Reset)
+		fmt.Printf("%s✗ %s%s %s(%s)%s\n\n", Red, i18n.T("shell.exit_code", "code", code), Reset, Dim, elapsed, Reset)
 	}
 	slog.InfoContext(ctx, "user shell command", "exit_code", code, "elapsed", elapsed)
 	if app.Workspace != nil {

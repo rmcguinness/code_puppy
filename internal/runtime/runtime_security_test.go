@@ -218,7 +218,7 @@ func TestInvokeAgentToolWiredEndToEnd(t *testing.T) {
 	// Root model calls invoke_agent; the sub-agent's reply must come back
 	// through the tool instead of the old fabricated "completed task" string.
 	call := &genai.Content{Role: genai.RoleModel, Parts: []*genai.Part{{FunctionCall: &genai.FunctionCall{
-		Name: "invoke_agent", Args: map[string]any{"agent_name": "qa-kitten", "prompt": "test it"},
+		Name: "invoke_agent", Args: map[string]any{"agent_name": "qa", "prompt": "test it"},
 	}}}}
 	f := newEngine(t, call, textContent("kitten says all green"), textContent("root done"))
 
@@ -248,7 +248,7 @@ func TestInvokeAgentToolWiredEndToEnd(t *testing.T) {
 func TestEngineConcurrentUse(t *testing.T) {
 	f := newEngine(t)
 	var wg sync.WaitGroup
-	names := []string{"helios", "blitz", "qa-kitten"}
+	names := []string{"helios", "blitz", "qa"}
 	for i := 0; i < 6; i++ {
 		wg.Add(3)
 		go func(i int) {

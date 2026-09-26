@@ -88,10 +88,10 @@ func TestWorkspaceOperationsOverTheAPI(t *testing.T) {
 	if i := slices.IndexFunc(agents.Msg.Agents, func(a *pb.AgentInfo) bool { return a.Active }); i < 0 || agents.Msg.Agents[i].Name != "blitz" {
 		t.Errorf("agents %v", agents.Msg.Agents)
 	}
-	if _, err := c.workspaces.SetAgent(ctx, connect.NewRequest(&pb.SetAgentRequest{Workspace: dir, Name: "qa-kitten"})); err != nil {
+	if _, err := c.workspaces.SetAgent(ctx, connect.NewRequest(&pb.SetAgentRequest{Workspace: dir, Name: "qa"})); err != nil {
 		t.Fatal(err)
 	}
-	pin, err := c.workspaces.PinModel(ctx, connect.NewRequest(&pb.PinModelRequest{Workspace: dir, Agent: "qa-kitten", Ref: "anthropic/claude-haiku-4-5"}))
+	pin, err := c.workspaces.PinModel(ctx, connect.NewRequest(&pb.PinModelRequest{Workspace: dir, Agent: "qa", Ref: "anthropic/claude-haiku-4-5"}))
 	if err != nil || pin.Msg.Model != "claude-haiku-4-5" || pin.Msg.Saved.Error != "" {
 		t.Fatalf("pin %v %v", pin, err)
 	}
@@ -114,7 +114,7 @@ func TestWorkspaceOperationsOverTheAPI(t *testing.T) {
 	}
 
 	tools, err := c.workspaces.ListTools(ctx, connect.NewRequest(&pb.ListToolsRequest{Workspace: dir}))
-	if err != nil || tools.Msg.Agent != "qa-kitten" || len(tools.Msg.Tools) == 0 {
+	if err != nil || tools.Msg.Agent != "qa" || len(tools.Msg.Tools) == 0 {
 		t.Errorf("tools %v %v", tools, err)
 	}
 }

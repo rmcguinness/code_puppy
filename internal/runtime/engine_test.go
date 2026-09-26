@@ -33,7 +33,7 @@ func TestEngineExecution(t *testing.T) {
 	}
 
 	mockModel := NewMockLLM("mock-model",
-		genai.NewContentFromText("Woof! I wrote your code cleanly.", genai.RoleModel),
+		genai.NewContentFromText("Wrote the code.", genai.RoleModel),
 	)
 
 	eng, err := NewEngine(ctx, cfg, agentReg, skillProv, toolReg, mockModel)
@@ -62,8 +62,8 @@ func TestEngineExecution(t *testing.T) {
 	}
 
 	joined := strings.Join(observedTexts, " ")
-	if !strings.Contains(joined, "Woof!") {
-		t.Errorf("expected output to contain 'Woof!', got: %s", joined)
+	if !strings.Contains(joined, "Wrote the code.") {
+		t.Errorf("expected output to contain 'Wrote the code.', got: %s", joined)
 	}
 
 	// Test switching agent to helios

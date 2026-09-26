@@ -148,7 +148,7 @@ func NewApprover(in Input, diffLines int) tools.Approver {
 			return tools.DecisionDeny, ctx.Err()
 		}
 		var sb strings.Builder
-		fmt.Fprintf(&sb, "\n%s🔐 %s%s [%s]\n", Yellow+Bold, i18n.T("approve.title"), Reset, i18n.T("approve.via", "kind", req.Kind, "tool", safe(req.Tool)))
+		fmt.Fprintf(&sb, "\n%s%s%s [%s]\n", Yellow+Bold, i18n.T("approve.title"), Reset, i18n.T("approve.via", "kind", req.Kind, "tool", safe(req.Tool)))
 		for _, line := range strings.Split(safe(req.Detail), "\n") {
 			fmt.Fprintf(&sb, "   %s%s%s\n", Dim, line, Reset)
 		}
@@ -241,11 +241,11 @@ func NewUserPrompter(in Input) tools.UserPromptFunc {
 			return "", ctx.Err()
 		}
 		var sb strings.Builder
-		fmt.Fprintf(&sb, "\n❓ [%s]: %s\n", i18n.T("question.title"), textutil.SanitizeTerminal(question))
+		fmt.Fprintf(&sb, "\n[%s]: %s\n", i18n.T("question.title"), textutil.SanitizeTerminal(question))
 		for i, opt := range options {
 			fmt.Fprintf(&sb, "   [%d] %s\n", i+1, textutil.SanitizeTerminal(opt))
 		}
-		sb.WriteString("👉 Answer: ")
+		sb.WriteString("Answer: ")
 
 		answer, err := in.Ask(ctx, sb.String())
 		if err != nil {

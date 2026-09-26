@@ -73,7 +73,7 @@ Subcommands: `doctor [--online]`, `config init|show|path`, `completion bash|zsh|
 | `/rename <name>` | Name this session. New sessions are named after their first prompt; the name shows in `/session list` and the terminal window title (`ui.terminal_title`, on by default). On exit, Blitz prints the `blitz --resume=<id>` command for the session |
 | `/session save <name> [--force]` | Save a snapshot of this session (📸 in `/session list`). Loading it by name starts a new session from that point and leaves the snapshot unchanged, so you can return to it again. `--continue` skips snapshots |
 | `/agents`, `/agent <name>`, `/model <name>` | Personas and models; `/model anthropic/claude-sonnet-5` can switch provider |
-| `/pin_model [<agent> <model>]`, `/unpin <agent>` | Run an agent on its own model (e.g. qa-kitten on a cheaper one); saved under `[agent_models]` |
+| `/pin_model [<agent> <model>]`, `/unpin <agent>` | Run an agent on its own model (e.g. qa on a cheaper one); saved under `[agent_models]` |
 | `/model_settings [<model> [key=value…\|reset]]` | Show or set one model's temperature, max_tokens, top_p or seed (`key=` clears one); saved under `[model_settings."<model>"]` |
 | `/sandbox`, `/mcp`, `/tools` | Active policy; MCP servers; the tools the active agent can use |
 | `/btw <question>` | Ask a side question in the middle of a task. The agent answers with everything this session knows, but the question and answer aren't kept: they aren't in the transcript, the saved session, or anything the agent sees later. The turn is read-only, its tokens count in `/cost`, and images queued with `/attach` wait for your next real prompt |
@@ -167,7 +167,7 @@ env     = { GITHUB_PERSONAL_ACCESS_TOKEN = "..." }
 # auto_approve = false
 # sandbox = true                    # stdio servers run in the OS sandbox
 # prefix = "gh"                     # expose tools as gh__create_issue
-# agents = ["blitz", "qa-kitten"]  # who gets these tools; default: primary agent; "*" = all
+# agents = ["blitz", "qa"]  # who gets these tools; default: primary agent; "*" = all
 ```
 MCP tools need approval per server/tool unless `auto_approve = true`, and can't shadow built-in tools (use `prefix` to avoid clashes). Listing a server's tools times out after 30 s and each call after `timeout_seconds` (default 300). A stdio server that crashes is restarted on the next call. After two failures in a row a server is paused (its tools disappear from the model's list) for 15 s, doubling up to 5 minutes, and then one call is let through as a trial. You get one warning when a server fails, one when it's paused, and one when it recovers.
 
@@ -258,7 +258,7 @@ Each provider uses its own credentials section. A failed model is skipped for 15
 **Per-agent models** — agents can run on different models, e.g. a cheap one for reviews:
 ```toml
 [agent_models]
-qa-kitten = "anthropic/claude-haiku-4-5"
+qa = "anthropic/claude-haiku-4-5"
 ```
 A pin wins over an agent's own `default_model` (agent frontmatter), and both win over the configured model. Pinned agents keep the `fallback_models` chain, and each agent's tokens are priced by its own model. `/pin_model` and `/unpin` change pins in the session and in the config file, keeping its comments. `doctor` checks each pinned model.
 
@@ -282,7 +282,7 @@ The key is the model name; a `provider/` prefix is ignored (for OpenRouter names
 |---|---|
 | `blitz` | Primary autonomous coding agent |
 | `helios` | Universal Constructor; builds and runs custom tools |
-| `qa-kitten` | Test loops, edge cases, regression suites |
+| `qa` | Test loops, edge cases, regression suites |
 | `web-retriever` | Documentation and web research (`web_fetch`) |
 | `planning-agent` | Requirement decomposition and roadmaps |
 | `agent-creator` | Creates custom agent specs and skills |

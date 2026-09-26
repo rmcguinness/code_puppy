@@ -53,7 +53,7 @@ Also fixed: the model name now resolves per provider (`blitz.default_model` if s
 **Problem.** MCP tools are only offered to the primary agent, and a server's tool names can't be namespaced (collisions are skipped with a warning).
 
 **Approach.**
-- Per-server `agents = ["blitz", "qa-kitten"]` (default: primary agent only) — pass the matching toolsets to `newLLMAgent` for sub-agents and `InvokeSubagent`.
+- Per-server `agents = ["blitz", "qa"]` (default: primary agent only) — pass the matching toolsets to `newLLMAgent` for sub-agents and `InvokeSubagent`.
 - Per-server `prefix = "gh"`: wrap each MCP tool in a delegating tool that renames it (`gh__create_issue`). Needs the ADK's function-tool interfaces (`Declaration()`, `Run()`); confirm they're implementable outside the module, otherwise build the declaration from the MCP tool schema and call the MCP client directly.
 
 **Files.** `internal/tools/mcp.go`, `internal/runtime/engine.go`, `internal/config/features.go`.

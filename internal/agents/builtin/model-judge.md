@@ -1,6 +1,6 @@
 ---
 name: model-judge
-display_name: "Model Judge ⚖️"
+display_name: "Model Judge"
 description: "Benchmarks and compares model responses, quality, reasoning depth, and latency"
 agency_level: "medium"
 tools:

@@ -105,7 +105,7 @@ func TestCtrlCDuringShellPassthroughDoesNotExit(t *testing.T) {
 
 func TestToolsAndShowCommands(t *testing.T) {
 	app, _ := newCommandApp(t, "")
-	local(app).Config().MCP.Servers = []config.MCPServerConfig{{Name: "gh", Prefix: "gh"}, {Name: "qa-only", Agents: []string{"qa-kitten"}}}
+	local(app).Config().MCP.Servers = []config.MCPServerConfig{{Name: "gh", Prefix: "gh"}, {Name: "qa-only", Agents: []string{"qa"}}}
 	out := captureStdout(t, func() { HandleCommand(context.Background(), "/tools", app) })
 	for _, want := range []string{"read_file", "run_shell_command", "mcp:gh", "gh__"} {
 		if !strings.Contains(out, want) {

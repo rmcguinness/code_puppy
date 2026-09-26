@@ -155,7 +155,7 @@ func TestSubagentToolsDoNotTakeTheParentsSteer(t *testing.T) {
 		t.Fatal(err)
 	}
 	ctx := context.WithValue(context.Background(), runStateKey{}, &runState{sessionID: "s"})
-	if _, err := f.eng.InvokeSubagent(ctx, "qa-kitten", "check"); err != nil {
+	if _, err := f.eng.InvokeSubagent(ctx, "qa", "check"); err != nil {
 		t.Fatal(err)
 	}
 	if left := f.eng.TakeSteers("s"); len(left) != 1 {

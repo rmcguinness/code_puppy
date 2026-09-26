@@ -31,7 +31,7 @@ func TestPlanModeRefusesChangesButAllowsReading(t *testing.T) {
 
 func TestPlanModeCoversSubagents(t *testing.T) {
 	f := newEngineWith(t, fixtureOpts{},
-		toolCall("invoke_agent", map[string]any{"agent_name": "qa-kitten", "prompt": "write a test"}),
+		toolCall("invoke_agent", map[string]any{"agent_name": "qa", "prompt": "write a test"}),
 		toolCall("create_file", map[string]any{"path": "sub.txt", "content": "x"}), // the sub-agent tries to write
 		textContent("sub-agent done"),
 		textContent("plan ready"))

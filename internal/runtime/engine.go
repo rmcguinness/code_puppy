@@ -519,7 +519,7 @@ func (e *Engine) imageInstruction(spec *agents.AgentSpec) string {
 }
 
 func (e *Engine) subInstruction(spec *agents.AgentSpec) string {
-	return spec.InterpolatePrompt(e.cfg.Blitz.PuppyName, e.cfg.Blitz.OwnerName, spec.AgencyLevel)
+	return spec.InterpolatePrompt(spec.AgencyLevel)
 }
 
 // rebuildLocked requires e.mu held for writing.
@@ -545,11 +545,7 @@ func (e *Engine) rebuildLocked() error {
 		subAgents = append(subAgents, sub)
 	}
 
-	rootInstruction := rootSpec.InterpolatePrompt(
-		e.cfg.Blitz.PuppyName,
-		e.cfg.Blitz.OwnerName,
-		e.cfg.Blitz.AgencyLevel,
-	)
+	rootInstruction := rootSpec.InterpolatePrompt(e.cfg.Blitz.AgencyLevel)
 	if e.cfg.Skills.Enabled && e.skillProv != nil {
 		if allSkills := e.skillProv.List(); len(allSkills) > 0 {
 			var sb strings.Builder

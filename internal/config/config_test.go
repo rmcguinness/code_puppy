@@ -9,9 +9,6 @@ import (
 
 func TestDefaultConfig(t *testing.T) {
 	cfg := DefaultConfig()
-	if cfg.Blitz.PuppyName != "Blitz" {
-		t.Errorf("expected 'Blitz', got '%s'", cfg.Blitz.PuppyName)
-	}
 	if cfg.Blitz.DefaultAgent != "blitz" {
 		t.Errorf("expected 'blitz', got '%s'", cfg.Blitz.DefaultAgent)
 	}
@@ -27,8 +24,6 @@ func TestModenvLoad(t *testing.T) {
 	tmpDir := t.TempDir()
 	tomlContent := `
 [blitz]
-puppy_name = "CustomPuppy"
-owner_name = "Alice"
 default_agent = "helios"
 agency_level = "extreme"
 
@@ -49,12 +44,6 @@ model = "gpt-4o"
 		t.Fatalf("Load returned unexpected error: %v", err)
 	}
 
-	if cfg.Blitz.PuppyName != "CustomPuppy" {
-		t.Errorf("expected 'CustomPuppy', got '%s'", cfg.Blitz.PuppyName)
-	}
-	if cfg.Blitz.OwnerName != "Alice" {
-		t.Errorf("expected 'Alice', got '%s'", cfg.Blitz.OwnerName)
-	}
 	if cfg.Blitz.DefaultAgent != "helios" {
 		t.Errorf("expected 'helios', got '%s'", cfg.Blitz.DefaultAgent)
 	}
@@ -122,7 +111,7 @@ func TestLoadUsesHomeConfig(t *testing.T) {
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(dir, ".env.toml"), []byte("[blitz]\npuppy_name = \"HomePup\"\n"), 0o600); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, ".env.toml"), []byte("[blitz]\ndefault_agent = \"home-agent\"\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	t.Chdir(t.TempDir())
@@ -131,8 +120,8 @@ func TestLoadUsesHomeConfig(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
-	if cfg.Blitz.PuppyName != "HomePup" {
-		t.Errorf("expected ~/.blitz/.env.toml to load, got %q", cfg.Blitz.PuppyName)
+	if cfg.Blitz.DefaultAgent != "home-agent" {
+		t.Errorf("expected ~/.blitz/.env.toml to load, got %q", cfg.Blitz.DefaultAgent)
 	}
 	if cfg.LLM.OpenAI.APIKey != "sk-from-env" {
 		t.Errorf("expected env API key, got %q", cfg.LLM.OpenAI.APIKey)
@@ -140,12 +129,12 @@ func TestLoadUsesHomeConfig(t *testing.T) {
 
 	// MODENV_PREFIX (user-controlled env) takes precedence over home.
 	alt := t.TempDir()
-	if err := os.WriteFile(filepath.Join(alt, ".env.toml"), []byte("[blitz]\npuppy_name = \"EnvPup\"\n"), 0o600); err != nil {
+	if err := os.WriteFile(filepath.Join(alt, ".env.toml"), []byte("[blitz]\ndefault_agent = \"env-agent\"\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	t.Setenv("MODENV_PREFIX", alt)
-	if cfg, _ := Load(""); cfg.Blitz.PuppyName != "EnvPup" {
-		t.Errorf("expected MODENV_PREFIX config, got %q", cfg.Blitz.PuppyName)
+	if cfg, _ := Load(""); cfg.Blitz.DefaultAgent != "env-agent" {
+		t.Errorf("expected MODENV_PREFIX config, got %q", cfg.Blitz.DefaultAgent)
 	}
 }
 
@@ -156,8 +145,8 @@ func TestLoadWithoutAnyConfig(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
-	if cfg.Blitz.PuppyName != "Blitz" {
-		t.Errorf("expected defaults, got %q", cfg.Blitz.PuppyName)
+	if cfg.Blitz.DefaultAgent != "blitz" {
+		t.Errorf("expected defaults, got %q", cfg.Blitz.DefaultAgent)
 	}
 }
 

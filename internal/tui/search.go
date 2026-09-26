@@ -39,16 +39,16 @@ func prepareSearch(ctx context.Context, app *App, args string, interrupts <-chan
 		fmt.Printf("%s%s%s\n", Yellow, i18n.T("search.no_fetch"), Reset)
 		return searchTurn{}, false
 	}
-	fmt.Printf("%s🔎 %s%s\n", Dim, i18n.T("search.searching", "provider", safe(provider), "query", safe(terms)), Reset)
+	fmt.Printf("%s%s%s\n", Dim, i18n.T("search.searching", "provider", safe(provider), "query", safe(terms)), Reset)
 	sctx, stop := cancelOnSignal(ctx, interrupts)
 	res, err := app.Workspace.SearchWeb(sctx, terms)
 	stop()
 	switch {
 	case errors.Is(err, core.ErrNoSearch):
-		fmt.Printf("%s⚠️  %s%s\n", Yellow, i18n.T("search.not_setup", "error", safe(err.Error())), Reset)
+		fmt.Printf("%s!  %s%s\n", Yellow, i18n.T("search.not_setup", "error", safe(err.Error())), Reset)
 		return searchTurn{}, false
 	case err != nil:
-		fmt.Printf("%s❌ %s%s\n", Red, i18n.T("search.failed", "error", safe(err.Error())), Reset)
+		fmt.Printf("%s✗ %s%s\n", Red, i18n.T("search.failed", "error", safe(err.Error())), Reset)
 		return searchTurn{}, false
 	}
 	if len(res.Links) == 0 {
@@ -68,9 +68,9 @@ func prepareSearch(ctx context.Context, app *App, args string, interrupts <-chan
 func sessionSearch(app *App, terms string) string {
 	total, prompt := app.Workspace.SearchSession(terms)
 	if total == 0 {
-		fmt.Printf("%s🔎 %s%s\n", Dim, i18n.T("search.session_none"), Reset)
+		fmt.Printf("%s%s%s\n", Dim, i18n.T("search.session_none"), Reset)
 	} else {
-		fmt.Printf("%s🔎 %s%s\n", Dim, i18n.T("search.session_found", "passages", i18n.N("search.passages", total)), Reset)
+		fmt.Printf("%s%s%s\n", Dim, i18n.T("search.session_found", "passages", i18n.N("search.passages", total)), Reset)
 	}
 	return prompt
 }

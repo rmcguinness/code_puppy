@@ -51,10 +51,8 @@ type Config struct {
 	ModelSettings map[string]ModelSettings `toml:"model_settings"`
 }
 
-// BlitzConfig controls the core persona and behavior settings.
+// BlitzConfig controls the core behaviour settings.
 type BlitzConfig struct {
-	PuppyName    string  `toml:"puppy_name"`
-	OwnerName    string  `toml:"owner_name"`
 	DefaultAgent string  `toml:"default_agent"`
 	DefaultModel string  `toml:"default_model"`
 	AgencyLevel  string  `toml:"agency_level"`
@@ -302,7 +300,7 @@ var DefaultBlockedPaths = []string{
 	".env", ".env.local", ".env.*.local", ".env.toml", ".env.*.toml",
 	"*.pem", "*.key", "*.p12", "id_rsa*", "id_ecdsa*", "id_ed25519*",
 	"~/.ssh", "~/.aws", "~/.gnupg", "~/.config/gcloud", "~/.azure", "~/.kube",
-	"~/.docker/config.json", "~/.netrc", "~/.blitz/puppy.cfg",
+	"~/.docker/config.json", "~/.netrc",
 }
 
 // DefaultScrubEnv are environment variables withheld from commands the model
@@ -333,8 +331,6 @@ func DefaultConfig() *Config {
 
 	cfg := &Config{
 		Blitz: BlitzConfig{
-			PuppyName:    "Blitz",
-			OwnerName:    "Developer",
 			DefaultAgent: "blitz",
 			DefaultModel: "", // empty: use llm.<provider>.model
 			AgencyLevel:  string(AgencyHigh),
@@ -555,52 +551,4 @@ func applyEnvOverrides(cfg *Config) {
 		cfg.Telemetry.Enabled = false
 	}
 
-	// Fallback to reading legacy ~/.blitz/puppy.cfg if keys still empty
-	if cfg.LLM.Gemini.APIKey == "" || cfg.LLM.OpenAI.APIKey == "" || cfg.LLM.Anthropic.APIKey == "" {
-		loadLegacyPuppyCfg(cfg)
-	}
-}
-
-func loadLegacyPuppyCfg(cfg *Config) {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return
-	}
-	cfgPath := filepath.Join(home, ".blitz", "puppy.cfg")
-	data, err := os.ReadFile(cfgPath)
-	if err != nil {
-		return
-	}
-
-	lines := strings.Split(string(data), "\n")
-	for _, line := range lines {
-		line = strings.TrimSpace(line)
-		if strings.HasPrefix(line, "#") || strings.HasPrefix(line, ";") || strings.HasPrefix(line, "[") {
-			continue
-		}
-		parts := strings.SplitN(line, "=", 2)
-		if len(parts) != 2 {
-			continue
-		}
-		k := strings.TrimSpace(strings.ToLower(parts[0]))
-		v := strings.TrimSpace(parts[1])
-		if v == "" {
-			continue
-		}
-
-		switch k {
-		case "gemini_api_key", "google_api_key", "google_generative_ai_api_key":
-			if cfg.LLM.Gemini.APIKey == "" {
-				cfg.LLM.Gemini.APIKey = v
-			}
-		case "openai_api_key":
-			if cfg.LLM.OpenAI.APIKey == "" {
-				cfg.LLM.OpenAI.APIKey = v
-			}
-		case "anthropic_api_key":
-			if cfg.LLM.Anthropic.APIKey == "" {
-				cfg.LLM.Anthropic.APIKey = v
-			}
-		}
-	}
 }

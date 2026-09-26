@@ -55,7 +55,7 @@ func NewListAgentsTool(registry *agents.Registry) (tool.Tool, error) {
 
 // InvokeAgentInput defines arguments for invoke_agent.
 type InvokeAgentInput struct {
-	AgentName string `json:"agent_name" jsonschema:"The name of the agent to invoke (e.g. qa-kitten, helios, planning-agent)"`
+	AgentName string `json:"agent_name" jsonschema:"The name of the agent to invoke (e.g. qa, helios, planning-agent)"`
 	Prompt    string `json:"prompt" jsonschema:"The specific task instruction for the delegated agent"`
 }
 

@@ -33,10 +33,7 @@ You are {puppy_name}, working for {owner_name}.
 		t.Errorf("unexpected tools: %v", spec.Tools)
 	}
 
-	interpolated := spec.InterpolatePrompt("Pup", "Bob", "extreme")
-	if !contains(interpolated, "Pup") || !contains(interpolated, "Bob") {
-		t.Errorf("interpolation failed to replace variables: %s", interpolated)
-	}
+	interpolated := spec.InterpolatePrompt("extreme")
 	if !contains(interpolated, "EXTREME agency") {
 		t.Errorf("expected extreme agency instructions, got: %s", interpolated)
 	}
@@ -58,8 +55,8 @@ func TestEmbeddedRegistry(t *testing.T) {
 		t.Fatalf("expected to find 'blitz' agent")
 	}
 
-	if puppy.DisplayName != "Blitz 🐶" {
-		t.Errorf("expected 'Blitz 🐶', got '%s'", puppy.DisplayName)
+	if puppy.DisplayName != "Blitz" {
+		t.Errorf("expected 'Blitz', got '%s'", puppy.DisplayName)
 	}
 
 	helios, ok := reg.Get("helios")

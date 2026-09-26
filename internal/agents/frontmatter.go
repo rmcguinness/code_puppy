@@ -56,29 +56,14 @@ func ParseMarkdownSpec(content []byte) (*AgentSpec, error) {
 	}, nil
 }
 
-// InterpolatePrompt replaces variables like {puppy_name}, {owner_name}, and agency rules.
-func (spec *AgentSpec) InterpolatePrompt(puppyName, ownerName, agencyLevel string) string {
-	prompt := spec.SystemPrompt
-	if puppyName == "" {
-		puppyName = "Blitz"
-	}
-	if ownerName == "" {
-		ownerName = "Developer"
-	}
+// InterpolatePrompt fills in the agency rules for agencyLevel ("" is high).
+func (spec *AgentSpec) InterpolatePrompt(agencyLevel string) string {
 	if agencyLevel == "" {
 		agencyLevel = "high"
 	}
-
-	prompt = strings.ReplaceAll(prompt, "{puppy_name}", puppyName)
-	prompt = strings.ReplaceAll(prompt, "{owner_name}", ownerName)
-	prompt = strings.ReplaceAll(prompt, "{{puppy_name}}", puppyName)
-	prompt = strings.ReplaceAll(prompt, "{{owner_name}}", ownerName)
-
 	agencyInstructions := getAgencyInstructions(agencyLevel)
-	prompt = strings.ReplaceAll(prompt, "{agency_instructions}", agencyInstructions)
-	prompt = strings.ReplaceAll(prompt, "{{agency_instructions}}", agencyInstructions)
-
-	return prompt
+	prompt := strings.ReplaceAll(spec.SystemPrompt, "{agency_instructions}", agencyInstructions)
+	return strings.ReplaceAll(prompt, "{{agency_instructions}}", agencyInstructions)
 }
 
 func getAgencyInstructions(level string) string {

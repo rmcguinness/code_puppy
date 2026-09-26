@@ -13,13 +13,13 @@ func TestAgentsAndModel(t *testing.T) {
 	if a := w.ActiveAgent(); a.Name != "blitz" || !a.Active || a.DisplayName == "" {
 		t.Fatalf("active agent %+v", a)
 	}
-	if i := slices.IndexFunc(w.ListAgents(), func(a AgentInfo) bool { return a.Name == "qa-kitten" }); i < 0 {
-		t.Fatal("qa-kitten not listed")
+	if i := slices.IndexFunc(w.ListAgents(), func(a AgentInfo) bool { return a.Name == "qa" }); i < 0 {
+		t.Fatal("qa not listed")
 	}
 	if _, err := w.SetAgent(ctx, "nobody"); err == nil {
 		t.Error("switched to an unknown agent")
 	}
-	if a, err := w.SetAgent(ctx, "qa-kitten"); err != nil || !a.Active || w.ActiveAgent().Name != "qa-kitten" {
+	if a, err := w.SetAgent(ctx, "qa"); err != nil || !a.Active || w.ActiveAgent().Name != "qa" {
 		t.Fatalf("switch: %+v %v", a, err)
 	}
 
@@ -30,7 +30,7 @@ func TestAgentsAndModel(t *testing.T) {
 		t.Fatalf("set model: %q %v %+v", pin, err, w.Model())
 	}
 	// The active agent's pin still decides what it runs on.
-	if _, err := w.PinModel(ctx, "qa-kitten", "anthropic/claude-haiku-4-5"); err != nil {
+	if _, err := w.PinModel(ctx, "qa", "anthropic/claude-haiku-4-5"); err != nil {
 		t.Fatal(err)
 	}
 	if pin, err := w.SetModel(ctx, "gemini-3.8-flash"); err != nil || pin != "claude-haiku-4-5" {
@@ -45,17 +45,17 @@ func TestPinAndUnpinSaveToTheConfigFile(t *testing.T) {
 	if _, err := w.PinModel(ctx, "nobody", "x"); !errors.As(err, &unknown) || unknown.Name != "nobody" {
 		t.Fatalf("unknown agent: %v", err)
 	}
-	res, err := w.PinModel(ctx, "qa-kitten", "anthropic/claude-haiku-4-5")
+	res, err := w.PinModel(ctx, "qa", "anthropic/claude-haiku-4-5")
 	if err != nil || res.Model != "claude-haiku-4-5" || res.Saved.Err != nil || res.Saved.Path == "" {
 		t.Fatalf("pin: %+v %v", res, err)
 	}
-	if got := savedConfig(t).AgentModels["qa-kitten"]; got != "anthropic/claude-haiku-4-5" {
+	if got := savedConfig(t).AgentModels["qa"]; got != "anthropic/claude-haiku-4-5" {
 		t.Errorf("saved pin %q", got)
 	}
-	if a := w.ListAgents()[slices.IndexFunc(w.ListAgents(), func(a AgentInfo) bool { return a.Name == "qa-kitten" })]; a.PinnedModel != "claude-haiku-4-5" {
+	if a := w.ListAgents()[slices.IndexFunc(w.ListAgents(), func(a AgentInfo) bool { return a.Name == "qa" })]; a.PinnedModel != "claude-haiku-4-5" {
 		t.Errorf("listed pin %q", a.PinnedModel)
 	}
-	if res, err = w.Unpin(ctx, "qa-kitten"); err != nil || res.Model != "gemini-3.8-flash" {
+	if res, err = w.Unpin(ctx, "qa"); err != nil || res.Model != "gemini-3.8-flash" {
 		t.Fatalf("unpin: %+v %v", res, err)
 	}
 	if got := savedConfig(t).AgentModels; len(got) != 0 {
@@ -103,8 +103,7 @@ func TestSetChangesSettings(t *testing.T) {
 	if key, err := w.Set(ctx, " Agency_Level ", "HIGH"); err != nil || key != "agency_level" {
 		t.Fatalf("set: %q %v", key, err)
 	}
-	w.Set(ctx, "owner_name", "Sam")
-	if s := w.Settings(); s.Agency != "high" || s.OwnerName != "Sam" || s.Agent != "blitz" || s.Locale == "" {
+	if s := w.Settings(); s.Agency != "high" || s.Agent != "blitz" || s.Locale == "" {
 		t.Errorf("settings %+v", s)
 	}
 }

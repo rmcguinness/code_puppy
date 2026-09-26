@@ -1512,13 +1512,11 @@ func (x *GetSettingsRequest) GetWorkspace() string {
 }
 
 type GetSettingsResponse struct {
-	state     protoimpl.MessageState `protogen:"open.v1"`
-	PuppyName string                 `protobuf:"bytes,1,opt,name=puppy_name,json=puppyName,proto3" json:"puppy_name,omitempty"`
-	OwnerName string                 `protobuf:"bytes,2,opt,name=owner_name,json=ownerName,proto3" json:"owner_name,omitempty"`
-	Agency    string                 `protobuf:"bytes,3,opt,name=agency,proto3" json:"agency,omitempty"`
-	Model     string                 `protobuf:"bytes,4,opt,name=model,proto3" json:"model,omitempty"`
-	Provider  string                 `protobuf:"bytes,5,opt,name=provider,proto3" json:"provider,omitempty"`
-	Agent     string                 `protobuf:"bytes,6,opt,name=agent,proto3" json:"agent,omitempty"`
+	state    protoimpl.MessageState `protogen:"open.v1"`
+	Agency   string                 `protobuf:"bytes,3,opt,name=agency,proto3" json:"agency,omitempty"`
+	Model    string                 `protobuf:"bytes,4,opt,name=model,proto3" json:"model,omitempty"`
+	Provider string                 `protobuf:"bytes,5,opt,name=provider,proto3" json:"provider,omitempty"`
+	Agent    string                 `protobuf:"bytes,6,opt,name=agent,proto3" json:"agent,omitempty"`
 	// The language the model replies in.
 	Locale string `protobuf:"bytes,7,opt,name=locale,proto3" json:"locale,omitempty"`
 	// Images can be attached to prompts.
@@ -1555,20 +1553,6 @@ func (x *GetSettingsResponse) ProtoReflect() protoreflect.Message {
 // Deprecated: Use GetSettingsResponse.ProtoReflect.Descriptor instead.
 func (*GetSettingsResponse) Descriptor() ([]byte, []int) {
 	return file_blitz_v1_workspace_proto_rawDescGZIP(), []int{28}
-}
-
-func (x *GetSettingsResponse) GetPuppyName() string {
-	if x != nil {
-		return x.PuppyName
-	}
-	return ""
-}
-
-func (x *GetSettingsResponse) GetOwnerName() string {
-	if x != nil {
-		return x.OwnerName
-	}
-	return ""
 }
 
 func (x *GetSettingsResponse) GetAgency() string {
@@ -1616,7 +1600,7 @@ func (x *GetSettingsResponse) GetImagesEnabled() bool {
 type SetSettingRequest struct {
 	state     protoimpl.MessageState `protogen:"open.v1"`
 	Workspace string                 `protobuf:"bytes,1,opt,name=workspace,proto3" json:"workspace,omitempty"`
-	// "agency", "puppy_name" or "owner_name".
+	// "agency".
 	Key           string `protobuf:"bytes,2,opt,name=key,proto3" json:"key,omitempty"`
 	Value         string `protobuf:"bytes,3,opt,name=value,proto3" json:"value,omitempty"`
 	unknownFields protoimpl.UnknownFields
@@ -4836,18 +4820,16 @@ const file_blitz_v1_workspace_proto_rawDesc = "" +
 	"\vunsupported\x18\x02 \x03(\tR\vunsupported\x12%\n" +
 	"\x05saved\x18\x03 \x01(\v2\x0f.blitz.v1.SavedR\x05saved\"2\n" +
 	"\x12GetSettingsRequest\x12\x1c\n" +
-	"\tworkspace\x18\x01 \x01(\tR\tworkspace\"\xf2\x01\n" +
-	"\x13GetSettingsResponse\x12\x1d\n" +
-	"\n" +
-	"puppy_name\x18\x01 \x01(\tR\tpuppyName\x12\x1d\n" +
-	"\n" +
-	"owner_name\x18\x02 \x01(\tR\townerName\x12\x16\n" +
+	"\tworkspace\x18\x01 \x01(\tR\tworkspace\"\xd8\x01\n" +
+	"\x13GetSettingsResponse\x12\x16\n" +
 	"\x06agency\x18\x03 \x01(\tR\x06agency\x12\x14\n" +
 	"\x05model\x18\x04 \x01(\tR\x05model\x12\x1a\n" +
 	"\bprovider\x18\x05 \x01(\tR\bprovider\x12\x14\n" +
 	"\x05agent\x18\x06 \x01(\tR\x05agent\x12\x16\n" +
 	"\x06locale\x18\a \x01(\tR\x06locale\x12%\n" +
-	"\x0eimages_enabled\x18\b \x01(\bR\rimagesEnabled\"Y\n" +
+	"\x0eimages_enabled\x18\b \x01(\bR\rimagesEnabledJ\x04\b\x01\x10\x02J\x04\b\x02\x10\x03R\n" +
+	"puppy_nameR\n" +
+	"owner_name\"Y\n" +
 	"\x11SetSettingRequest\x12\x1c\n" +
 	"\tworkspace\x18\x01 \x01(\tR\tworkspace\x12\x10\n" +
 	"\x03key\x18\x02 \x01(\tR\x03key\x12\x14\n" +

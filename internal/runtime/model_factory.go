@@ -221,7 +221,7 @@ func (m *MockLLM) GenerateContent(ctx context.Context, req *model.LLMRequest, st
 		if idx < len(m.Responses) {
 			content = m.Responses[idx]
 		} else {
-			content = genai.NewContentFromText("Woof! Task completed.", genai.RoleModel)
+			content = genai.NewContentFromText("Done.", genai.RoleModel)
 		}
 
 		resp := &model.LLMResponse{

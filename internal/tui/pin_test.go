@@ -46,29 +46,29 @@ func TestPinModelAndUnpin(t *testing.T) {
 	if out := run("/pin_model nobody anthropic/x"); !strings.Contains(out, "Unknown agent") || len(savedConfig(t).AgentModels) != 0 {
 		t.Errorf("unknown agent:\n%s", out)
 	}
-	if out := run("/pin_model qa-kitten"); !strings.Contains(out, "Usage: /pin_model") {
+	if out := run("/pin_model qa"); !strings.Contains(out, "Usage: /pin_model") {
 		t.Errorf("usage:\n%s", out)
 	}
 
-	out := run("/pin_model qa-kitten anthropic/claude-haiku-4-5")
-	if !strings.Contains(out, "qa-kitten now runs on claude-haiku-4-5") || !strings.Contains(out, "Saved in") {
+	out := run("/pin_model qa anthropic/claude-haiku-4-5")
+	if !strings.Contains(out, "qa now runs on claude-haiku-4-5") || !strings.Contains(out, "Saved in") {
 		t.Errorf("pin:\n%s", out)
 	}
-	if m, pinned := local(app).Engine().AgentModel("qa-kitten"); !pinned || m != "claude-haiku-4-5" {
+	if m, pinned := local(app).Engine().AgentModel("qa"); !pinned || m != "claude-haiku-4-5" {
 		t.Fatalf("engine pin: %s %v", m, pinned)
 	}
-	if got := savedConfig(t).AgentModels; len(got) != 1 || got["qa-kitten"] != "anthropic/claude-haiku-4-5" {
+	if got := savedConfig(t).AgentModels; len(got) != 1 || got["qa"] != "anthropic/claude-haiku-4-5" {
 		t.Fatalf("saved = %v", got)
 	}
-	if out := run("/pin_model"); !strings.Contains(out, "qa-kitten") || !strings.Contains(out, "claude-haiku-4-5") {
+	if out := run("/pin_model"); !strings.Contains(out, "qa") || !strings.Contains(out, "claude-haiku-4-5") {
 		t.Errorf("list:\n%s", out)
 	}
-	if out := run("/agents"); !strings.Contains(out, "📌 claude-haiku-4-5") {
+	if out := run("/agents"); !strings.Contains(out, "pinned claude-haiku-4-5") {
 		t.Errorf("/agents doesn't show the pin:\n%s", out)
 	}
 
-	out = run("/unpin qa-kitten")
-	if _, pinned := local(app).Engine().AgentModel("qa-kitten"); pinned || !strings.Contains(out, "qa-kitten now runs on gemini-3.8-flash") {
+	out = run("/unpin qa")
+	if _, pinned := local(app).Engine().AgentModel("qa"); pinned || !strings.Contains(out, "qa now runs on gemini-3.8-flash") {
 		t.Fatalf("unpin:\n%s", out)
 	}
 	if got := savedConfig(t).AgentModels; len(got) != 0 {

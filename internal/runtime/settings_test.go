@@ -162,10 +162,10 @@ func TestSubagentUsesModelSettings(t *testing.T) {
 		cfg: func(c *config.Config) {
 			c.ModelSettings = map[string]config.ModelSettings{"claude-haiku-4-5": {Temperature: ptr(0.3)}}
 		},
-		opts: []Option{WithAgentModel("qa-kitten", withModelSettings(sub, "anthropic"))},
+		opts: []Option{WithAgentModel("qa", withModelSettings(sub, "anthropic"))},
 	})
 	// Called directly, as a hook would, without a run context.
-	if _, err := f.eng.InvokeSubagent(context.Background(), "qa-kitten", "review"); err != nil {
+	if _, err := f.eng.InvokeSubagent(context.Background(), "qa", "review"); err != nil {
 		t.Fatal(err)
 	}
 	if got := sub.last(t); got.Temperature == nil || *got.Temperature != 0.3 {

@@ -11,8 +11,8 @@ import (
 func TestPinnedSubagentRunsAndIsPricedOnItsModel(t *testing.T) {
 	haiku := NewMockLLM("claude-haiku-4-5", textContent("tests look fine"))
 	haiku.Usage = &genai.GenerateContentResponseUsageMetadata{PromptTokenCount: 1_000_000}
-	f := newEngineWith(t, fixtureOpts{opts: []Option{WithAgentModel("qa-kitten", haiku)}},
-		toolCall("invoke_agent", map[string]any{"agent_name": "qa-kitten", "prompt": "review"}),
+	f := newEngineWith(t, fixtureOpts{opts: []Option{WithAgentModel("qa", haiku)}},
+		toolCall("invoke_agent", map[string]any{"agent_name": "qa", "prompt": "review"}),
 		textContent("done"))
 
 	if _, err := functionResponses(t, f.eng, "s", "get a review"); err != nil {
@@ -30,7 +30,7 @@ func TestPinnedSubagentRunsAndIsPricedOnItsModel(t *testing.T) {
 	if u := f.eng.Usage("s"); abs(u.CostUSD-want) > 1e-9 {
 		t.Fatalf("cost $%v, want $%v (haiku input for 1M tokens)", u.CostUSD, want)
 	}
-	if name, pinned := f.eng.AgentModel("qa-kitten"); name != "claude-haiku-4-5" || !pinned {
+	if name, pinned := f.eng.AgentModel("qa"); name != "claude-haiku-4-5" || !pinned {
 		t.Fatalf("AgentModel = %s %v", name, pinned)
 	}
 	if name, pinned := f.eng.AgentModel("blitz"); name != "gemini-3.8-flash" || pinned {

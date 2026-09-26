@@ -152,10 +152,10 @@ func serviceInstall(out io.Writer) error {
 			return err
 		}
 	}
-	fmt.Fprintf(out, "✅ The Blitz service starts at login (%s).\n", path)
+	fmt.Fprintf(out, "✓ The Blitz service starts at login (%s).\n", path)
 	fmt.Fprintf(out, "   It runs %s serve; after upgrading Blitz, run 'blitz service install' again.\n", bin)
 	if keys := keysOnlyInEnvironment(); len(keys) > 0 {
-		fmt.Fprintf(out, "⚠️  %s %s only in your shell's environment, which the service won't see: put %s in %s.\n",
+		fmt.Fprintf(out, "!  %s %s only in your shell's environment, which the service won't see: put %s in %s.\n",
 			strings.Join(keys, ", "), plural(len(keys), "is", "are"), plural(len(keys), "it", "them"), filepath.Join(config.ConfigDir(""), ".env.toml"))
 	}
 	return nil

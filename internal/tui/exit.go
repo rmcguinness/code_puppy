@@ -34,7 +34,7 @@ func ConfirmExit(ctx context.Context, in Input, pm *tools.ProcessManager, interr
 		return true
 	}
 
-	fmt.Printf("\n%s⚠️  %s%s\n", Yellow+Bold, i18n.N("exit.running", len(running)), Reset)
+	fmt.Printf("\n%s!  %s%s\n", Yellow+Bold, i18n.N("exit.running", len(running)), Reset)
 	for _, p := range running {
 		fmt.Printf("   [%d] %s %s(%ds)%s\n", p.ID, safe(textutil.Ellipsize(p.Command, 70)), Dim, p.RuntimeMs/1000, Reset)
 	}
@@ -51,7 +51,7 @@ func ConfirmExit(ctx context.Context, in Input, pm *tools.ProcessManager, interr
 	answer, err := in.Ask(askCtx, fmt.Sprintf("   %s? %s(%s)%s ", choices, Dim, i18n.T("exit.force_hint"), Reset))
 	stopAsk()
 	if err != nil {
-		fmt.Printf("\n%s⛔ %s%s\n", Red, i18n.T("exit.force_quit"), Reset)
+		fmt.Printf("\n%s✗ %s%s\n", Red, i18n.T("exit.force_quit"), Reset)
 		killAll(pm)
 		return true
 	}
@@ -61,12 +61,12 @@ func ConfirmExit(ctx context.Context, in Input, pm *tools.ProcessManager, interr
 		killAll(pm)
 		return true
 	case "w", "wait":
-		fmt.Printf("%s⏳ %s%s\n", Cyan, i18n.T("exit.waiting"), Reset)
+		fmt.Printf("%s%s%s\n", Cyan, i18n.T("exit.waiting"), Reset)
 		waitCtx, stopWait := cancelOnSignal(ctx, interrupts)
 		err := pm.WaitAll(waitCtx)
 		stopWait()
 		if err != nil {
-			fmt.Printf("\n%s⛔ %s%s\n", Red, i18n.T("exit.force_quit"), Reset)
+			fmt.Printf("\n%s✗ %s%s\n", Red, i18n.T("exit.force_quit"), Reset)
 			killAll(pm)
 		}
 		return true
@@ -84,7 +84,7 @@ func killAll(pm *tools.ProcessManager) {
 	n := len(pm.Running())
 	pm.Shutdown()
 	if n > 0 {
-		fmt.Printf("%s🛑 %s%s\n", Yellow, i18n.N("exit.stopped", n), Reset)
+		fmt.Printf("%s%s%s\n", Yellow, i18n.N("exit.stopped", n), Reset)
 	}
 }
 

@@ -39,7 +39,7 @@ func TestModelSettingsSetValidates(t *testing.T) {
 func TestSaveModelSettingsWritesAndRemoves(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, ".env.toml")
-	orig := "# mine\n[blitz]\ntemperature = 0.2  # global\n\n[agent_models]\nqa-kitten = \"gpt-5\"\n"
+	orig := "# mine\n[blitz]\ntemperature = 0.2  # global\n\n[agent_models]\nqa = \"gpt-5\"\n"
 	os.WriteFile(path, []byte(orig), 0o600)
 
 	var gpt, local ModelSettings
@@ -69,7 +69,7 @@ func TestSaveModelSettingsWritesAndRemoves(t *testing.T) {
 	if l := cfg.ModelSettings["qwen2.5-coder:7b"]; l.Seed == nil || *l.Seed != 7 {
 		t.Fatalf("qwen = %+v\n%s", l, b)
 	}
-	for _, keep := range []string{"# mine", "# global", `qa-kitten = "gpt-5"`} {
+	for _, keep := range []string{"# mine", "# global", `qa = "gpt-5"`} {
 		if !strings.Contains(string(b), keep) {
 			t.Fatalf("lost %q:\n%s", keep, b)
 		}

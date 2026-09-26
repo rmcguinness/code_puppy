@@ -77,7 +77,7 @@ func TestSessionSaveAndLoadRestoreTheModelsContext(t *testing.T) {
 		t.Fatalf("the model saw:\n%s", sent)
 	}
 
-	if out := run("/session list"); !strings.Contains(out, "📸 fruit") {
+	if out := run("/session list"); !strings.Contains(out, "snapshot fruit") {
 		t.Errorf("list:\n%s", out)
 	}
 	// /resume takes names too, and a second load branches again.

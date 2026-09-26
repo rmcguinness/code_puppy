@@ -1,6 +1,6 @@
 ---
 name: web-retriever
-display_name: "Web Retriever 🌐"
+display_name: "Web Retriever"
 description: "Documentation crawler, technical research, and structured data extraction"
 agency_level: "high"
 tools:

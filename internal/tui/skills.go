@@ -36,7 +36,7 @@ func showSkill(s core.SkillInfo) {
 			about = append(about, v)
 		}
 	}
-	fmt.Printf("\n%s📦 %s%s %s%s%s\n", Bold, safe(s.Name), Reset, Dim, safe(strings.Join(about, " · ")), Reset)
+	fmt.Printf("\n%s%s%s %s%s%s\n", Bold, safe(s.Name), Reset, Dim, safe(strings.Join(about, " · ")), Reset)
 	fmt.Printf("   %s\n", safe(s.Description))
 	if s.Compatibility != "" {
 		fmt.Printf("   %s%s%s\n", Dim, safe(s.Compatibility), Reset)

@@ -116,7 +116,7 @@ export function Conversation({ dir }: { dir: string }) {
         </button>
         {list.map((s) => (
           <button key={s.id} className={s.id === session?.id ? "session active" : "session"} disabled={running} onClick={() => load(s.id)} title={s.id}>
-            {s.snapshot ? `📸 ${s.snapshot}` : s.title || "(untitled)"}
+            {s.snapshot ? `snapshot ${s.snapshot}` : s.title || "(untitled)"}
             <small>{s.messageCount} messages</small>
           </button>
         ))}

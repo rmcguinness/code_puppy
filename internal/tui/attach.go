@@ -28,7 +28,7 @@ func collectAttachments(app *App, line string) ([]*images.Image, bool) {
 	for _, p := range mentions {
 		img, err := loadImage(app, p)
 		if err != nil {
-			fmt.Printf("%s❌ %s%s\n", Red, i18n.T("attach.failed", "path", safe(p), "error", safe(err.Error())), Reset)
+			fmt.Printf("%s✗ %s%s\n", Red, i18n.T("attach.failed", "path", safe(p), "error", safe(err.Error())), Reset)
 			fmt.Printf("%s%s%s\n", Dim, i18n.T("attach.not_sent"), Reset)
 			return nil, false
 		}
@@ -54,7 +54,7 @@ func cmdAttach(args []string, app *App) {
 		}
 		fmt.Println(i18n.N("attach.pending", len(app.Attachments)))
 		for _, img := range app.Attachments {
-			fmt.Printf("  📎 %s\n", safe(img.Summary()))
+			fmt.Printf("  %s\n", safe(img.Summary()))
 		}
 		return
 	case "clear":
@@ -67,7 +67,7 @@ func cmdAttach(args []string, app *App) {
 	path := strings.Trim(strings.TrimPrefix(arg, "@"), `"'`)
 	img, err := loadImage(app, path)
 	if err != nil {
-		fmt.Printf("%s❌ %s%s\n", Red, i18n.T("attach.failed", "path", safe(path), "error", safe(err.Error())), Reset)
+		fmt.Printf("%s✗ %s%s\n", Red, i18n.T("attach.failed", "path", safe(path), "error", safe(err.Error())), Reset)
 		return
 	}
 	queue(app, img)
@@ -83,13 +83,13 @@ func cmdPaste(ctx context.Context, app *App) {
 		if errors.Is(err, images.ErrNoClipboardImage) {
 			fmt.Printf("%s%s%s\n", Yellow, i18n.T("attach.no_clipboard"), Reset)
 		} else {
-			fmt.Printf("%s❌ %s%s\n", Red, safe(err.Error()), Reset)
+			fmt.Printf("%s✗ %s%s\n", Red, safe(err.Error()), Reset)
 		}
 		return
 	}
 	img, err := app.Workspace.AddImage("clipboard-"+time.Now().Format("150405")+".png", data)
 	if err != nil {
-		fmt.Printf("%s❌ %s%s\n", Red, i18n.T("attach.failed", "path", "clipboard", "error", safe(err.Error())), Reset)
+		fmt.Printf("%s✗ %s%s\n", Red, i18n.T("attach.failed", "path", "clipboard", "error", safe(err.Error())), Reset)
 		return
 	}
 	queue(app, img)
@@ -103,5 +103,5 @@ func queue(app *App, img *images.Image) {
 		}
 	}
 	app.Attachments = append(app.Attachments, img)
-	fmt.Printf("%s📎 %s%s\n", Green, i18n.T("attach.queued", "summary", safe(img.Summary())), Reset)
+	fmt.Printf("%s%s%s\n", Green, i18n.T("attach.queued", "summary", safe(img.Summary())), Reset)
 }

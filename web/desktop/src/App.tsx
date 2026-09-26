@@ -43,7 +43,7 @@ export function App() {
   if (!status.running) {
     return (
       <main className="center">
-        <h1>🐶 Blitz</h1>
+        <h1>Blitz</h1>
         <p>The Blitz service isn't running. It holds your workspaces and runs scheduled workers, and it keeps running after this window closes.</p>
         {status.cli ? (
           <button onClick={install}>{status.installed ? "Start the service" : "Install and start the service"}</button>

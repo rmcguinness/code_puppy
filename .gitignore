@@ -13,3 +13,4 @@
 !/cmd/blitz-desktop/dist/.gitkeep
 /build/desktop/bin/
 /web/desktop/wailsjs/
+/cmd/blitz-desktop/blitz-desktop

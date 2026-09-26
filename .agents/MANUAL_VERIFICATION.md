@@ -116,7 +116,7 @@ prefix = "fs"
 ```
 - [ ] `doctor --online` shows `mcp fs  N tools`. `/mcp` lists it.
 - [ ] Ask the agent to list files using the fs server. **Expected:** approval prompt naming `fs__…` and the server; the call works inside the sandbox.
-- [ ] Add `agents = ["qa-kitten"]`. **Expected:** the main agent no longer sees `fs__` tools; `invoke_agent` → qa-kitten can use them.
+- [ ] Add `agents = ["qa"]`. **Expected:** the main agent no longer sees `fs__` tools; `invoke_agent` → qa can use them.
 - [ ] `kill -9` the CLI. **Expected:** no leftover `npx` / server processes.
 - [ ] During a session, `pkill -f server-filesystem` (kill the MCP server), then ask for another fs tool call. **Expected:** it works; `ps` shows a new server process.
 - [ ] Point an MCP server at a command that exits immediately (e.g. `command = "false"`). **Expected:** one "unavailable" warning, then one "paused for 15s" warning; later turns aren't slowed and don't repeat the warning.
@@ -253,12 +253,12 @@ Set `fallback_models = ["anthropic/claude-sonnet-5"]` with a working Anthropic k
 
 ## 27. Per-agent models 💲
 
-- [ ] `/pin_model qa-kitten anthropic/claude-haiku-4-5`. **Expected:** "qa-kitten now runs on claude-haiku-4-5", "Saved in …/.env.toml"; the file has `[agent_models]` with that line and your comments intact.
-- [ ] `/agents`. **Expected:** 📌 claude-haiku-4-5 next to qa-kitten.
-- [ ] Ask the main agent to have qa-kitten review a file. **Expected:** it works; `/cost` includes Haiku-priced tokens. With telemetry on, qa-kitten's `generate_content` span names claude-haiku-4-5.
-- [ ] Restart. **Expected:** the pin is still there (`/pin_model` lists it). `blitz doctor` shows `pin qa-kitten`.
+- [ ] `/pin_model qa anthropic/claude-haiku-4-5`. **Expected:** "qa now runs on claude-haiku-4-5", "Saved in …/.env.toml"; the file has `[agent_models]` with that line and your comments intact.
+- [ ] `/agents`. **Expected:** 📌 claude-haiku-4-5 next to qa.
+- [ ] Ask the main agent to have qa review a file. **Expected:** it works; `/cost` includes Haiku-priced tokens. With telemetry on, qa's `generate_content` span names claude-haiku-4-5.
+- [ ] Restart. **Expected:** the pin is still there (`/pin_model` lists it). `blitz doctor` shows `pin qa`.
 - [ ] `/model anthropic/claude-sonnet-5`. **Expected:** the main agent switches provider.
-- [ ] `/unpin qa-kitten`. **Expected:** it runs on the configured model again; the line is gone from the config file.
+- [ ] `/unpin qa`. **Expected:** it runs on the configured model again; the line is gone from the config file.
 
 ## 28. Per-model settings 💲
 

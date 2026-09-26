@@ -42,7 +42,7 @@ func TestREPLOnARemoteWorkspace(t *testing.T) {
 	ctx := context.Background()
 	run := func(cmd string) string { return captureStdout(t, func() { HandleCommand(ctx, cmd, app) }) }
 
-	if out := run("/pin_model qa-kitten anthropic/claude-haiku-4-5"); !strings.Contains(out, "qa-kitten now runs on claude-haiku-4-5") {
+	if out := run("/pin_model qa anthropic/claude-haiku-4-5"); !strings.Contains(out, "qa now runs on claude-haiku-4-5") {
 		t.Errorf("/pin_model:\n%s", out)
 	}
 	if out := run("/pin_model nobody x"); !strings.Contains(out, "Unknown agent") {

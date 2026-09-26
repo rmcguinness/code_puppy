@@ -194,7 +194,7 @@ func workersEnable(cmd *cobra.Command, g *globalFlags, name string, yes bool) er
 	if !on.Next.IsZero() {
 		next = on.Next.Local().Format("Mon Jan 2 15:04")
 	}
-	fmt.Fprintf(out, "✅ %s enabled; next run %s.\n", name, next)
+	fmt.Fprintf(out, "✓ %s enabled; next run %s.\n", name, next)
 	if !server.Running(server.DefaultSocket()) {
 		fmt.Fprintln(out, "Workers run in the Blitz service: start it with 'blitz serve'.")
 	}

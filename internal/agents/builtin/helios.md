@@ -1,6 +1,6 @@
 ---
 name: helios
-display_name: "Helios ☀️"
+display_name: "Helios"
 description: "The Universal Constructor - creates dynamic tools, scripts, and capabilities on demand"
 agency_level: "high"
 tools:

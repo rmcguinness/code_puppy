@@ -158,7 +158,7 @@ type WorkspaceServiceClient interface {
 	// Changes a model's generation settings and saves them (BAD_MODEL_REF,
 	// INVALID_SETTING; nothing changes on error).
 	UpdateModelSettings(context.Context, *connect.Request[v1.UpdateModelSettingsRequest]) (*connect.Response[v1.UpdateModelSettingsResponse], error)
-	// Returns the settings /set changes, plus model, agent and reply language.
+	// Returns the agency level, plus model, agent and reply language.
 	GetSettings(context.Context, *connect.Request[v1.GetSettingsRequest]) (*connect.Response[v1.GetSettingsResponse], error)
 	// Changes a setting for the workspace (UNKNOWN_SETTING, INVALID_AGENCY).
 	SetSetting(context.Context, *connect.Request[v1.SetSettingRequest]) (*connect.Response[v1.SetSettingResponse], error)
@@ -648,7 +648,7 @@ type WorkspaceServiceHandler interface {
 	// Changes a model's generation settings and saves them (BAD_MODEL_REF,
 	// INVALID_SETTING; nothing changes on error).
 	UpdateModelSettings(context.Context, *connect.Request[v1.UpdateModelSettingsRequest]) (*connect.Response[v1.UpdateModelSettingsResponse], error)
-	// Returns the settings /set changes, plus model, agent and reply language.
+	// Returns the agency level, plus model, agent and reply language.
 	GetSettings(context.Context, *connect.Request[v1.GetSettingsRequest]) (*connect.Response[v1.GetSettingsResponse], error)
 	// Changes a setting for the workspace (UNKNOWN_SETTING, INVALID_AGENCY).
 	SetSetting(context.Context, *connect.Request[v1.SetSettingRequest]) (*connect.Response[v1.SetSettingResponse], error)

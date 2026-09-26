@@ -180,7 +180,7 @@ func TestMCPPrefixedTools(t *testing.T) {
 func TestMCPToolsetsForAgents(t *testing.T) {
 	m := NewMCPManagerFromToolsets([]MCPToolset{
 		{Config: config.MCPServerConfig{Name: "primary-only"}, Toolset: inMemoryMCP(t, "a")},
-		{Config: config.MCPServerConfig{Name: "kitten", Agents: []string{"qa-kitten"}}, Toolset: inMemoryMCP(t, "b")},
+		{Config: config.MCPServerConfig{Name: "kitten", Agents: []string{"qa"}}, Toolset: inMemoryMCP(t, "b")},
 		{Config: config.MCPServerConfig{Name: "everyone", Agents: []string{"*"}}, Toolset: inMemoryMCP(t, "c")},
 	}, nil)
 	names := func(ts []tool.Toolset) string {
@@ -196,8 +196,8 @@ func TestMCPToolsetsForAgents(t *testing.T) {
 		want    string
 	}{
 		{"blitz", true, "mcp:primary-only,mcp:everyone"},
-		{"qa-kitten", false, "mcp:kitten,mcp:everyone"},
-		{"qa-kitten", true, "mcp:primary-only,mcp:kitten,mcp:everyone"},
+		{"qa", false, "mcp:kitten,mcp:everyone"},
+		{"qa", true, "mcp:primary-only,mcp:kitten,mcp:everyone"},
 		{"helios", false, "mcp:everyone"},
 	}
 	for _, c := range cases {

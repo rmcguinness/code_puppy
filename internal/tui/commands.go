@@ -36,15 +36,15 @@ func HandleCommand(ctx context.Context, input string, app *App) (bool, error) {
 		printHelp()
 
 	case "agents":
-		fmt.Printf("\n%s🤖 %s:%s\n", Bold, i18n.T("agents.title"), Reset)
+		fmt.Printf("\n%s%s:%s\n", Bold, i18n.T("agents.title"), Reset)
 		for _, a := range app.Workspace.ListAgents() {
 			marker := "  "
 			if a.Active {
-				marker = "👉"
+				marker = "› "
 			}
 			pin := ""
 			if a.PinnedModel != "" {
-				pin = fmt.Sprintf(" %s[📌 %s]%s", Cyan, safe(a.PinnedModel), Reset)
+				pin = fmt.Sprintf(" %s[pinned %s]%s", Cyan, safe(a.PinnedModel), Reset)
 			}
 			fmt.Printf("%s %s%s%s (%s)%s: %s\n", marker, Bold, safe(a.DisplayName), Reset, safe(a.Name), pin, safe(a.Description))
 		}
@@ -58,7 +58,7 @@ func HandleCommand(ctx context.Context, input string, app *App) (bool, error) {
 		}
 		a, err := app.Workspace.SetAgent(ctx, args[0])
 		if err != nil {
-			fmt.Printf("%s❌ %s%s\n", Red, i18n.T("agent.switch_failed", "error", safe(err.Error())), Reset)
+			fmt.Printf("%s✗ %s%s\n", Red, i18n.T("agent.switch_failed", "error", safe(err.Error())), Reset)
 		} else {
 			fmt.Printf("%s %s%s\n", Green, i18n.T("agent.switched", "name", Bold+safe(a.DisplayName)), Reset)
 		}
@@ -71,7 +71,7 @@ func HandleCommand(ctx context.Context, input string, app *App) (bool, error) {
 		}
 		pin, err := app.Workspace.SetModel(ctx, args[0])
 		if err != nil {
-			fmt.Printf("%s❌ %s%s\n", Red, i18n.T("model.switch_failed", "error", safe(err.Error())), Reset)
+			fmt.Printf("%s✗ %s%s\n", Red, i18n.T("model.switch_failed", "error", safe(err.Error())), Reset)
 			return true, nil
 		}
 		fmt.Printf("%s %s%s\n", Green, i18n.T("model.set", "model", Cyan+safe(args[0])), Reset)
@@ -88,9 +88,7 @@ func HandleCommand(ctx context.Context, input string, app *App) (bool, error) {
 	case "set":
 		if len(args) == 0 {
 			st := app.Workspace.Settings()
-			fmt.Printf("\n%s⚙️ %s:%s\n", Bold, i18n.T("settings.title"), Reset)
-			fmt.Printf("  %-14s %s\n", i18n.T("settings.puppy_name")+":", st.PuppyName)
-			fmt.Printf("  %-14s %s\n", i18n.T("settings.owner_name")+":", st.OwnerName)
+			fmt.Printf("\n%s%s:%s\n", Bold, i18n.T("settings.title"), Reset)
 			fmt.Printf("  %-14s %s\n", i18n.T("settings.agency")+":", st.Agency)
 			fmt.Printf("  %-14s %s\n", i18n.T("settings.model")+":", i18n.T("settings.model_value", "model", st.Model.Name, "provider", st.Model.Provider))
 			fmt.Printf("  %-14s %s\n", i18n.T("settings.agent")+":", st.Agent)
@@ -111,7 +109,7 @@ func HandleCommand(ctx context.Context, input string, app *App) (bool, error) {
 		case errors.As(err, &unknown):
 			fmt.Printf("%s%s%s\n", Yellow, i18n.T("set.unknown", "key", safe(unknown.Key)), Reset)
 		case err != nil:
-			fmt.Printf("%s❌ %s%s\n", Red, i18n.T("set.failed", "error", err), Reset)
+			fmt.Printf("%s✗ %s%s\n", Red, i18n.T("set.failed", "error", err), Reset)
 		default:
 			fmt.Printf("%s %s%s\n", Green, i18n.T("set.updated", "key", k, "value", safe(v)), Reset)
 		}
@@ -120,7 +118,7 @@ func HandleCommand(ctx context.Context, input string, app *App) (bool, error) {
 		fmt.Print("\033[H\033[2J")
 
 	case "sandbox":
-		fmt.Printf("\n%s🛡️  %s:%s\n", Bold, i18n.T("sandbox.title"), Reset)
+		fmt.Printf("\n%s%s:%s\n", Bold, i18n.T("sandbox.title"), Reset)
 		for _, line := range app.Workspace.SandboxSummary() {
 			fmt.Printf("  %s\n", safe(line))
 		}
@@ -173,7 +171,7 @@ func printHelp() {
 		{"/clear", "help.clear"},
 		{"/exit, /quit", "help.exit"},
 	}
-	fmt.Printf("\n%s🐾 %s:%s\n", Bold, i18n.T("help.title"), Reset)
+	fmt.Printf("\n%s%s:%s\n", Bold, i18n.T("help.title"), Reset)
 	for _, r := range rows {
 		fmt.Printf("  %s%-36s%s %s\n", Bold, r[0], Reset, i18n.T(r[1]))
 	}
@@ -189,7 +187,7 @@ func handleSkillsCommand(args []string, app *App) {
 	switch sub {
 	case "list":
 		all := app.Workspace.ListSkills()
-		fmt.Printf("\n%s📦 %s:%s\n", Bold, i18n.T("skills.discovered", "count", len(all)), Reset)
+		fmt.Printf("\n%s%s:%s\n", Bold, i18n.T("skills.discovered", "count", len(all)), Reset)
 		for _, s := range all {
 			tags := ""
 			if len(s.Tags) > 0 {
@@ -209,7 +207,7 @@ func handleSkillsCommand(args []string, app *App) {
 		}
 		s, ok := app.Workspace.Skill(args[1])
 		if !ok {
-			fmt.Printf("%s❌ %s%s\n", Red, i18n.T("skills.not_found", "name", safe(args[1])), Reset)
+			fmt.Printf("%s✗ %s%s\n", Red, i18n.T("skills.not_found", "name", safe(args[1])), Reset)
 			return
 		}
 		showSkill(s)
@@ -220,7 +218,7 @@ func handleSkillsCommand(args []string, app *App) {
 			query = strings.Join(args[1:], " ")
 		}
 		matched := app.Workspace.SearchSkills(query)
-		fmt.Printf("\n%s🔍 %s:%s\n", Bold, i18n.T("skills.search_results", "query", safe(query), "count", len(matched)), Reset)
+		fmt.Printf("\n%s%s:%s\n", Bold, i18n.T("skills.search_results", "query", safe(query), "count", len(matched)), Reset)
 		for _, s := range matched {
 			fmt.Printf("  • %s%s%s: %s\n", Bold, safe(s.Name), Reset, safe(s.Description))
 		}
@@ -246,11 +244,11 @@ func handleSessionCommand(args []string, app *App) {
 		if all {
 			title = i18n.T("session.list_title_all", "count", len(list))
 		}
-		fmt.Printf("\n%s📁 %s:%s\n", Bold, title, Reset)
+		fmt.Printf("\n%s%s:%s\n", Bold, title, Reset)
 		for _, s := range list {
 			snapshot := ""
 			if s.Snapshot != "" {
-				snapshot = " " + Cyan + "📸 " + safe(s.Snapshot) + Reset
+				snapshot = " " + Cyan + "snapshot " + safe(s.Snapshot) + Reset
 			}
 			fmt.Printf("  • %s%s%s (%s): %s [%s]%s\n", Bold, safe(s.ID), Reset, safe(s.Agent), safe(sessionTitle(s)), i18n.N("session.messages", s.MessageCount), snapshot)
 			if all {
@@ -275,7 +273,7 @@ func handleSessionCommand(args []string, app *App) {
 	case "new":
 		s, err := app.Workspace.NewSession()
 		if err != nil {
-			fmt.Printf("%s❌ %s%s\n", Red, i18n.T("session.create_failed", "error", err), Reset)
+			fmt.Printf("%s✗ %s%s\n", Red, i18n.T("session.create_failed", "error", err), Reset)
 			return
 		}
 		fmt.Printf("%s %s%s\n", Green, i18n.T("session.started", "id", s.ID), Reset)

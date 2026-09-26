@@ -161,7 +161,7 @@ func TestExternalCatalogs(t *testing.T) {
 		}
 	}
 	write("de.json", `{"meta":{"locale":"de"},"messages":{"exit.cancelled":"Beenden abgebrochen.","session.messages.one":"{count} Nachricht","session.messages.other":"{count} Nachrichten"}}`)
-	write("es-fix.json", `{"meta":{"locale":"es"},"messages":{"recap.puppy":"perrito"}}`)
+	write("es-fix.json", `{"meta":{"locale":"es"},"messages":{"recap.blitz":"perrito"}}`)
 	write("broken.json", `{not json`)
 	write("nolocale.json", `{"meta":{"locale":"???"},"messages":{"a":"b"}}`)
 	write("notes.txt", "ignored")
@@ -181,7 +181,7 @@ func TestExternalCatalogs(t *testing.T) {
 		t.Errorf("names should default from CLDR: %+v", c.Meta)
 	}
 	es := b.Localizer(language.Spanish)
-	if es.T("recap.puppy") != "perrito" || es.T("recap.you") != "tú" {
+	if es.T("recap.blitz") != "perrito" || es.T("recap.you") != "tú" {
 		t.Error("an external file should override single keys and keep the rest")
 	}
 	if tag, err := b.Resolve("german"); err != nil || tag != language.German {

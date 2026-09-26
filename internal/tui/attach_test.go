@@ -80,7 +80,7 @@ func TestAttachCommandsAndMentions(t *testing.T) {
 	if n := sentImages(llm); n != 2 {
 		t.Errorf("sent %d images, want 2", n)
 	}
-	if len(app.Attachments) != 0 || !strings.Contains(out, "📎 b.png 50×30") {
+	if len(app.Attachments) != 0 || !strings.Contains(out, "b.png 50×30") {
 		t.Errorf("queue not emptied / not shown:\n%s", out)
 	}
 	msgs := local(app).Storage().Active().Messages

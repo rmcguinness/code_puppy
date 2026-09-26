@@ -176,7 +176,7 @@ func (p *Printer) Handle(ev core.Event) {
 func RunREPL(ctx context.Context, app *App) error {
 	PrintBanner(app.Version, app.Workspace.ActiveAgent().Name, app.Workspace.Model().Name)
 	if sandbox := app.Workspace.SandboxSummary(); len(sandbox) > 0 {
-		fmt.Printf("🛡️  %s%s%s\n", Dim, safe(sandbox[0]), Reset)
+		fmt.Printf("%s%s%s\n", Dim, safe(sandbox[0]), Reset)
 		fmt.Printf("   %s%s%s\n", Dim, i18n.T("repl.hint"), Reset)
 		if _, ok := app.Input.(steerInput); ok {
 			fmt.Printf("   %s%s%s\n", Dim, i18n.T("steer.hint"), Reset)
@@ -205,7 +205,7 @@ func RunREPL(ctx context.Context, app *App) error {
 		}
 	}()
 	goodbye := func() error {
-		fmt.Printf("\n🐾 %s%s%s\n", Cyan, i18n.T("repl.goodbye"), Reset)
+		fmt.Println()
 		if a, ok := app.Workspace.ActiveSession(); ok && a.MessageCount > 0 {
 			fmt.Printf("%s%s%s\n", Dim, i18n.T("repl.resume_hint", "command", "blitz --resume="+a.ID), Reset)
 		}
@@ -216,12 +216,12 @@ func RunREPL(ctx context.Context, app *App) error {
 	for {
 		if app.TerminalTitle {
 			active, _ := app.Workspace.ActiveSession()
-			if t := "🐶 " + sessionTitle(active); t != shownTitle {
+			if t := Product + " · " + sessionTitle(active); t != shownTitle {
 				fmt.Printf("\033]0;%s\007", safe(t))
 				shownTitle = t
 			}
 		}
-		prompt := fmt.Sprintf("%s🐶 [%s]> %s", Bold+Green, app.Workspace.ActiveAgent().Name, Reset)
+		prompt := fmt.Sprintf("%s%s ›%s ", Bold+Green, app.Workspace.ActiveAgent().Name, Reset)
 		idleCtx, stopIdle := cancelOnSignal(ctx, interrupts)
 		line, err := app.Input.ReadInput(idleCtx, prompt)
 		stopIdle()
@@ -255,7 +255,7 @@ func RunREPL(ctx context.Context, app *App) error {
 			case strings.TrimSpace(q) == "":
 				fmt.Printf("%s%s%s\n", Yellow, i18n.T("btw.usage"), Reset)
 			case !ok:
-				fmt.Printf("%s❌ %s%s\n", Red, i18n.T("session.none_active"), Reset)
+				fmt.Printf("%s✗ %s%s\n", Red, i18n.T("session.none_active"), Reset)
 			default:
 				runTurn(ctx, app, active.ID, strings.TrimSpace(q), interrupts, turnOptions{aside: true})
 			}
@@ -264,7 +264,7 @@ func RunREPL(ctx context.Context, app *App) error {
 		if rest, ok := strings.CutPrefix(line, "/search"); ok && (rest == "" || rest[0] == ' ') {
 			active, ok := app.Workspace.ActiveSession()
 			if !ok {
-				fmt.Printf("%s❌ %s%s\n", Red, i18n.T("session.none_active"), Reset)
+				fmt.Printf("%s✗ %s%s\n", Red, i18n.T("session.none_active"), Reset)
 				continue
 			}
 			if t, ok := prepareSearch(ctx, app, rest, interrupts); ok {
@@ -297,7 +297,7 @@ func RunREPL(ctx context.Context, app *App) error {
 		// Re-read each turn: /session new and /session load switch sessions.
 		active, ok := app.Workspace.ActiveSession()
 		if !ok {
-			fmt.Printf("%s❌ %s%s\n", Red, i18n.T("session.none_active"), Reset)
+			fmt.Printf("%s✗ %s%s\n", Red, i18n.T("session.none_active"), Reset)
 			continue
 		}
 		runTurn(ctx, app, active.ID, line, interrupts, turnOptions{plan: plan})
@@ -348,15 +348,15 @@ func runTurn(ctx context.Context, app *App, sessionID, line string, interrupts <
 		OnAccepted: func() {
 			if len(attached) > 0 {
 				for _, img := range attached {
-					fmt.Printf("%s📎 %s%s\n", Dim, safe(img.Summary()), Reset)
+					fmt.Printf("%s%s%s\n", Dim, safe(img.Summary()), Reset)
 				}
 				app.Attachments = nil
 			}
 			if o.plan {
-				fmt.Printf("%s📝 %s%s\n", Dim, i18n.T("plan.mode"), Reset)
+				fmt.Printf("%s%s%s\n", Dim, i18n.T("plan.mode"), Reset)
 			}
 			if o.aside {
-				fmt.Printf("%s💬 %s%s\n", Dim, i18n.T("btw.mode"), Reset)
+				fmt.Printf("%s%s%s\n", Dim, i18n.T("btw.mode"), Reset)
 			}
 			fmt.Println()
 			printer.Begin()
@@ -369,7 +369,7 @@ func runTurn(ctx context.Context, app *App, sessionID, line string, interrupts <
 	}, printer.Handle)
 	var blocked *core.BlockedError
 	if errors.As(streamErr, &blocked) {
-		fmt.Printf("%s⛔ %s%s\n", Red, i18n.T("repl.prompt_blocked", "reason", safe(blocked.Reason)), Reset)
+		fmt.Printf("%s✗ %s%s\n", Red, i18n.T("repl.prompt_blocked", "reason", safe(blocked.Reason)), Reset)
 		stopTurn()
 		return
 	}
@@ -378,9 +378,9 @@ func runTurn(ctx context.Context, app *App, sessionID, line string, interrupts <
 	stopTurn()
 	switch {
 	case streamErr != nil && turnInterrupted:
-		fmt.Printf("\n%s⏹  %s%s\n", Yellow, i18n.T("repl.interrupted"), Reset)
+		fmt.Printf("\n%s%s%s\n", Yellow, i18n.T("repl.interrupted"), Reset)
 	case streamErr != nil:
-		fmt.Printf("\n%s❌ %s%s\n", Red, i18n.T("repl.error", "error", safe(streamErr.Error())), Reset)
+		fmt.Printf("\n%s✗ %s%s\n", Red, i18n.T("repl.error", "error", safe(streamErr.Error())), Reset)
 	default:
 		fmt.Println()
 	}
@@ -429,7 +429,7 @@ func watchSteering(ctx context.Context, app *App, sessionID string, printer *Pri
 		}
 		var blocked *core.BlockedError
 		if err := app.Workspace.Steer(ctx, sessionID, text); errors.As(err, &blocked) {
-			fmt.Printf("%s⛔ %s%s\n", Red, i18n.T("repl.prompt_blocked", "reason", safe(blocked.Reason)), Reset)
+			fmt.Printf("%s✗ %s%s\n", Red, i18n.T("repl.prompt_blocked", "reason", safe(blocked.Reason)), Reset)
 			return
 		}
 		fmt.Printf("%s%s%s\n", Dim, i18n.T("steer.queued"), Reset)

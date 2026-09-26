@@ -75,9 +75,12 @@ jobs:
           BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
         run: |
           make proto-check
-          # Only against a base with the same proto package: the rename to
-          # blitz.v1 is the one deliberate break.
-          if git cat-file -e "$BASE:api/blitz/v1" 2>/dev/null; then
+          # A deliberate break says so in its commit message, with a line
+          # "Breaking-API: <why>". Otherwise compare with the base, when it
+          # has the same proto package (the rename to blitz.v1 had none).
+          if git log -1 --format=%B "$GITHUB_SHA" | grep -q '^Breaking-API:'; then
+            echo "::notice::API break declared: $(git log -1 --format=%B "$GITHUB_SHA" | grep '^Breaking-API:')"
+          elif git cat-file -e "$BASE:api/blitz/v1" 2>/dev/null; then
             go tool -modfile=tools/go.mod buf breaking --against ".git#ref=$BASE"
           fi
       - run: go test -race ./...

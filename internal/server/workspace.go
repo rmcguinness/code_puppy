@@ -152,8 +152,8 @@ func (h workspaceService) GetSettings(ctx context.Context, r req[pb.GetSettingsR
 	}
 	st := w.Settings()
 	return ok(&pb.GetSettingsResponse{
-		PuppyName: st.PuppyName, OwnerName: st.OwnerName, Agency: st.Agency,
-		Model: st.Model.Name, Provider: st.Model.Provider, Agent: st.Agent, Locale: st.Locale,
+		Agency: st.Agency,
+		Model:  st.Model.Name, Provider: st.Model.Provider, Agent: st.Agent, Locale: st.Locale,
 		ImagesEnabled: w.ImagesEnabled(),
 	})
 }

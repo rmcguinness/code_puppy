@@ -52,7 +52,7 @@ func newRootCommand() *cobra.Command {
 	o := &rootOptions{}
 	root := &cobra.Command{
 		Use:   "blitz [flags] [prompt...]",
-		Short: "🐶 Blitz - autonomous AI coding agent built on Google ADK",
+		Short: "Blitz - autonomous AI coding agent built on Google ADK",
 		Long: `Blitz is an AI coding agent. Run it with no arguments for an interactive
 session, or pass a prompt to run once and exit.
 
@@ -80,7 +80,7 @@ Exit codes: 0 success, 1 error, 2 usage, 3 --max-turns reached,
 	f := root.Flags()
 	f.StringVarP(&o.prompt, "prompt", "p", "", `One-shot prompt; "-" reads it from stdin`)
 	f.BoolVarP(&o.interactive, "interactive", "i", false, "Start the interactive REPL even when a prompt is given")
-	f.StringVarP(&o.global.agent, "agent", "a", "", "Agent persona to activate (blitz, helios, qa-kitten, ...)")
+	f.StringVarP(&o.global.agent, "agent", "a", "", "Agent persona to activate (blitz, helios, qa, ...)")
 	f.StringVarP(&o.global.model, "model", "m", "", "Model identifier to use")
 	f.StringVar(&o.global.agency, "agency", "", "Agency level (low, medium, high, extreme)")
 	f.BoolVar(&o.global.trustWorkspace, "trust-workspace", false, "Load agents and skills from the workspace (./agents, ./skills, .agents/skills)")
@@ -144,7 +144,7 @@ func runRoot(cmd *cobra.Command, o *rootOptions, args []string) (err error) {
 	warnOut := os.Stderr
 	warnFn := func(msg string) {
 		slog.Warn(msg)
-		fmt.Fprintf(warnOut, "%s⚠️  %s%s\n", tui.Yellow, msg, tui.Reset)
+		fmt.Fprintf(warnOut, "%s!  %s%s\n", tui.Yellow, msg, tui.Reset)
 	}
 	defer startObservability(ctx, cfg, warnFn)()
 	defer func() { // runs before the log closes
@@ -158,7 +158,7 @@ func runRoot(cmd *cobra.Command, o *rootOptions, args []string) (err error) {
 		return err
 	}
 	if remote && !oneShot {
-		fmt.Fprintf(os.Stderr, "%s🔌 %s%s\n", tui.Dim, i18n.T("startup.attached", "socket", server.DefaultSocket()), tui.Reset)
+		fmt.Fprintf(os.Stderr, "%s%s%s\n", tui.Dim, i18n.T("startup.attached", "socket", server.DefaultSocket()), tui.Reset)
 	}
 	defer func() {
 		if cerr := w.Close(); cerr != nil && err == nil {
@@ -239,7 +239,7 @@ func runRoot(cmd *cobra.Command, o *rootOptions, args []string) (err error) {
 		if o.resume != "" && o.resume != "latest" && o.resume != sess.ID { // a snapshot name
 			msg = i18n.T("snapshot.branched", "id", sess.ID, "name", o.resume, "messages", i18n.N("session.messages", sess.MessageCount))
 		}
-		fmt.Printf("%s▶️  %s%s\n", tui.Green, msg, tui.Reset)
+		fmt.Printf("%s%s%s\n", tui.Green, msg, tui.Reset)
 		tui.PrintRecap(sess.Messages, 3)
 		fmt.Println()
 	}
@@ -309,7 +309,7 @@ func newCompleter(w app.Backend) *tui.Completer {
 	c.Command("attach", "clear")
 	c.Command("undo", "--force")
 	c.Command("compact")
-	c.Command("set", "agency=", "puppy_name=", "owner_name=")
+	c.Command("set", "agency=")
 	agentNames := func() []string {
 		var names []string
 		for _, a := range w.ListAgents() {

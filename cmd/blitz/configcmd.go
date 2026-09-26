@@ -99,8 +99,6 @@ const configTemplate = `
 # A .env.toml inside a project is ignored unless you pass --config explicitly.
 
 [blitz]
-puppy_name    = "Blitz"
-owner_name    = "Developer"
 default_agent = "blitz"
 # default_model = "gemini-3.8-flash"  # overrides llm.<provider>.model for every provider
 agency_level  = "high"      # low | medium | high | extreme
@@ -212,7 +210,7 @@ enabled = true
 # deny = []
 
 # [agent_models]                                   # run agents on their own model (/pin_model, /unpin)
-# qa-kitten = "anthropic/claude-haiku-4-5"
+# qa = "anthropic/claude-haiku-4-5"
 
 # [model_settings."gpt-5"]                         # per-model generation settings (/model_settings)
 # temperature = 0.3                                # also top_p, max_tokens, seed; wins over the global ones

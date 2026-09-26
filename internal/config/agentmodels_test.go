@@ -16,9 +16,9 @@ func TestSaveAgentModelPinsAndUnpins(t *testing.T) {
 	os.WriteFile(path, []byte(orig), 0o600)
 
 	steps := []struct{ agent, ref string }{
-		{"qa-kitten", "anthropic/claude-haiku-4-5"},
+		{"qa", "anthropic/claude-haiku-4-5"},
 		{"helios", "openai/gpt-5"},
-		{"qa-kitten", "gemini-3.8-flash"}, // replace
+		{"qa", "gemini-3.8-flash"}, // replace
 		{"my agent", "ollama/qwen2.5-coder:7b"},
 		{"helios", ""}, // unpin
 	}
@@ -35,8 +35,8 @@ func TestSaveAgentModelPinsAndUnpins(t *testing.T) {
 	if _, err := toml.Decode(string(b), &got); err != nil {
 		t.Fatalf("invalid TOML:\n%s\n%v", b, err)
 	}
-	want := map[string]string{"qa-kitten": "gemini-3.8-flash", "my agent": "ollama/qwen2.5-coder:7b"}
-	if len(got.AgentModels) != len(want) || got.AgentModels["qa-kitten"] != want["qa-kitten"] || got.AgentModels["my agent"] != want["my agent"] {
+	want := map[string]string{"qa": "gemini-3.8-flash", "my agent": "ollama/qwen2.5-coder:7b"}
+	if len(got.AgentModels) != len(want) || got.AgentModels["qa"] != want["qa"] || got.AgentModels["my agent"] != want["my agent"] {
 		t.Fatalf("agent_models = %v\n%s", got.AgentModels, b)
 	}
 	if !strings.Contains(string(b), "# my settings") || !strings.Contains(string(b), "# keep me") || got.LLM["provider"] != "gemini" {

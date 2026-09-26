@@ -32,7 +32,7 @@ func TestMCPToolsReachChosenSubAgentOnly(t *testing.T) {
 		t.Fatal(err)
 	}
 	f.tools.SetMCP(tools.NewMCPManagerFromToolsets([]tools.MCPToolset{{
-		Config: config.MCPServerConfig{Name: "qa", Agents: []string{"qa-kitten"}, Prefix: "qa"}, Toolset: ts,
+		Config: config.MCPServerConfig{Name: "qa", Agents: []string{"qa"}, Prefix: "qa"}, Toolset: ts,
 	}}, nil))
 	if err := f.eng.Rebuild(context.Background()); err != nil {
 		t.Fatal(err)
@@ -42,13 +42,13 @@ func TestMCPToolsReachChosenSubAgentOnly(t *testing.T) {
 		t.Fatal(err)
 	}
 	if _, ok := f.llm.Requests[0].Tools["qa__run_e2e_tests"]; ok {
-		t.Error("primary agent was offered a server scoped to qa-kitten")
+		t.Error("primary agent was offered a server scoped to qa")
 	}
-	if _, err := f.eng.InvokeSubagent(context.Background(), "qa-kitten", "run the tests"); err != nil {
+	if _, err := f.eng.InvokeSubagent(context.Background(), "qa", "run the tests"); err != nil {
 		t.Fatal(err)
 	}
 	if _, ok := f.llm.Requests[1].Tools["qa__run_e2e_tests"]; !ok {
-		t.Errorf("qa-kitten not offered its MCP tool; tools: %v", keys(f.llm.Requests[1].Tools))
+		t.Errorf("qa not offered its MCP tool; tools: %v", keys(f.llm.Requests[1].Tools))
 	}
 }
 

@@ -347,8 +347,8 @@ func (r *Remote) getSettings() settings {
 	}
 	m := res.Msg
 	return settings{Settings: app.Settings{
-		PuppyName: m.PuppyName, OwnerName: m.OwnerName, Agency: m.Agency,
-		Model: app.ModelInfo{Name: m.Model, Provider: m.Provider}, Agent: m.Agent, Locale: m.Locale,
+		Agency: m.Agency,
+		Model:  app.ModelInfo{Name: m.Model, Provider: m.Provider}, Agent: m.Agent, Locale: m.Locale,
 	}, ImagesEnabled: m.ImagesEnabled}
 }
 

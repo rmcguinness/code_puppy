@@ -25,18 +25,12 @@ const (
 )
 
 // PrintBanner renders the Blitz ASCII splash banner.
+// Product is the product's name, which isn't translated.
+const Product = "Blitz"
+
 func PrintBanner(version, agent, model string) {
-	banner := `
-  __      _
-o'')}____//      __ _ _ _  _ _ __ _  _
- ` + "`" + `_/      )     / _/ _ \ || | '_ \ || |
- (_(_/-(_/     \__\___/\_,_| .__/\_, |
-                            |_|   |__/
-`
-	fmt.Printf("%s%s%s", Cyan, banner, Reset)
-	fmt.Printf("🐶 %sBlitz Go%s (%s) %sv%s%s\n", Bold, Reset, i18n.T("banner.edition"), Yellow, version, Reset)
-	fmt.Printf("🐕 %s: %s%s%s | %s: %s%s%s\n", i18n.T("banner.agent"), Green, agent, Reset, i18n.T("banner.model"), Blue, model, Reset)
-	fmt.Printf("💡 %s\n\n", i18n.T("banner.hint", "help", Bold+"/help"+Reset, "key", Dim+"Ctrl+C"+Reset))
+	fmt.Printf("%s%s%s %s  %s%s %s · %s %s%s\n", Bold, Product, Reset, version, Dim, i18n.T("banner.agent"), agent, i18n.T("banner.model"), model, Reset)
+	fmt.Printf("%s%s%s\n\n", Dim, i18n.T("banner.hint", "help", "/help", "key", "Ctrl+C"), Reset)
 }
 
 // FormatDiff highlights diff additions in green and deletions in red.
@@ -69,7 +63,7 @@ func PrintModelText(text string) { fmt.Print(safe(text)) }
 // FormatToolCall renders an invocation badge for a tool.
 func FormatToolCall(toolName string, args map[string]any) string {
 	var sb strings.Builder
-	fmt.Fprintf(&sb, "\n%s⚙️  %s:%s %s%s%s", Yellow, i18n.T("tool.call"), Reset, Bold, safe(toolName), Reset)
+	fmt.Fprintf(&sb, "\n%s%s:%s %s%s%s", Yellow, i18n.T("tool.call"), Reset, Bold, safe(toolName), Reset)
 	if path, ok := args["path"].(string); ok && path != "" {
 		fmt.Fprintf(&sb, " (%s%s%s)", Cyan, safe(textutil.Ellipsize(path, 120)), Reset)
 	} else if cmd, ok := args["command"].(string); ok && cmd != "" {
@@ -88,10 +82,10 @@ func PrintToolCall(toolName string, args map[string]any) {
 
 // FormatToolResult renders a completed tool badge.
 func FormatToolResult(toolName string, success bool, summary string) string {
-	icon := "✅"
+	icon := "✓"
 	color := Green
 	if !success {
-		icon = "❌"
+		icon = "✗"
 		color = Red
 	}
 	toolName = safe(toolName)

@@ -12,10 +12,10 @@ func TestRenameTitleAndResumeHint(t *testing.T) {
 	out := captureStdout(t, func() { RunREPL(context.Background(), app) })
 
 	for _, want := range []string{
-		"(untitled)",              // before the first prompt
-		"\033]0;🐶 (untitled)\007", // terminal title
-		"fix the [31mlogin bug",   // named by the prompt, control characters dropped
-		"\033]0;🐶 fix the [31mlogin bug\007",
+		"(untitled)",                    // before the first prompt
+		"\033]0;Blitz · (untitled)\007", // terminal title
+		"fix the [31mlogin bug",         // named by the prompt, control characters dropped
+		"\033]0;Blitz · fix the [31mlogin bug\007",
 		"Usage: /rename <name>",
 		"Session renamed to Login work.",
 		"\033]0;\007", // restored at exit

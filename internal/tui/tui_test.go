@@ -293,10 +293,9 @@ func TestHandleCommandSetAndSession(t *testing.T) {
 	if local(app).Config().Blitz.AgencyLevel != "low" {
 		t.Errorf("invalid agency accepted: %q", local(app).Config().Blitz.AgencyLevel)
 	}
-	// Values with spaces are kept whole.
-	HandleCommand(ctx, "/set owner_name=Ada Lovelace", app)
-	if local(app).Config().Blitz.OwnerName != "Ada Lovelace" {
-		t.Errorf("owner_name = %q", local(app).Config().Blitz.OwnerName)
+	// The persona settings are gone.
+	if out := captureStdout(t, func() { HandleCommand(ctx, "/set owner_name=Ada", app) }); !strings.Contains(out, "owner_name") {
+		t.Errorf("owner_name should be unknown now:\n%s", out)
 	}
 
 	// /session new records the active agent and becomes active.

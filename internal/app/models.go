@@ -253,19 +253,17 @@ func settingsKey(cfg *config.Config, name string) string {
 
 // Settings are the values /set changes, plus the model, agent and locale.
 type Settings struct {
-	PuppyName string
-	OwnerName string
-	Agency    string
-	Model     ModelInfo
-	Agent     string
-	Locale    string // the language the model replies in
+	Agency string
+	Model  ModelInfo
+	Agent  string
+	Locale string // the language the model replies in
 }
 
 // Settings returns the current settings.
 func (w *Workspace) Settings() Settings {
 	return Settings{
-		PuppyName: w.cfg.Blitz.PuppyName, OwnerName: w.cfg.Blitz.OwnerName, Agency: w.cfg.Blitz.AgencyLevel,
-		Model: w.Model(), Agent: w.engine.ActiveAgent(), Locale: w.reply.Tag().String(),
+		Agency: w.cfg.Blitz.AgencyLevel,
+		Model:  w.Model(), Agent: w.engine.ActiveAgent(), Locale: w.reply.Tag().String(),
 	}
 }
 
@@ -277,9 +275,9 @@ func (e *UnknownSettingError) Error() string { return fmt.Sprintf("unknown setti
 // ErrInvalidAgency reports an agency level other than low, medium, high or extreme.
 var ErrInvalidAgency = errors.New("agency must be low, medium, high or extreme")
 
-// Set changes a setting for this session ("agency" or "agency_level",
-// "puppy_name", "owner_name") and returns the key in canonical form. The
-// agents' instructions embed these values, so they are rebuilt.
+// Set changes a setting for this session ("agency" or "agency_level") and
+// returns the key in canonical form. The agents' instructions embed it, so
+// they are rebuilt.
 func (w *Workspace) Set(ctx context.Context, key, value string) (string, error) {
 	key = strings.ToLower(strings.TrimSpace(key))
 	switch key {
@@ -290,10 +288,6 @@ func (w *Workspace) Set(ctx context.Context, key, value string) (string, error) 
 			return key, ErrInvalidAgency
 		}
 		w.cfg.Blitz.AgencyLevel = strings.ToLower(value)
-	case "puppy_name":
-		w.cfg.Blitz.PuppyName = value
-	case "owner_name":
-		w.cfg.Blitz.OwnerName = value
 	default:
 		return key, &UnknownSettingError{key}
 	}

@@ -101,7 +101,7 @@ func runServe(ctx context.Context, g *globalFlags, socket string) error {
 	if cfg.Workers.Enabled {
 		s.StartScheduler(ctx)
 	}
-	fmt.Fprintf(os.Stderr, "🐶 Blitz service listening on %s\n", socket)
+	fmt.Fprintf(os.Stderr, "Blitz service listening on %s\n", socket)
 	slog.Info("serve", "socket", socket)
 	return server.Serve(ctx, l, s.Handler(), serveGrace)
 }
