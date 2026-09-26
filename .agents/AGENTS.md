@@ -8,7 +8,8 @@ The layout follows [golang-standards/project-layout](https://github.com/golang-s
 
 | Path | What |
 |---|---|
-| `cmd/code-puppy` | The CLI: flags, setup, one-shot runs, `doctor`, `config` |
+| `cmd/code-puppy` | The CLI: flags, `--dir`, observability, output modes, one-shot runs, `doctor`, `config` |
+| `internal/app` | The program without a UI: `app.Open` builds a `Workspace` (registries, tools, sessions, model, engine) and exposes typed operations that return data and never print. Front ends drive it |
 | `internal/runtime` | The engine over the ADK runner: models and providers, fallback, per-model settings, compaction, steering, side questions, usage and cost |
 | `internal/tools` | Tools and their guardrails: workspace roots, approvals, command policy, OS sandbox, script sandbox (gVisor), skill scripts and their environments, web, MCP, hooks, checkpoints |
 | `internal/tui` | The REPL: commands, rendering, input, steering keys |

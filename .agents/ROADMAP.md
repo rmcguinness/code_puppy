@@ -430,6 +430,29 @@ deny           = ["*-nightly"]
 
 ---
 
+## 23. A UI-independent core and a desktop app — 🚧 in progress (L)
+
+**Goal.** A Wails desktop app with a tab per workspace, alongside the CLI, without a second copy of the program's logic.
+
+**Decisions (2026-09-26).**
+- **A process per tab.** Each tab drives its own `code-puppy` process for its directory, rather than one desktop process holding several workspaces. Each tab then has its own working directory, environment, `.env.toml`, sandbox, locale and telemetry, a crash takes down one tab, and the desktop app doesn't link the engine: it ships and drives the same binary as the CLI.
+- **Layout per golang-standards/project-layout:** `cmd/code-puppy` (pure Go, cross-compiled) and `cmd/code-puppy-desktop` (Wails, cgo, built on each OS); code in `internal/`; frontend in `web/desktop`; packaging in `build/`.
+- **No Bazel.** Wails already orchestrates the frontend and Go builds, and it needs host cgo libraries (WebKit, webkit2gtk) that Bazel can't make hermetic. Pinned tools, lockfiles and the cross-host reproducibility check in CI cover the rest.
+- **Typed operations, not a command dispatcher.** Slash-command syntax is a terminal concern and stays in `tui`; `internal/app` exposes methods that return data and never print, which a protocol handler can call.
+
+**Found.** The engine was already UI-independent (`runtime.EventHandler`, `tools.Approver`, `tools.UserPromptFunc`; the shell tool resolves its directory against the workspace root). The logic that wasn't lived in `cmd/code-puppy/setup.go` (wiring), `tui/repl.go` `runTurn` (the turn lifecycle: hooks, audit, checkpoint, recording, leftover steers) and `tui/commands*.go` (about 30 commands that act and print in the same place). The workspace is also the process's working directory (`-d` uses `os.Chdir`; `WorkspaceDir` is `"."`; `config.Load` and `./agents` read the working directory), which is fine for a process per tab.
+
+**Phases.**
+1. *(Deferred; optional with a process per tab.)* `config.Load` takes the workspace directory instead of relying on the working directory.
+2. ✅ **`app.Open`.** `buildEnv` is `app.Open` and `env` is `app.Workspace`, with `OpenSession` (selection plus audit context), `LoadAttachments`, model pins and settings, memory reload and locale. `app` knows nothing of exit codes: an unresumable session is a `*ResumeError`, which `cmd` maps to exit code 2. `Options.Model` injects a model; `cmd`'s tests now open real workspaces around a mock. `cmd` keeps flags, `--dir`, observability and output modes.
+3. **`Session.Run` and `Steer`:** the turn lifecycle out of `runTurn`; `tui` renders events.
+4. **Typed commands** in groups: agents and models; sessions; checkpoints and approvals; skills, envs and MCP; memory, locale and cost. `HandleCommand` becomes parsing plus rendering.
+5. **`app.Event`:** a JSON-ready event type (text, tool calls and results, approvals, usage); `--output-format stream-json` switches to it.
+6. **`code-puppy serve --stdio`:** JSON-RPC over stdio, tested from Go without a GUI. Evaluate the Agent Client Protocol (ACP) first; slash commands would likely be extension methods.
+7. **Desktop scaffold:** a thin Wails shell running one `code-puppy serve` per tab, bundling the CLI binary. Needs notarization on macOS.
+
+---
+
 ## Antigravity CLI review (2026-09-25)
 
 Google's Antigravity CLI (`agy`) was compared feature by feature with Code Puppy Go, from a feature summary of its docs (https://antigravity.google/docs/cli/features/). The summary read as AI-generated, so its descriptions were treated as approximate.

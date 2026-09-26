@@ -9,14 +9,10 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-	"time"
 
-	"github.com/retail-cortex/code_puppy/internal/agents"
+	"github.com/retail-cortex/code_puppy/internal/app"
 	"github.com/retail-cortex/code_puppy/internal/config"
 	"github.com/retail-cortex/code_puppy/internal/runtime"
-	"github.com/retail-cortex/code_puppy/internal/session"
-	"github.com/retail-cortex/code_puppy/internal/skills"
-	"github.com/retail-cortex/code_puppy/internal/tools"
 	"google.golang.org/genai"
 )
 
@@ -159,56 +155,12 @@ func TestConfigInitAndShow(t *testing.T) {
 	}
 }
 
-func TestSelectSession(t *testing.T) {
-	st, err := session.NewStorage(t.TempDir())
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, _, err := selectSession(st, "", true, "t", "a"); exitCodeFor(err) != exitUsage {
-		t.Errorf("--continue with no sessions: %v", err)
-	}
-	first, resumed, _ := selectSession(st, "", false, "first", "a")
-	if resumed {
-		t.Error("new session reported as resumed")
-	}
-	st.AddMessage("user", "hello")
-	latest, resumed, err := selectSession(st, "latest", false, "", "")
-	if err != nil || !resumed || latest.ID != first.ID || len(latest.Messages) != 1 {
-		t.Errorf("resume latest: %+v %v %v", latest, resumed, err)
-	}
-	byID, _, err := selectSession(st, first.ID, false, "", "")
-	if err != nil || byID.ID != first.ID {
-		t.Errorf("resume by id: %v", err)
-	}
-	if _, _, err := selectSession(st, "no-such-session", false, "", ""); exitCodeFor(err) != exitUsage {
-		t.Errorf("unknown id: %v", err)
-	}
-	// --resume <name> starts a new session from the snapshot.
-	snap, err := st.Snapshot(first.ID, "greeting", false)
-	if err != nil {
-		t.Fatal(err)
-	}
-	branch, resumed, err := selectSession(st, "greeting", false, "", "")
-	if err != nil || !resumed || branch.ID == first.ID || branch.ID == snap.ID || branch.From != snap.ID || len(branch.Messages) != 1 {
-		t.Errorf("resume by name: %+v %v %v", branch, resumed, err)
-	}
-	// --continue skips snapshots even when one is the newest session.
-	time.Sleep(10 * time.Millisecond)
-	if _, err := st.Snapshot(branch.ID, "newest", false); err != nil {
-		t.Fatal(err)
-	}
-	cont, _, err := selectSession(st, "", true, "", "")
-	if err != nil || cont.ID != branch.ID {
-		t.Errorf("--continue picked %s, want %s: %v", cont.ID, branch.ID, err)
-	}
-}
-
-// testEnv builds an env around a mock model.
-func testEnv(t *testing.T, responses ...*genai.Content) *env {
+// testEnv opens a workspace around a mock model.
+func testEnv(t *testing.T, responses ...*genai.Content) *app.Workspace {
 	return testEnvWith(t, nil, responses...)
 }
 
-func testEnvWith(t *testing.T, mutate func(*config.Config), responses ...*genai.Content) *env {
+func testEnvWith(t *testing.T, mutate func(*config.Config), responses ...*genai.Content) *app.Workspace {
 	t.Helper()
 	isolate(t)
 	cfg := config.DefaultConfig()
@@ -219,20 +171,13 @@ func testEnvWith(t *testing.T, mutate func(*config.Config), responses ...*genai.
 	if mutate != nil {
 		mutate(cfg)
 	}
-	e := &env{cfg: cfg}
-	e.agents, _ = agents.NewRegistry()
-	e.skills, _ = skills.NewProvider()
-	var err error
-	if e.tools, err = tools.NewRegistry(cfg, e.agents, e.skills); err != nil {
+	llm := runtime.NewMockLLM("gemini-3.8-flash", responses...)
+	llm.Usage = &genai.GenerateContentResponseUsageMetadata{PromptTokenCount: 100, CandidatesTokenCount: 10}
+	e, err := app.Open(context.Background(), cfg, app.Options{Model: llm})
+	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { e.Close() })
-	e.storage, _ = session.NewStorage(cfg.Session.StorageDir)
-	llm := runtime.NewMockLLM("gemini-3.8-flash", responses...)
-	llm.Usage = &genai.GenerateContentResponseUsageMetadata{PromptTokenCount: 100, CandidatesTokenCount: 10}
-	if e.engine, err = runtime.NewEngine(context.Background(), cfg, e.agents, e.skills, e.tools, llm); err != nil {
-		t.Fatal(err)
-	}
 	return e
 }
 
@@ -242,7 +187,7 @@ func toolCall(name string, args map[string]any) *genai.Content {
 
 func TestOneShotJSON(t *testing.T) {
 	e := testEnv(t, toolCall("list_files", map[string]any{}), genai.NewContentFromText("all done", genai.RoleModel))
-	sess, _ := e.storage.CreateSession("", "t", "code-puppy")
+	sess, _ := e.Storage().CreateSession("", "t", "code-puppy")
 	var out bytes.Buffer
 	err := runOneShot(context.Background(), e, oneShotOptions{prompt: "list", sessionID: sess.ID, format: formatJSON, stdout: &out})
 	if err != nil {
@@ -269,7 +214,7 @@ func TestOneShotStreamJSONAndMaxTurns(t *testing.T) {
 		loop = append(loop, toolCall("list_files", map[string]any{}))
 	}
 	e := testEnv(t, loop...)
-	sess, _ := e.storage.CreateSession("", "t", "code-puppy")
+	sess, _ := e.Storage().CreateSession("", "t", "code-puppy")
 	var out bytes.Buffer
 	err := runOneShot(context.Background(), e, oneShotOptions{prompt: "loop", sessionID: sess.ID, format: formatStreamJSON, maxTurns: 2, stdout: &out})
 	if exitCodeFor(err) != exitMaxTurns {
@@ -298,7 +243,7 @@ func TestOneShotPromptHookBlocks(t *testing.T) {
 	e := testEnvWith(t, func(c *config.Config) {
 		c.Hooks.PromptSubmit = []config.HookConfig{{Command: `echo "no secrets in prompts" >&2; exit 2`}}
 	}, genai.NewContentFromText("should not run", genai.RoleModel))
-	sess, _ := e.storage.CreateSession("", "t", "code-puppy")
+	sess, _ := e.Storage().CreateSession("", "t", "code-puppy")
 	var out bytes.Buffer
 	err := runOneShot(context.Background(), e, oneShotOptions{prompt: "my password is x", sessionID: sess.ID, format: formatJSON, stdout: &out})
 	if exitCodeFor(err) != exitBlocked || !strings.Contains(err.Error(), "no secrets in prompts") {
@@ -317,20 +262,6 @@ func TestMaskSecret(t *testing.T) {
 	}
 }
 
-func TestModelErrorSummary(t *testing.T) {
-	cfg := config.DefaultConfig()
-	cfg.LLM.Gemini.APIKey = "AIzaSySECRETSECRETSECRETSECRETSECRET123"
-	err := errors.New(`api key is required. ClientConfig: &genai.ClientConfig{APIKey:"AIzaSySECRETSECRETSECRETSECRETSECRET123"}` + "\nmore")
-	got := modelErrorSummary(err, cfg)
-	if got != "api key is required" {
-		t.Errorf("summary = %q", got)
-	}
-	leak := modelErrorSummary(errors.New("bad key AIzaSySECRETSECRETSECRETSECRETSECRET123"), cfg)
-	if strings.Contains(leak, "SECRET") {
-		t.Errorf("key leaked: %q", leak)
-	}
-}
-
 func TestOneShotFailsWithoutModel(t *testing.T) {
 	home := isolate(t)
 	t.Setenv("GEMINI_API_KEY", "")
@@ -340,29 +271,6 @@ func TestOneShotFailsWithoutModel(t *testing.T) {
 	_, err := runCLI(t, "--output-format", "json", "hello")
 	if exitCodeFor(err) != exitFailure || !strings.Contains(err.Error(), "model initialization failed") {
 		t.Errorf("expected model failure, got %v", err)
-	}
-}
-
-func TestSelectSessionScopedToWorkspace(t *testing.T) {
-	st, _ := session.NewStorage(t.TempDir())
-	st.SetWorkspace("/proj/one")
-	one, _, _ := selectSession(st, "", false, "one", "a")
-	st.SetWorkspace("/proj/two")
-	two, _, _ := selectSession(st, "", false, "two", "a") // newest overall
-
-	st.SetWorkspace("/proj/one")
-	got, resumed, err := selectSession(st, "", true, "", "")
-	if err != nil || !resumed || got.ID != one.ID {
-		t.Errorf("--continue in /proj/one picked %v (%v), want %s", got, err, one.ID)
-	}
-	// Explicit IDs still work across workspaces.
-	got, _, err = selectSession(st, two.ID, false, "", "")
-	if err != nil || got.ID != two.ID || got.Workspace != "/proj/two" {
-		t.Errorf("explicit resume across workspaces: %+v %v", got, err)
-	}
-	st.SetWorkspace("/proj/three")
-	if _, _, err := selectSession(st, "latest", false, "", ""); exitCodeFor(err) != exitUsage || !strings.Contains(err.Error(), "/proj/three") {
-		t.Errorf("empty workspace should be a usage error naming it: %v", err)
 	}
 }
 
@@ -389,12 +297,12 @@ func TestOneShotPlanRefusesEdits(t *testing.T) {
 	e := testEnv(t,
 		toolCall("create_file", map[string]any{"path": "x.txt", "content": "x"}),
 		genai.NewContentFromText("1. make x.txt", genai.RoleModel))
-	sess, _ := e.storage.CreateSession("", "t", "code-puppy")
+	sess, _ := e.Storage().CreateSession("", "t", "code-puppy")
 	var out bytes.Buffer
 	if err := runOneShot(context.Background(), e, oneShotOptions{prompt: "add x.txt", sessionID: sess.ID, format: formatJSON, plan: true, stdout: &out}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := os.Stat(filepath.Join(e.tools.Workspace().Dir(), "x.txt")); err == nil {
+	if _, err := os.Stat(filepath.Join(e.Tools().Workspace().Dir(), "x.txt")); err == nil {
 		t.Fatal("--plan created a file")
 	}
 	var res runResult
@@ -403,27 +311,6 @@ func TestOneShotPlanRefusesEdits(t *testing.T) {
 	}
 	if e, _ := res.ToolCalls[0].Result["error"].(string); !strings.Contains(e, "plan mode") {
 		t.Fatalf("create_file result %+v", res.ToolCalls[0])
-	}
-}
-
-func TestAgentModelRefsPrecedence(t *testing.T) {
-	dir := t.TempDir()
-	for name, model := range map[string]string{"alpha": "anthropic/claude-haiku-4-5", "beta": "openai/gpt-5"} {
-		os.WriteFile(filepath.Join(dir, name+".md"), []byte("---\nname: "+name+"\ndisplay_name: "+name+"\ndescription: d\ntools: []\ndefault_model: "+model+"\n---\nprompt\n"), 0o600)
-	}
-	reg, _ := agents.NewRegistry()
-	if err := reg.LoadExternalAgents(dir); err != nil {
-		t.Fatal(err)
-	}
-	cfg := config.DefaultConfig()
-	cfg.AgentModels = map[string]string{"alpha": "gemini-3.8-flash", "ghost": "x"}
-	var warnings []string
-	refs := agentModelRefs(cfg, reg, func(s string) { warnings = append(warnings, s) })
-	if refs["alpha"] != "gemini-3.8-flash" || refs["beta"] != "openai/gpt-5" || len(refs) != 2 {
-		t.Fatalf("refs = %v (config pin must win over default_model)", refs)
-	}
-	if len(warnings) != 1 || !strings.Contains(warnings[0], "ghost") {
-		t.Fatalf("warnings = %v", warnings)
 	}
 }
 

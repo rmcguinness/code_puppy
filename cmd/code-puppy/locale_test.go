@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/retail-cortex/code_puppy/internal/app"
 	"github.com/retail-cortex/code_puppy/internal/config"
 	"github.com/retail-cortex/code_puppy/internal/i18n"
 	"github.com/retail-cortex/code_puppy/internal/runtime"
@@ -36,14 +37,13 @@ func TestLocaleReachesModelAndConfig(t *testing.T) {
 	cfgFile := filepath.Join(cfgDir, ".env.toml")
 	os.WriteFile(cfgFile, []byte("# my settings\n[ui]\nlocale = \"en-US\"   # keep me\n"), 0o600)
 
-	e.locales = setupLocale(e.cfg, func(s string) { t.Errorf("warning: %s", s) })
 	reply := func() *genai.Content { return genai.NewContentFromText("ok", genai.RoleModel) }
 	llm := runtime.NewMockLLM("gemini-3.8-flash", reply(), reply())
-	if err := e.engine.SetModel(ctx, llm); err != nil {
+	if err := e.Engine().SetModel(ctx, llm); err != nil {
 		t.Fatal(err)
 	}
 	run := func() string {
-		sess, _ := e.storage.CreateSession("", "t", "code-puppy")
+		sess, _ := e.Storage().CreateSession("", "t", "code-puppy")
 		var out bytes.Buffer
 		if err := runOneShot(ctx, e, oneShotOptions{prompt: "hi", sessionID: sess.ID, format: formatText, stdout: &out}); err != nil {
 			t.Fatal(err)
@@ -51,10 +51,10 @@ func TestLocaleReachesModelAndConfig(t *testing.T) {
 		return lastSystemText(llm)
 	}
 
-	tag, _ := e.locales.Resolve("ES-sp")
-	l := e.locales.Localizer(tag)
+	tag, _ := e.Locales().Resolve("ES-sp")
+	l := e.Locales().Localizer(tag)
 	i18n.SetCurrent(l)
-	path, err := e.setLocale(ctx, l)
+	path, err := e.SetLocale(ctx, l)
 	if err != nil || path != cfgFile {
 		t.Fatalf("setLocale = %q, %v", path, err)
 	}
@@ -72,35 +72,18 @@ func TestLocaleReachesModelAndConfig(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	setupLocale(cfg, func(string) {})
+	app.SetupLocale(cfg, func(string) {})
 	if got := i18n.Current().Tag().String(); got != "es" || i18n.T("exit.cancelled") != "Salida cancelada." {
 		t.Errorf("after reload: %s", got)
 	}
 
-	enTag, _ := e.locales.Resolve("en-US")
-	en := e.locales.Localizer(enTag)
+	enTag, _ := e.Locales().Resolve("en-US")
+	en := e.Locales().Localizer(enTag)
 	i18n.SetCurrent(en)
-	if _, err := e.setLocale(ctx, en); err != nil {
+	if _, err := e.SetLocale(ctx, en); err != nil {
 		t.Fatal(err)
 	}
 	if sys := run(); strings.Contains(sys, "Response Language") {
 		t.Errorf("English should not add a language instruction:\n%s", sys)
-	}
-}
-
-func TestSetupLocaleWarnsAndFallsBack(t *testing.T) {
-	defer i18n.SetCurrent(nil)
-	dir := t.TempDir()
-	os.WriteFile(filepath.Join(dir, "bad.json"), []byte("{"), 0o600)
-	cfg := config.DefaultConfig()
-	cfg.UI.Locale = "not a language!"
-	cfg.UI.LocalesDir = dir
-	var warnings []string
-	setupLocale(cfg, func(s string) { warnings = append(warnings, s) })
-	if len(warnings) != 2 || !strings.Contains(warnings[0], "bad.json") || !strings.Contains(warnings[1], "not a language") {
-		t.Errorf("warnings = %q", warnings)
-	}
-	if i18n.Current().Tag().String() != "en-US" {
-		t.Errorf("fallback locale = %s", i18n.Current().Tag())
 	}
 }

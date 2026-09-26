@@ -4,7 +4,7 @@ Written 2026-09-24 at commit `7e211697` on `main`; updated 2026-09-25. Read this
 
 ## State
 
-Roadmap items 1–22 are done and committed; each has its own commit:
+Roadmap items 1–22 are done and committed, and item 23 (the desktop app) is in progress; each has its own commit:
 
 | Commit | Change |
 |---|---|
@@ -25,7 +25,8 @@ Roadmap items 1–22 are done and committed; each has its own commit:
 | `155d595b`, `a5f34180`, `e2f02959` | Item 22: Castor skill definitions and `[skills.policy]`; the gVisor/OS script sandbox; environments, `run_skill_script`, `/envs` |
 | (the commit removing `python/`) | Go-only repository: Python removed (tag `python-final`), Go at the root, workflows `ci.yml` and `release.yml`, Apache 2.0 with `NOTICE`, planning docs in `.agents/` |
 | `1370b80f` | Side questions (`/btw`) |
-| `56a870a4`, `dce9baa9`, (the commit moving `pkg/` to `internal/`) | Dependabot and a macOS release note; pinned release tools, `GOTOOLCHAIN=local`, a cross-host reproducibility check; project-layout with code in `internal/` |
+| `56a870a4`, `dce9baa9`, `c239dfb8`, `f318498d` | Dependabot and a macOS release note; pinned release tools, `GOTOOLCHAIN=local`, a cross-host reproducibility check; project-layout with code in `internal/`; actions upgraded (checkout v7, setup-go v7, Node 24) |
+| (the commit adding `internal/app`) | ROADMAP item 23, phase 2: `app.Open` and `app.Workspace` replace `cmd`'s `buildEnv` |
 | (the commit adding `internal/session/title_test.go`) | Session names from the first prompt, `/rename`, terminal title, resume hint on exit |
 
 `go vet ./...` and `go test -race ./...` pass.
@@ -36,10 +37,10 @@ Roadmap items 1–22 are done and committed; each has its own commit:
 
 ## Open work, in suggested order
 
-1. **Manual verification (needs a person).** Nothing in `MANUAL_VERIFICATION.md` has been run yet. It covers real providers (💲 = paid calls), terminal behavior, the macOS and Linux sandboxes, MCP, steering, fallback and pinning. Record results in the file; any failure becomes the next task.
-2. **Optional: notarize the macOS binaries** (needs an Apple Developer account). Until then, the release notes (GoReleaser `release.footer`) and the README explain clearing the quarantine flag. Dependabot (`.github/dependabot.yml`) keeps the pinned action SHAs current. `~/.gnupg/gpg-agent.conf` now points at GPG Suite's `pinentry-mac`; the next tag will show whether signing works.
-3. **Linux sandbox startup cost.** Before every sandboxed command, `expandBlocked` (`internal/tools/bwrap.go`) scans the writable roots, including the temp and cache directories (e.g. the Go build cache), for blocked names, up to 50,000 entries. Measured in a Linux container: about 0.1 s per command normally, 3.4 s under `-race`. Worth reducing (e.g. skip cache directories for name patterns, or reuse a recent scan), keeping in mind that a file created between scans could then escape masking. CI's parallel-cap test runs with the sandbox off because of this.
-4. **Upgrade the pinned actions' majors** soon: GitHub warns that checkout v4 and setup-go v5 target Node.js 20, which is deprecated and already forced onto Node.js 24.
+1. **Desktop app: ROADMAP item 23, phase 3 next** (`Session.Run` and `Steer`: the turn lifecycle out of `tui/repl.go` `runTurn`). The phases and decisions are in the ROADMAP item.
+2. **Manual verification (needs a person).** Nothing in `MANUAL_VERIFICATION.md` has been run yet. It covers real providers (💲 = paid calls), terminal behavior, the macOS and Linux sandboxes, MCP, steering, fallback and pinning. Record results in the file; any failure becomes the next task.
+3. **Optional: notarize the macOS binaries** (needs an Apple Developer account). Until then, the release notes (GoReleaser `release.footer`) and the README explain clearing the quarantine flag. Dependabot (`.github/dependabot.yml`) keeps the pinned action SHAs current. `~/.gnupg/gpg-agent.conf` now points at GPG Suite's `pinentry-mac`; the next tag will show whether signing works.
+4. **Linux sandbox startup cost.** Before every sandboxed command, `expandBlocked` (`internal/tools/bwrap.go`) scans the writable roots, including the temp and cache directories (e.g. the Go build cache), for blocked names, up to 50,000 entries. Measured in a Linux container: about 0.1 s per command normally, 3.4 s under `-race`. Worth reducing (e.g. skip cache directories for name patterns, or reuse a recent scan), keeping in mind that a file created between scans could then escape masking. CI's parallel-cap test runs with the sandbox off because of this.
 5. **Skill scripts, follow-ups** (ROADMAP item 22 is done: Castor definitions, `[skills.policy]`, the gVisor/OS `ScriptBox`, environments, `run_skill_script`, `/envs`):
    - TypeScript scripts;
    - scripts that write the workspace directly, with snapshots;
@@ -66,6 +67,7 @@ Roadmap items 1–22 are done and committed; each has its own commit:
 - **Telemetry and OTel need one provider per process:** the ADK binds its tracer to the first global provider.
 - **No Bazel** (2026-09-26). Go modules, `CGO_ENABLED=0` and GoReleaser already give reproducible CLI builds, and the planned Wails app needs host cgo libraries (WebKit, webkit2gtk) that Bazel can't make hermetic. Close the gaps by pinning tools instead; reconsider only for a multi-language monorepo or a need for remote caching. Make stays as a thin entry point.
 - **Layout follows golang-standards/project-layout** (2026-09-26): `cmd/code-puppy` (CLI/TUI, pure Go) and `cmd/code-puppy-desktop` (Wails, cgo, built on each OS); code in `internal/`, `pkg/` only for deliberately public APIs; frontend in `web/desktop`, packaging in `build/`. Slash-command logic moves from `tui` to a UI-agnostic `internal/app` shared by both UIs.
+- **Desktop tabs are separate `code-puppy` processes** (2026-09-26), one per directory, driven over a stdio protocol; not several workspaces in one process. See ROADMAP item 23.
 - **The module path stays `github.com/retail-cortex/code_puppy`** even though the repository is `rmcguinness/code_puppy`.
 
 Conventions, layout and commands: [AGENTS.md](AGENTS.md).

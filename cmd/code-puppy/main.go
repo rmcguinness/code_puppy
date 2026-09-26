@@ -11,6 +11,7 @@ import (
 	"strings"
 	"syscall"
 
+	"github.com/retail-cortex/code_puppy/internal/app"
 	"github.com/retail-cortex/code_puppy/internal/config"
 	"github.com/retail-cortex/code_puppy/internal/i18n"
 	"github.com/retail-cortex/code_puppy/internal/tui"
@@ -149,17 +150,17 @@ func runRoot(cmd *cobra.Command, o *rootOptions, args []string) (err error) {
 		}
 	}()
 
-	e, err := buildEnv(ctx, cfg, envOptions{streaming: pretty, warn: warnFn})
+	w, err := app.Open(ctx, cfg, app.Options{Streaming: pretty, Warn: warnFn})
 	if err != nil {
 		return err
 	}
 	defer func() {
-		if cerr := e.Close(); cerr != nil && err == nil {
+		if cerr := w.Close(); cerr != nil && err == nil {
 			err = cerr
 		}
 	}()
-	if e.modelErr != nil {
-		msg := i18n.T("startup.model_failed", "error", modelErrorSummary(e.modelErr, cfg))
+	if merr := w.ModelErr(); merr != nil {
+		msg := i18n.T("startup.model_failed", "error", app.ModelErrorSummary(merr, cfg))
 		if oneShot {
 			// A placeholder model would "succeed" silently; scripts need a real failure.
 			return withCode(exitFailure, fmt.Errorf("%s (run 'code-puppy doctor')", msg))
@@ -177,7 +178,7 @@ func runRoot(cmd *cobra.Command, o *rootOptions, args []string) (err error) {
 		ti, terr := tui.NewTerminalInput(tui.TerminalOptions{
 			HistoryFile: config.ExpandHome(cfg.UI.HistoryFile),
 			HistorySize: cfg.UI.HistorySize,
-			Completer:   newCompleter(e),
+			Completer:   newCompleter(w),
 		})
 		if terr != nil {
 			warnFn(i18n.T("startup.line_editor", "error", terr.Error()))
@@ -194,28 +195,30 @@ func runRoot(cmd *cobra.Command, o *rootOptions, args []string) (err error) {
 		input = tui.NewLineReader(os.Stdin, promptOut)
 	}
 	if input != nil {
-		e.tools.Hooks().SetApprover(tui.NewApprover(input, cfg.UI.DiffLines))
-		e.tools.Hooks().SetUserPrompter(tui.NewUserPrompter(input))
+		w.Tools().Hooks().SetApprover(tui.NewApprover(input, cfg.UI.DiffLines))
+		w.Tools().Hooks().SetUserPrompter(tui.NewUserPrompter(input))
 	}
 
 	attachPrompt := ""
 	if oneShot {
 		attachPrompt = prompt
 	}
-	attached, err := loadAttachments(e, o.images, attachPrompt, warnFn)
+	attached, err := w.LoadAttachments(o.images, attachPrompt, warnFn)
 	if err != nil {
-		return withCode(exitUsage, err)
+		return withCode(exitUsage, fmt.Errorf("--image %w", err))
 	}
 
-	// A new session is named after its first prompt.
-	sess, resumed, err := selectSession(e.storage, o.resume, o.cont, "", e.engine.ActiveAgent())
+	sess, resumed, err := w.OpenSession(o.resume, o.cont)
 	if err != nil {
+		var re *app.ResumeError
+		if errors.As(err, &re) {
+			return withCode(exitUsage, err)
+		}
 		return err
 	}
-	e.audit.SetContext(sess.ID, e.tools.Workspace().Dir())
 
 	if oneShot {
-		return runOneShot(ctx, e, oneShotOptions{
+		return runOneShot(ctx, w, oneShotOptions{
 			prompt: prompt, sessionID: sess.ID, format: o.outputFormat, maxTurns: o.maxTurns, plan: o.plan,
 			input: input, stdinTTY: stdinTTY && !stdinUsed, stdout: os.Stdout,
 			markdown: pretty && cfg.UI.Markdown, spinner: pretty && cfg.UI.Spinner, width: terminalWidth(),
@@ -223,7 +226,7 @@ func runRoot(cmd *cobra.Command, o *rootOptions, args []string) (err error) {
 		})
 	}
 
-	if resumed && sess.Workspace != "" && sess.Workspace != e.storage.Workspace() {
+	if resumed && sess.Workspace != "" && sess.Workspace != w.Storage().Workspace() {
 		warnFn(i18n.T("resume.other_workspace_id", "id", sess.ID, "workspace", sess.Workspace))
 	}
 	if resumed {
@@ -238,21 +241,21 @@ func runRoot(cmd *cobra.Command, o *rootOptions, args []string) (err error) {
 	return tui.RunREPL(ctx, &tui.App{
 		Version:           version,
 		Cfg:               cfg,
-		Engine:            e.engine,
-		Agents:            e.agents,
-		Skills:            e.skills,
-		Storage:           e.storage,
+		Engine:            w.Engine(),
+		Agents:            w.Agents(),
+		Skills:            w.Skills(),
+		Storage:           w.Storage(),
 		Input:             input,
-		Tools:             e.tools,
-		Processes:         e.tools.Processes(),
-		SandboxSummary:    e.tools.SandboxSummary(),
-		NewModel:          e.newModel,
-		ReloadMemory:      e.reloadMemory,
+		Tools:             w.Tools(),
+		Processes:         w.Tools().Processes(),
+		SandboxSummary:    w.Tools().SandboxSummary(),
+		NewModel:          w.NewModel,
+		ReloadMemory:      w.ReloadMemory,
 		Attachments:       attached,
-		Locales:           e.locales,
-		SetLocale:         e.setLocale,
-		SaveAgentModel:    e.saveAgentModel,
-		SaveModelSettings: e.saveModelSettings,
+		Locales:           w.Locales(),
+		SetLocale:         w.SetLocale,
+		SaveAgentModel:    w.SaveAgentModel,
+		SaveModelSettings: w.SaveModelSettings,
 		TerminalTitle:     pretty && cfg.UI.TerminalTitle,
 		Printer: tui.PrinterOptions{
 			Out: os.Stdout, Markdown: pretty && cfg.UI.Markdown, Theme: cfg.UI.Theme,
@@ -296,8 +299,8 @@ func resolvePrompt(flag string, args []string, stdinTTY, interactive bool, stdin
 }
 
 // newCompleter registers slash commands and dynamic argument sources.
-func newCompleter(e *env) *tui.Completer {
-	c := tui.NewCompleter(e.tools.Workspace().Dir())
+func newCompleter(w *app.Workspace) *tui.Completer {
+	c := tui.NewCompleter(w.Tools().Workspace().Dir())
 	for _, cmd := range []string{"help", "agents", "model", "skills", "session", "set", "clear", "sandbox", "exit", "quit",
 		"undo", "checkpoints", "diff", "cost", "context", "compact", "memory", "approvals", "mcp", "resume", "locale", "attach", "paste",
 		"tools", "plan", "show", "pin_model", "unpin", "model_settings", "search", "btw", "rename", "envs"} {
@@ -316,14 +319,14 @@ func newCompleter(e *env) *tui.Completer {
 	c.Command("set", "agency=", "puppy_name=", "owner_name=")
 	c.Dynamic("agent", func() []string {
 		var names []string
-		for _, a := range e.agents.List() {
+		for _, a := range w.Agents().List() {
 			names = append(names, a.Name)
 		}
 		return names
 	})
 	agentNames := func() []string {
 		var names []string
-		for _, a := range e.agents.List() {
+		for _, a := range w.Agents().List() {
 			names = append(names, a.Name)
 		}
 		return names
@@ -332,7 +335,7 @@ func newCompleter(e *env) *tui.Completer {
 	c.Dynamic("unpin", func() []string {
 		var names []string
 		for _, n := range agentNames() {
-			if _, pinned := e.engine.AgentModel(n); pinned {
+			if _, pinned := w.Engine().AgentModel(n); pinned {
 				names = append(names, n)
 			}
 		}
@@ -340,27 +343,27 @@ func newCompleter(e *env) *tui.Completer {
 	})
 	// Models in use (the main one and any agent's) and those with settings.
 	c.Dynamic("model_settings", func() []string {
-		names := []string{e.engine.ModelName()}
+		names := []string{w.Engine().ModelName()}
 		for _, n := range agentNames() {
-			if m, pinned := e.engine.AgentModel(n); pinned {
+			if m, pinned := w.Engine().AgentModel(n); pinned {
 				names = append(names, m)
 			}
 		}
-		for m := range e.engine.AllModelSettings() {
+		for m := range w.Engine().AllModelSettings() {
 			names = append(names, m)
 		}
 		return names
 	})
 	c.Dynamic("locale", func() []string {
 		var tags []string
-		for _, m := range e.locales.Available() {
+		for _, m := range w.Locales().Available() {
 			tags = append(tags, m.Locale)
 		}
 		return tags
 	})
 	c.Dynamic("resume", func() []string {
 		var ids []string
-		if list, err := e.storage.ListWorkspace(e.storage.Workspace()); err == nil {
+		if list, err := w.Storage().ListWorkspace(w.Storage().Workspace()); err == nil {
 			for i, s := range list {
 				if i == 20 {
 					break
@@ -368,7 +371,7 @@ func newCompleter(e *env) *tui.Completer {
 				ids = append(ids, s.ID)
 			}
 		}
-		if all, err := e.storage.List(); err == nil {
+		if all, err := w.Storage().List(); err == nil {
 			for _, s := range all {
 				if s.Name != "" {
 					ids = append(ids, s.Name)

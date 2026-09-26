@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/retail-cortex/code_puppy/internal/app"
 	"github.com/retail-cortex/code_puppy/internal/images"
 	"io"
 	"os"
@@ -72,37 +73,37 @@ type oneShotOptions struct {
 // runOneShot executes a single prompt and exits. Background processes are
 // never left behind: the user is asked (text mode on a terminal) or they are
 // killed.
-func runOneShot(ctx context.Context, e *env, o oneShotOptions) error {
+func runOneShot(ctx context.Context, w *app.Workspace, o oneShotOptions) error {
 	start := time.Now()
 	out := o.stdout
 	sid := o.sessionID
 
 	var runErr error
-	if reason := e.tools.ScriptHooks().PromptSubmit(ctx, sid, o.prompt); reason != "" {
+	if reason := w.Tools().ScriptHooks().PromptSubmit(ctx, sid, o.prompt); reason != "" {
 		runErr = withCode(exitBlocked, fmt.Errorf("prompt blocked by hook: %s", reason))
 	}
 
 	var transcript strings.Builder
 	var calls []toolCallJSON
 	if runErr == nil {
-		e.tools.Checkpoints().Begin(o.prompt)
-		e.audit.Log(audit.Entry{Kind: audit.KindPrompt, Session: sid, Detail: o.prompt})
+		w.Tools().Checkpoints().Begin(o.prompt)
+		w.Audit().Log(audit.Entry{Kind: audit.KindPrompt, Session: sid, Detail: o.prompt})
 		recorded, modelPrompt := o.prompt, o.prompt
 		if o.plan {
 			recorded, modelPrompt = "/plan "+o.prompt, runtime.PlanPrompt(o.prompt)
 		}
-		_ = e.storage.AddMessage("user", recorded+tui.AttachmentNote(o.images))
+		_ = w.Storage().AddMessage("user", recorded+tui.AttachmentNote(o.images))
 
 		var handler runtime.EventHandler
 		var printer *tui.Printer
 		switch o.format {
 		case formatText:
-			printer = tui.NewPrinter(tui.PrinterOptions{Out: out, Markdown: o.markdown, Theme: e.cfg.UI.Theme, Width: o.width, Spinner: o.spinner, Transcript: &transcript})
+			printer = tui.NewPrinter(tui.PrinterOptions{Out: out, Markdown: o.markdown, Theme: w.Config().UI.Theme, Width: o.width, Spinner: o.spinner, Transcript: &transcript})
 			handler = printer.Handle
 			printer.Begin()
 		case formatStreamJSON:
 			enc := json.NewEncoder(out)
-			_ = enc.Encode(map[string]any{"type": "session", "session_id": sid, "model": e.engine.ModelName(), "agent": e.engine.ActiveAgent()})
+			_ = enc.Encode(map[string]any{"type": "session", "session_id": sid, "model": w.Engine().ModelName(), "agent": w.Engine().ActiveAgent()})
 			handler = streamJSONHandler(enc, &transcript)
 		default:
 			handler = collectHandler(&transcript, &calls)
@@ -115,20 +116,20 @@ func runOneShot(ctx context.Context, e *env, o oneShotOptions) error {
 		if o.plan {
 			execOpts = append(execOpts, runtime.WithPlanOnly())
 		}
-		runErr = e.engine.Execute(ctx, sid, modelPrompt, handler, execOpts...)
+		runErr = w.Engine().Execute(ctx, sid, modelPrompt, handler, execOpts...)
 		if printer != nil {
 			printer.End()
 			fmt.Fprintln(out)
 		}
 		if transcript.Len() > 0 {
-			_ = e.storage.AddMessage("model", transcript.String())
+			_ = w.Storage().AddMessage("model", transcript.String())
 		}
 	}
 	if ctx.Err() != nil && runErr != nil && !errors.Is(runErr, runtime.ErrMaxTurns) {
 		runErr = withCode(exitInterrupted, runErr)
 	}
 
-	usage := e.engine.Usage(sid)
+	usage := w.Engine().Usage(sid)
 	if o.format == formatText {
 		if o.usageLines {
 			if line := tui.UsageLine(runtime.Usage{}, usage); line != "" {
@@ -156,7 +157,7 @@ func runOneShot(ctx context.Context, e *env, o oneShotOptions) error {
 	interrupts := make(chan os.Signal, 1)
 	signal.Notify(interrupts, os.Interrupt)
 	defer signal.Stop(interrupts)
-	tui.ConfirmExit(context.Background(), o.input, e.tools.Processes(), interrupts, tui.ExitPrompt{
+	tui.ConfirmExit(context.Background(), o.input, w.Tools().Processes(), interrupts, tui.ExitPrompt{
 		CanPrompt: o.format == formatText && ctx.Err() == nil && o.stdinTTY && o.input != nil,
 	})
 	return runErr

@@ -23,38 +23,18 @@ func writePNG(t *testing.T, path string) {
 	}
 }
 
-func TestLoadAttachments(t *testing.T) {
-	e := testEnv(t)
-	ws := e.tools.Workspace().Dir()
-	writePNG(t, filepath.Join(ws, "a.png"))
-	writePNG(t, filepath.Join(ws, "b.png")) // same bytes as a.png: deduplicated
-
-	var warnings []string
-	warn := func(s string) { warnings = append(warnings, s) }
-	got, err := loadAttachments(e, []string{"a.png"}, "diff mentions @b.png and @gone.png", warn)
-	if err != nil || len(got) != 1 {
-		t.Fatalf("got %d images, %v", len(got), err)
-	}
-	if len(warnings) != 1 || !strings.Contains(warnings[0], "gone.png") {
-		t.Errorf("a bad mention should warn, not fail: %q", warnings)
-	}
-	if _, err := loadAttachments(e, []string{"missing.png"}, "", warn); err == nil || !strings.Contains(err.Error(), "--image missing.png") {
-		t.Errorf("a bad --image must fail: %v", err)
-	}
-}
-
 func TestOneShotWithImage(t *testing.T) {
 	e := testEnv(t)
-	writePNG(t, filepath.Join(e.tools.Workspace().Dir(), "ui.png"))
+	writePNG(t, filepath.Join(e.Tools().Workspace().Dir(), "ui.png"))
 	llm := runtime.NewMockLLM("gemini-3.8-flash", genai.NewContentFromText("a button", genai.RoleModel))
-	if err := e.engine.SetModel(context.Background(), llm); err != nil {
+	if err := e.Engine().SetModel(context.Background(), llm); err != nil {
 		t.Fatal(err)
 	}
-	imgs, err := loadAttachments(e, []string{"ui.png"}, "", func(string) {})
+	imgs, err := e.LoadAttachments([]string{"ui.png"}, "", func(string) {})
 	if err != nil {
 		t.Fatal(err)
 	}
-	sess, _ := e.storage.CreateSession("", "t", "code-puppy")
+	sess, _ := e.Storage().CreateSession("", "t", "code-puppy")
 	var out bytes.Buffer
 	if err := runOneShot(context.Background(), e, oneShotOptions{prompt: "what is this?", sessionID: sess.ID, format: formatText, stdout: &out, images: imgs}); err != nil {
 		t.Fatal(err)

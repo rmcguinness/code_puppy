@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/retail-cortex/code_puppy/internal/app"
 	"github.com/retail-cortex/code_puppy/internal/config"
 	"github.com/retail-cortex/code_puppy/internal/memory"
 	"github.com/retail-cortex/code_puppy/internal/observability"
@@ -136,7 +137,7 @@ func runDoctor(ctx context.Context, g *globalFlags, online bool) []check {
 			fail = statusWarn
 		}
 		if err != nil {
-			add(label, fail, "%s%s", refPrefix(ref), modelErrorSummary(err, cfg))
+			add(label, fail, "%s%s", refPrefix(ref), app.ModelErrorSummary(err, cfg))
 			return
 		}
 		add(label, statusOK, "%s%s initialised", refPrefix(ref), m.Name())
@@ -147,7 +148,7 @@ func runDoctor(ctx context.Context, g *globalFlags, online bool) []check {
 		err = pingModel(octx, m)
 		cancel()
 		if err != nil {
-			add(label+" request", fail, "%s", modelErrorSummary(err, cfg))
+			add(label+" request", fail, "%s", app.ModelErrorSummary(err, cfg))
 		} else {
 			add(label+" request", statusOK, "model responded")
 		}
