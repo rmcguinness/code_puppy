@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -251,5 +252,38 @@ func TestExecEnvScrubsCredentials(t *testing.T) {
 	cfg.Exec = &ExecEnv{}
 	if out := runShellCommand(context.Background(), cfg, RunShellCommandInput{Command: "env"}); !strings.Contains(out.Output, "sk-leak") {
 		t.Error("expected unscrubbed environment when ScrubEnv is empty")
+	}
+}
+
+// Commands run in the ExecEnv's directory, not the process's.
+func TestExecEnvRunsInItsDir(t *testing.T) {
+	dir := t.TempDir()
+	t.Chdir(t.TempDir())
+	cmd, err := (&ExecEnv{Dir: dir}).command(context.Background(), []string{"pwd", "-P"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	out, err := cmd.Output()
+	want, _ := filepath.EvalSymlinks(dir)
+	if err != nil || strings.TrimSpace(string(out)) != want {
+		t.Errorf("ran in %q (%v), want %q", out, err, want)
+	}
+}
+
+// Relative extra roots are relative to the workspace, wherever the process is.
+func TestExtraRootsResolveAgainstTheWorkspace(t *testing.T) {
+	base := t.TempDir()
+	ws, shared := filepath.Join(base, "ws"), filepath.Join(base, "shared")
+	os.MkdirAll(ws, 0o755)
+	os.MkdirAll(shared, 0o755)
+	t.Chdir(t.TempDir())
+	w, err := OpenWorkspace(WorkspaceOptions{Dir: ws, ReadOnlyPaths: []string{"../shared"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer w.Close()
+	want, _ := filepath.EvalSymlinks(shared)
+	if !slices.Contains(w.RootDirs(), want) {
+		t.Errorf("roots %v lack %s", w.RootDirs(), want)
 	}
 }

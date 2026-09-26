@@ -140,7 +140,7 @@ func NewMCPManager(cfgs []config.MCPServerConfig, env *ExecEnv, reserved []strin
 		if c.Command != "" {
 			serverEnv := env
 			if c.Sandbox != nil && !*c.Sandbox && env != nil {
-				serverEnv = &ExecEnv{ScrubEnv: env.ScrubEnv}
+				serverEnv = &ExecEnv{ScrubEnv: env.ScrubEnv, Dir: env.Dir}
 			}
 			argv := append([]string{c.Command}, c.Args...)
 			build := func() (*guardedCmd, error) {

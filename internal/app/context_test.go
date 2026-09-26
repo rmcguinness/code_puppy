@@ -82,8 +82,12 @@ func TestMemoryAndLocale(t *testing.T) {
 		t.Errorf("unknown locale: %v", err)
 	}
 	res, err := w.SetLocale(ctx, "japanese")
-	if err != nil || res.Tag != "ja" || res.HasCatalog || res.Saved.Err != nil || i18n.Current().Tag().String() != "ja" {
+	if err != nil || res.Tag != "ja" || res.HasCatalog || res.Saved.Err != nil || w.Settings().Locale != "ja" {
 		t.Fatalf("ja: %+v %v", res, err)
+	}
+	// The interface language is the client's; the workspace leaves it alone.
+	if got := i18n.Current().Tag().String(); got != "en-US" {
+		t.Errorf("interface language changed to %s", got)
 	}
 	if got := savedConfig(t).UI.Locale; got != "ja" {
 		t.Errorf("saved locale %q", got)

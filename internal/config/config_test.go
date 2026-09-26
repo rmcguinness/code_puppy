@@ -184,22 +184,28 @@ func TestSearchPathsRespectTrust(t *testing.T) {
 	cfg.Skills.Paths = []string{"~/.code_puppy/skills", "./skills", ".agents/skills", "/opt/skills"}
 
 	// Negative: untrusted workspace drops relative (workspace) paths.
-	got := cfg.SkillSearchPaths()
+	got := cfg.SkillSearchPaths("/work")
 	want := []string{filepath.Join(home, ".code_puppy", "skills"), "/opt/skills"}
 	if strings.Join(got, ",") != strings.Join(want, ",") {
 		t.Errorf("untrusted skill paths = %v, want %v", got, want)
 	}
-	if agents := cfg.AgentSearchPaths(); len(agents) != 1 || agents[0] != filepath.Join(home, ".code_puppy", "agents") {
+	if agents := cfg.AgentSearchPaths("/work"); len(agents) != 1 || agents[0] != filepath.Join(home, ".code_puppy", "agents") {
 		t.Errorf("untrusted agent paths = %v", agents)
 	}
 
 	// Positive: trusted workspace includes them.
 	cfg.CodePuppy.TrustWorkspace = true
-	if got := cfg.SkillSearchPaths(); len(got) != 4 {
-		t.Errorf("trusted skill paths = %v", got)
+	// Relative paths resolve against the workspace, not the working directory.
+	got = cfg.SkillSearchPaths("/work")
+	want = []string{filepath.Join(home, ".code_puppy", "skills"), "/work/skills", "/work/.agents/skills", "/opt/skills"}
+	if strings.Join(got, ",") != strings.Join(want, ",") {
+		t.Errorf("trusted skill paths = %v, want %v", got, want)
 	}
-	if agents := cfg.AgentSearchPaths(); len(agents) != 2 || agents[1] != "./agents" {
+	if agents := cfg.AgentSearchPaths("/work"); len(agents) != 2 || agents[1] != "/work/agents" {
 		t.Errorf("trusted agent paths = %v", agents)
+	}
+	if agents := cfg.AgentSearchPaths(""); agents[1] != "./agents" {
+		t.Errorf("without a workspace, paths stay relative: %v", agents)
 	}
 }
 

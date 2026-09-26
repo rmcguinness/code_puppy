@@ -19,6 +19,9 @@ type ExecEnv struct {
 	// "*_API_KEY") removed from every child process, so commands the model
 	// runs can't read Code Puppy's own credentials.
 	ScrubEnv []string
+	// Dir is where commands run unless they set their own directory: the
+	// workspace root, never the process's working directory.
+	Dir string
 }
 
 // guardedCmd is an exec.Cmd whose process group dies with Code Puppy.
@@ -39,6 +42,9 @@ func (e *ExecEnv) command(ctx context.Context, argv []string) (*guardedCmd, erro
 		return nil, err
 	}
 	cmd := exec.CommandContext(ctx, wrapped[0], wrapped[1:]...)
+	if e != nil {
+		cmd.Dir = e.Dir
+	}
 	if childEnd != nil {
 		cmd.ExtraFiles = []*os.File{childEnd}
 	}

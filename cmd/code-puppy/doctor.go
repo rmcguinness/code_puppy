@@ -256,8 +256,7 @@ func runDoctor(ctx context.Context, g *globalFlags, online bool) []check {
 		add("audit log", statusWarn, "disabled")
 	}
 
-	wd, _ := os.Getwd()
-	if docs := memory.Load(wd, cfg.Memory); len(docs) > 0 {
+	if docs := memory.Load(config.ExpandHome(cfg.Tools.WorkspaceDir), cfg.Memory); len(docs) > 0 {
 		var paths []string
 		for _, d := range docs {
 			paths = append(paths, d.Path)
@@ -373,7 +372,7 @@ func checkSkills(cfg *config.Config, add func(name string, st checkStatus, forma
 		add("skills", statusFail, "%v", err)
 		return
 	}
-	if err := prov.DiscoverExternal(cfg.SkillSearchPaths()); err != nil {
+	if err := prov.DiscoverExternal(cfg.SkillSearchPaths(config.ExpandHome(cfg.Tools.WorkspaceDir))); err != nil {
 		for _, line := range strings.Split(err.Error(), "\n") {
 			add("skills", statusWarn, "%s", line)
 		}

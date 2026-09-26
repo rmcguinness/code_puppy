@@ -110,6 +110,28 @@ func TestRootFlagValidation(t *testing.T) {
 	}
 }
 
+// --dir names the workspace; the process's working directory stays put.
+func TestDirFlagDoesNotChangeTheWorkingDirectory(t *testing.T) {
+	isolate(t)
+	before, _ := os.Getwd()
+	ws := t.TempDir()
+	cfg, err := loadConfig(&globalFlags{dir: ws})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if after, _ := os.Getwd(); after != before {
+		t.Errorf("working directory changed to %s", after)
+	}
+	if cfg.Tools.WorkspaceDir != ws {
+		t.Errorf("workspace %q, want %q", cfg.Tools.WorkspaceDir, ws)
+	}
+	file := filepath.Join(ws, "f")
+	os.WriteFile(file, nil, 0o600)
+	if _, err := loadConfig(&globalFlags{dir: file}); exitCodeFor(err) != exitUsage {
+		t.Errorf("a file as --dir: %v", err)
+	}
+}
+
 // isolate points HOME and config at temp dirs.
 func isolate(t *testing.T) string {
 	t.Helper()

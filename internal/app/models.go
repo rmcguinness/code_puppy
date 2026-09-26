@@ -9,7 +9,6 @@ import (
 	"strings"
 
 	"github.com/retail-cortex/code_puppy/internal/config"
-	"github.com/retail-cortex/code_puppy/internal/i18n"
 	"github.com/retail-cortex/code_puppy/internal/runtime"
 )
 
@@ -259,14 +258,14 @@ type Settings struct {
 	Agency    string
 	Model     ModelInfo
 	Agent     string
-	Locale    string
+	Locale    string // the language the model replies in
 }
 
 // Settings returns the current settings.
 func (w *Workspace) Settings() Settings {
 	return Settings{
 		PuppyName: w.cfg.CodePuppy.PuppyName, OwnerName: w.cfg.CodePuppy.OwnerName, Agency: w.cfg.CodePuppy.AgencyLevel,
-		Model: w.Model(), Agent: w.engine.ActiveAgent(), Locale: i18n.Current().Tag().String(),
+		Model: w.Model(), Agent: w.engine.ActiveAgent(), Locale: w.reply.Tag().String(),
 	}
 }
 

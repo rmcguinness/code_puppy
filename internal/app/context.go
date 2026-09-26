@@ -8,7 +8,6 @@ import (
 	"strings"
 
 	"github.com/retail-cortex/code_puppy/internal/config"
-	"github.com/retail-cortex/code_puppy/internal/i18n"
 	"github.com/retail-cortex/code_puppy/internal/images"
 	"github.com/retail-cortex/code_puppy/internal/memory"
 	"github.com/retail-cortex/code_puppy/internal/runtime"
@@ -142,16 +141,17 @@ type LocaleChange struct {
 	Saved      Saved
 }
 
-// SetLocale switches the interface language (per process) and the language
-// the model replies in, and saves it as ui.locale in the config file.
-// input is a language tag or name.
+// SetLocale switches the language the model replies in, for this
+// workspace, and saves it as ui.locale in the config file. input is a
+// language tag or name. The interface language belongs to the client: a
+// front end switches its own (i18n.SetCurrent) with the returned Tag.
 func (w *Workspace) SetLocale(ctx context.Context, input string) (LocaleChange, error) {
 	tag, err := w.locales.Resolve(input)
 	if err != nil {
 		return LocaleChange{}, ErrUnknownLocale
 	}
 	l := w.locales.Localizer(tag)
-	i18n.SetCurrent(l)
+	w.reply = l
 	out := LocaleChange{Tag: tag.String(), NativeName: l.NativeName(), LanguageName: l.LanguageName(), HasCatalog: l.HasCatalog()}
 	if err := w.engine.SetInstructions(ctx, w.instructions()); err != nil {
 		out.Saved.Err = err

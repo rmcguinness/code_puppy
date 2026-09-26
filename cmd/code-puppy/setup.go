@@ -19,20 +19,23 @@ type globalFlags struct {
 	trustWorkspace                    bool
 }
 
-// loadConfig applies --dir (changing the working directory), loads trusted
-// configuration and applies flag overrides.
+// loadConfig loads trusted configuration and applies flag overrides,
+// including --dir as the workspace. The process's working directory is
+// left alone: the workspace is always named explicitly.
 func loadConfig(f *globalFlags) (*config.Config, error) {
+	var dir string
 	if f.dir != "" {
-		if f.config != "" {
-			abs, err := filepath.Abs(config.ExpandHome(f.config))
-			if err != nil {
-				return nil, withCode(exitUsage, fmt.Errorf("invalid --config: %w", err))
+		abs, err := filepath.Abs(config.ExpandHome(f.dir))
+		if err == nil {
+			var info os.FileInfo
+			if info, err = os.Stat(abs); err == nil && !info.IsDir() {
+				err = fmt.Errorf("%s is not a directory", abs)
 			}
-			f.config = abs
 		}
-		if err := os.Chdir(config.ExpandHome(f.dir)); err != nil {
+		if err != nil {
 			return nil, withCode(exitUsage, fmt.Errorf("cannot use --dir: %w", err))
 		}
+		dir = abs
 	}
 	cfg, err := config.Load(f.config)
 	if err != nil {
@@ -50,8 +53,8 @@ func loadConfig(f *globalFlags) (*config.Config, error) {
 	if f.trustWorkspace {
 		cfg.CodePuppy.TrustWorkspace = true
 	}
-	if f.dir != "" {
-		cfg.Tools.WorkspaceDir = "."
+	if dir != "" {
+		cfg.Tools.WorkspaceDir = dir
 	}
 	return cfg, nil
 }

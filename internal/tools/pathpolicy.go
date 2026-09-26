@@ -166,6 +166,17 @@ func canonicalGlobPrefix(p string) string {
 	return filepath.ToSlash(resolved) + rest
 }
 
+// resolveIn expands "~" in dir and resolves it against base when relative:
+// configured paths are relative to the workspace, not to the process's
+// working directory.
+func resolveIn(base, dir string) string {
+	dir = config.ExpandHome(dir)
+	if filepath.IsAbs(dir) || base == "" {
+		return dir
+	}
+	return filepath.Join(base, dir)
+}
+
 // canonicalDir returns the absolute, symlink-resolved form of an existing directory.
 func canonicalDir(dir string) (string, error) {
 	abs, err := filepath.Abs(config.ExpandHome(dir))

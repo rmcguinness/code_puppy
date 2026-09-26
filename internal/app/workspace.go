@@ -7,6 +7,7 @@ package app
 import (
 	"context"
 	"fmt"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -51,32 +52,43 @@ type Workspace struct {
 	locales  *i18n.Bundle
 	modelErr error // set when the configured model failed to initialise
 	warn     func(string)
+	// reply is the language the model replies in, per workspace.
+	reply    *i18n.Localizer
 	newModel func(ctx context.Context, cfg *config.Config, name string) (model.LLM, error)
 }
 
-// Open wires registries, tools, the model and the engine for cfg. It also
-// activates cfg's interface language, which is per process.
+// Open wires registries, tools, the model and the engine for the workspace
+// cfg.Tools.WorkspaceDir names. The workspace owns cfg from then on and
+// changes it (the model, pins, settings), so each workspace needs its own
+// copy. Open also activates cfg's interface language for the process.
 func Open(ctx context.Context, cfg *config.Config, o Options) (*Workspace, error) {
 	if o.Warn == nil {
 		o.Warn = func(string) {}
 	}
 	w := &Workspace{cfg: cfg, locales: SetupLocale(cfg, o.Warn), warn: o.Warn}
+	w.reply = i18n.Current()
 	if w.newModel = o.NewModel; w.newModel == nil {
 		w.newModel = runtime.NewModel
 	}
-	var err error
+	// Everything relative resolves against the workspace, never the
+	// process's working directory: one process can hold several workspaces.
+	dir, err := filepath.Abs(config.ExpandHome(cfg.Tools.WorkspaceDir))
+	if err != nil {
+		return nil, fmt.Errorf("invalid workspace directory: %w", err)
+	}
+	cfg.Tools.WorkspaceDir = dir
 
 	if w.agents, err = agents.NewRegistry(); err != nil {
 		return nil, fmt.Errorf("failed to load agent registry: %w", err)
 	}
-	if err := w.agents.LoadExternalAgents(cfg.AgentSearchPaths()...); err != nil {
+	if err := w.agents.LoadExternalAgents(cfg.AgentSearchPaths(dir)...); err != nil {
 		o.Warn(err.Error())
 	}
 	if w.skills, err = skills.NewProvider(); err != nil {
 		return nil, fmt.Errorf("failed to load skills provider: %w", err)
 	}
 	if cfg.Skills.Enabled {
-		if err := w.skills.DiscoverExternal(cfg.SkillSearchPaths()); err != nil {
+		if err := w.skills.DiscoverExternal(cfg.SkillSearchPaths(dir)); err != nil {
 			o.Warn(err.Error())
 		}
 		for _, p := range cfg.Skills.Policy.Problems() {
@@ -224,7 +236,7 @@ func (w *Workspace) LoadAttachments(paths []string, prompt string, warn func(str
 // instructions are the extra system instructions: project memory plus, for
 // non-English locales, which language to reply in.
 func (w *Workspace) instructions() string {
-	return memory.Render(w.memory) + i18n.ReplyInstruction(i18n.Current())
+	return memory.Render(w.memory) + i18n.ReplyInstruction(w.reply)
 }
 
 // agentModelRefs returns the model each agent should run on when it isn't

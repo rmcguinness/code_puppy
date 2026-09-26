@@ -92,14 +92,16 @@ func OpenWorkspace(opts WorkspaceOptions) (*Workspace, error) {
 	if err := add(opts.Dir, true); err != nil {
 		return nil, err
 	}
+	// Additional roots are relative to the workspace.
+	base := w.roots[0].dir
 	for _, d := range opts.AllowedPaths {
-		if err := add(d, true); err != nil {
+		if err := add(resolveIn(base, d), true); err != nil {
 			w.Close()
 			return nil, err
 		}
 	}
 	for _, d := range opts.ReadOnlyPaths {
-		if err := add(d, false); err != nil {
+		if err := add(resolveIn(base, d), false); err != nil {
 			w.Close()
 			return nil, err
 		}

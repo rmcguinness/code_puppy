@@ -441,23 +441,30 @@ func IsWorkspaceRelative(p string) bool {
 }
 
 // SkillSearchPaths returns skill directories to scan, expanded, with
-// workspace-relative entries removed unless the workspace is trusted.
-func (c *Config) SkillSearchPaths() []string {
-	return filterTrusted(c.Skills.Paths, c.CodePuppy.TrustWorkspace)
+// workspace-relative entries removed unless the workspace is trusted, and
+// otherwise resolved against workspace (the working directory if "").
+func (c *Config) SkillSearchPaths(workspace string) []string {
+	return filterTrusted(c.Skills.Paths, c.CodePuppy.TrustWorkspace, workspace)
 }
 
-// AgentSearchPaths returns directories to scan for user-defined agents.
-func (c *Config) AgentSearchPaths() []string {
-	return filterTrusted([]string{"~/.code_puppy/agents", "./agents"}, c.CodePuppy.TrustWorkspace)
+// AgentSearchPaths returns directories to scan for user-defined agents,
+// resolved like SkillSearchPaths.
+func (c *Config) AgentSearchPaths(workspace string) []string {
+	return filterTrusted([]string{"~/.code_puppy/agents", "./agents"}, c.CodePuppy.TrustWorkspace, workspace)
 }
 
-func filterTrusted(paths []string, trustWorkspace bool) []string {
+func filterTrusted(paths []string, trustWorkspace bool, workspace string) []string {
 	out := make([]string, 0, len(paths))
 	for _, p := range paths {
-		if IsWorkspaceRelative(p) && !trustWorkspace {
+		rel := IsWorkspaceRelative(p)
+		switch {
+		case rel && !trustWorkspace:
 			continue
+		case rel && workspace != "":
+			out = append(out, filepath.Join(workspace, p))
+		default:
+			out = append(out, ExpandHome(p))
 		}
-		out = append(out, ExpandHome(p))
 	}
 	return out
 }
