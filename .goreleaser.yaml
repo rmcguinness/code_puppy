@@ -61,3 +61,13 @@ changelog:
 
 release:
   draft: true
+  footer: |
+    ### macOS
+
+    The macOS binaries aren't notarized by Apple. If you download one in a browser, Gatekeeper refuses to run it until you clear the quarantine flag:
+
+    ```bash
+    xattr -d com.apple.quarantine code-puppy
+    ```
+
+    You can also open it once through Finder's context menu (Open). A copy downloaded with `curl` isn't quarantined.
