@@ -315,7 +315,7 @@ limits: { max_turns: 30, max_cost_usd: 0.50, timeout: 20m }
 Check for outdated Go modules and write reports/deps.md.
 ```
 
-`code-puppy workers` lists them; `code-puppy workers enable <name>` shows exactly what you're approving and enables that content (an edit disables it again); `workers run <name>` runs one now; `workers runs <name>` shows its history. A worker may only do what its `permissions` allow (`shell:`, `write:`, `delete:`, `web:`, `mcp:`), capped by `[workers.policy]`; anything else is refused and recorded, and it can't ask questions. Each run is a session of its own you can open with `/resume`.
+`code-puppy workers` lists them; `code-puppy workers enable <name>` shows exactly what you're approving and enables that content (an edit disables it again); `workers run <name>` runs one now; `workers runs <name>` shows its history. A worker may only do what its `permissions` allow (`shell:`, `write:`, `delete:`, `web:`, `mcp:`), capped by `[workers.policy]`; anything else is refused and recorded, and it can't ask questions. Each run is a session of its own you can open with `/resume`. `code-puppy service install` starts the service at every login (a launchd agent on macOS, a systemd user unit on Linux), so workers keep their schedules; keep API keys in `~/.code_puppy/.env.toml`, since a login item doesn't see your shell's environment.
 
 ## 📦 Build, Test, Release
 
