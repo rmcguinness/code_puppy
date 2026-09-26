@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"slices"
-	"sort"
 	"strconv"
 	"strings"
 
@@ -284,25 +283,18 @@ func describeApproval(a core.Approval) string {
 }
 
 func cmdMCP(app *App) {
-	if !needTools(app) {
-		return
-	}
-	servers := app.Tools.MCP().Servers()
+	servers := app.Workspace.ListMCPServers()
 	if len(servers) == 0 {
 		fmt.Println(i18n.T("mcp.none"))
 		return
 	}
 	fmt.Printf("\n%s🔌 %s%s\n", Bold, i18n.T("mcp.title"), Reset)
-	for _, s := range app.Cfg.MCP.Servers {
-		target := s.URL
-		if target == "" {
-			target = strings.Join(append([]string{s.Command}, s.Args...), " ")
-		}
+	for _, s := range servers {
 		approval := i18n.T("mcp.approval_required")
 		if s.AutoApprove {
 			approval = i18n.T("mcp.auto_approved")
 		}
-		fmt.Printf("  • %s%s%s: %s %s(%s)%s\n", Bold, safe(s.Name), Reset, safe(target), Dim, approval, Reset)
+		fmt.Printf("  • %s%s%s: %s %s(%s)%s\n", Bold, safe(s.Name), Reset, safe(s.Target), Dim, approval, Reset)
 	}
 	fmt.Println()
 }
@@ -382,28 +374,16 @@ func printSaved(s core.Saved) {
 // cmdTools lists what the active agent can use: its built-in tools and the
 // MCP servers offered to it. ● marks tools that stay available in /plan.
 func cmdTools(app *App) {
-	if !needTools(app) {
-		return
-	}
-	active := app.Engine.ActiveAgent()
-	spec, ok := app.Agents.Get(active)
-	if !ok {
-		return
-	}
-	list := app.Tools.GetToolsForAgent(spec.Tools)
-	sort.Slice(list, func(i, j int) bool { return list[i].Name() < list[j].Name() })
-	fmt.Printf("\n%s🧰 %s%s\n", Bold, i18n.T("tools.title", "agent", safe(active)), Reset)
-	for _, t := range list {
+	at := app.Workspace.ActiveAgentTools()
+	fmt.Printf("\n%s🧰 %s%s\n", Bold, i18n.T("tools.title", "agent", safe(at.Agent)), Reset)
+	for _, t := range at.Tools {
 		mark := " "
-		if runtime.PlanAllows(t.Name()) {
+		if t.PlanAllowed {
 			mark = Green + "●" + Reset
 		}
-		fmt.Printf("  %s %s%-26s%s %s\n", mark, Bold, safe(t.Name()), Reset, safe(textutil.Ellipsize(firstSentence(t.Description()), 70)))
+		fmt.Printf("  %s %s%-26s%s %s\n", mark, Bold, safe(t.Name), Reset, safe(textutil.Ellipsize(firstSentence(t.Description), 70)))
 	}
-	for _, s := range app.Cfg.MCP.Servers {
-		if !mcpOfferedTo(s.Agents, active) {
-			continue
-		}
+	for _, s := range at.MCP {
 		detail := i18n.T("tools.mcp_all")
 		if len(s.Tools) > 0 {
 			detail = strings.Join(s.Tools, ", ")
@@ -411,23 +391,9 @@ func cmdTools(app *App) {
 		if s.Prefix != "" {
 			detail += " " + i18n.T("tools.mcp_prefix", "prefix", s.Prefix+"__")
 		}
-		fmt.Printf("  %s %s%-26s%s %s\n", " ", Bold, "mcp:"+safe(s.Name), Reset, safe(detail))
+		fmt.Printf("  %s %s%-26s%s %s\n", " ", Bold, "mcp:"+safe(s.Server), Reset, safe(detail))
 	}
 	fmt.Printf("\n  %s%s%s\n\n", Dim, i18n.T("tools.legend"), Reset)
-}
-
-// mcpOfferedTo mirrors the MCP manager's rule for the primary agent: no
-// agents list means the primary agent only; "*" means every agent.
-func mcpOfferedTo(agents []string, active string) bool {
-	if len(agents) == 0 {
-		return true
-	}
-	for _, a := range agents {
-		if a == "*" || a == active {
-			return true
-		}
-	}
-	return false
 }
 
 func firstSentence(s string) string {

@@ -181,12 +181,6 @@ func printHelp() {
 }
 
 func handleSkillsCommand(args []string, app *App) {
-	prov := app.Skills
-	if prov == nil {
-		fmt.Println(i18n.T("skills.disabled"))
-		return
-	}
-
 	sub := "list"
 	if len(args) > 0 {
 		sub = strings.ToLower(args[0])
@@ -194,7 +188,7 @@ func handleSkillsCommand(args []string, app *App) {
 
 	switch sub {
 	case "list":
-		all := prov.List()
+		all := app.Workspace.ListSkills()
 		fmt.Printf("\n%s📦 %s:%s\n", Bold, i18n.T("skills.discovered", "count", len(all)), Reset)
 		for _, s := range all {
 			tags := ""
@@ -202,7 +196,7 @@ func handleSkillsCommand(args []string, app *App) {
 				tags = fmt.Sprintf("[%s]", strings.Join(s.Tags, ", "))
 			}
 			fmt.Printf("  • %s%s%s %s: %s\n", Bold, safe(s.Name), Reset, Dim+safe(tags)+Reset, safe(s.Description))
-			if line := scriptSummary(s, skillPolicy(app)); line != "" {
+			if line := scriptSummary(s); line != "" {
 				fmt.Printf("      %s%s%s\n", Dim, safe(line), Reset)
 			}
 		}
@@ -213,14 +207,19 @@ func handleSkillsCommand(args []string, app *App) {
 			fmt.Printf("%s%s%s\n", Yellow, i18n.T("skills.show_usage"), Reset)
 			return
 		}
-		showSkill(args[1], prov, skillPolicy(app))
+		s, ok := app.Workspace.Skill(args[1])
+		if !ok {
+			fmt.Printf("%s❌ %s%s\n", Red, i18n.T("skills.not_found", "name", safe(args[1])), Reset)
+			return
+		}
+		showSkill(s)
 
 	case "search":
 		query := ""
 		if len(args) > 1 {
 			query = strings.Join(args[1:], " ")
 		}
-		matched := prov.Search(query)
+		matched := app.Workspace.SearchSkills(query)
 		fmt.Printf("\n%s🔍 %s:%s\n", Bold, i18n.T("skills.search_results", "query", safe(query), "count", len(matched)), Reset)
 		for _, s := range matched {
 			fmt.Printf("  • %s%s%s: %s\n", Bold, safe(s.Name), Reset, safe(s.Description))

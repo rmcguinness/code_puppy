@@ -30,7 +30,8 @@ Roadmap items 1–22 are done and committed, and item 23 (the desktop app) is in
 | `75630f18` | Phase 3: `Workspace.Run` and `Steer`, one turn lifecycle for the REPL and one-shot runs |
 | `e657a7bd` | Phase 4, agents and models: typed operations for `/agents`, `/agent`, `/model`, `/pin_model`, `/unpin`, `/model_settings`, `/set` |
 | `ef91966a` | Phase 4, sessions: `/session list/new/load/save`, `/resume`, `/rename` |
-| (the commit adding `internal/app/changes.go`) | Phase 4, checkpoints and approvals: `/undo`, `/checkpoints`, `/diff`, `/approvals` |
+| `8bbe0b94` | Phase 4, checkpoints and approvals: `/undo`, `/checkpoints`, `/diff`, `/approvals` |
+| (the commit adding `internal/app/extensions.go`) | Phase 4, skills, envs, MCP and tools: `/skills`, `/envs`, `/mcp`, `/tools` |
 | (the commit adding `internal/session/title_test.go`) | Session names from the first prompt, `/rename`, terminal title, resume hint on exit |
 
 `go vet ./...` and `go test -race ./...` pass.
@@ -41,7 +42,7 @@ Roadmap items 1–22 are done and committed, and item 23 (the desktop app) is in
 
 ## Open work, in suggested order
 
-1. **Desktop app: ROADMAP item 23, phase 4 in progress**: typed commands in `internal/app`, in groups (agents and models ✅; sessions ✅; checkpoints and approvals ✅; skills, envs and MCP; memory, locale and cost), so `tui.HandleCommand` only parses and renders, and `tui.App` loses its individual fields in favour of `Workspace`. The phases and decisions are in the ROADMAP item.
+1. **Desktop app: ROADMAP item 23, phase 4 in progress**: typed commands in `internal/app`, in groups (agents and models ✅; sessions ✅; checkpoints and approvals ✅; skills, envs and MCP ✅; memory, locale and cost), so `tui.HandleCommand` only parses and renders, and `tui.App` loses its individual fields in favour of `Workspace`. The phases and decisions are in the ROADMAP item.
 2. **Manual verification (needs a person).** Nothing in `MANUAL_VERIFICATION.md` has been run yet. It covers real providers (💲 = paid calls), terminal behavior, the macOS and Linux sandboxes, MCP, steering, fallback and pinning. Record results in the file; any failure becomes the next task.
 3. **Optional: notarize the macOS binaries** (needs an Apple Developer account). Until then, the release notes (GoReleaser `release.footer`) and the README explain clearing the quarantine flag. Dependabot (`.github/dependabot.yml`) keeps the pinned action SHAs current. `~/.gnupg/gpg-agent.conf` now points at GPG Suite's `pinentry-mac`; the next tag will show whether signing works.
 4. **Linux sandbox startup cost.** Before every sandboxed command, `expandBlocked` (`internal/tools/bwrap.go`) scans the writable roots, including the temp and cache directories (e.g. the Go build cache), for blocked names, up to 50,000 entries. Measured in a Linux container: about 0.1 s per command normally, 3.4 s under `-race`. Worth reducing (e.g. skip cache directories for name patterns, or reuse a recent scan), keeping in mind that a file created between scans could then escape masking. CI's parallel-cap test runs with the sandbox off because of this.
