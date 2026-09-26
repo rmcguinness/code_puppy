@@ -23,8 +23,9 @@ const (
 	KindDenial     = "denial"
 	KindHook       = "hook"
 	KindUndo       = "undo"
-	KindAttachment = "attachment" // an image sent to the model: path and hash only
-	KindUserShell  = "user_shell" // a command the user ran with "!" (not an agent action)
+	KindAttachment = "attachment"  // an image sent to the model: path and hash only
+	KindUserShell  = "user_shell"  // a command the user ran with "!" (not an agent action)
+	KindUserSearch = "user_search" // a web search the user ran with /search web
 )
 
 // Entry is one audit record.

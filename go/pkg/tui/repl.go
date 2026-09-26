@@ -290,6 +290,17 @@ func RunREPL(ctx context.Context, app *App) error {
 			runShellPassthrough(ctx, app, cmd, interrupts)
 			continue
 		}
+		if rest, ok := strings.CutPrefix(line, "/search"); ok && (rest == "" || rest[0] == ' ') {
+			active := app.Storage.Active()
+			if active == nil {
+				fmt.Printf("%s❌ %s%s\n", Red, i18n.T("session.none_active"), Reset)
+				continue
+			}
+			if t, ok := prepareSearch(ctx, app, rest, interrupts); ok {
+				runTurn(t.ctx, app, active.ID, t.recorded, interrupts, turnOptions{prompt: t.prompt, readOnly: "search"})
+			}
+			continue
+		}
 		plan := false
 		if goal, ok := strings.CutPrefix(line, "/plan"); ok && (goal == "" || goal[0] == ' ') {
 			if line = strings.TrimSpace(goal); line == "" {
@@ -330,6 +341,12 @@ type turnOptions struct {
 	// plan: the prompt is a goal to plan for; tools that change anything
 	// are refused for the whole turn (see runtime.WithPlanOnly).
 	plan bool
+	// prompt, if set, is sent to the agent instead of the line, which is
+	// what the transcript records (e.g. "/search web …").
+	prompt string
+	// readOnly names a mode that refuses the same tools as plan mode
+	// (see runtime.WithReadOnly).
+	readOnly string
 }
 
 // runTurn sends one prompt to the agent and renders the result.
@@ -342,6 +359,9 @@ func runTurn(ctx context.Context, app *App, sessionID, line string, interrupts <
 		return
 	}
 	prompt, recorded := line, line
+	if o.prompt != "" {
+		prompt = o.prompt
+	}
 	if o.plan {
 		prompt, recorded = runtime.PlanPrompt(line), "/plan "+line
 		fmt.Printf("%s📝 %s%s\n", Dim, i18n.T("plan.mode"), Reset)
@@ -372,6 +392,9 @@ func runTurn(ctx context.Context, app *App, sessionID, line string, interrupts <
 	}
 	if o.plan {
 		execOpts = append(execOpts, runtime.WithPlanOnly())
+	}
+	if o.readOnly != "" {
+		execOpts = append(execOpts, runtime.WithReadOnly(o.readOnly))
 	}
 	stopSteering := watchSteering(turnCtx, app, sessionID, printer)
 	streamErr := app.Engine.Execute(turnCtx, sessionID, prompt, printer.Handle, execOpts...)

@@ -2,7 +2,7 @@
 
 Status key: ✅ done · 🔜 next · 📋 planned · 🔍 needs investigation first
 
-Items 10–18 were added after the first plan and appear before item 9, which stays last because it needs a person. Open work and resume notes: [NEXT_STEPS.md](NEXT_STEPS.md).
+Items 10–19 were added after the first plan and appear before item 9, which stays last because it needs a person. Open work and resume notes: [NEXT_STEPS.md](NEXT_STEPS.md).
 
 Each item lists the problem, the approach, where the change lands, how it is tested, and a rough size (S ≤ half a day, M ≈ 1–2 days, L ≈ 3+ days).
 
@@ -78,7 +78,7 @@ Also fixed: the model name now resolves per provider (`code_puppy.default_model`
 **Approach.** A `web_search` tool behind a provider interface. Options: (a) Anthropic's server-side `web_search` tool when the provider is Anthropic (no extra key, results cited); (b) a pluggable HTTP backend (Brave/Tavily/SearXNG) with `web.search_provider` + key for other providers. Results go through the same approval-per-host and SSRF rules for any follow-up fetch.
 
 **Tests.** Fake backends via `httptest`; approval and deny-domain behaviour.
-**Outcome.** Implemented option (b) — Brave, Tavily and SearXNG — which works with every provider. Anthropic's server-side search (option a) is not implemented: it needs server-tool result blocks round-tripped through the adapter.
+**Outcome.** Implemented option (b) — Brave, Tavily and SearXNG — which works with every provider. Anthropic's server-side search (option a) was later dropped as not needed; Google search came instead (item 19).
 
 ---
 
@@ -233,6 +233,22 @@ Also fixed: the model name now resolves per provider (`code_puppy.default_model`
 **Not done.** No `/session delete`; `--force` replaces a snapshot, and files can be removed from the sessions directory. Usage and cost (`/cost`) start at zero in a session loaded from a snapshot, as they do after `--resume`.
 
 **Tests.** Copying: files and permissions, name and `from`, the source stays active and keeps growing on its own. Unique names, and `--force` replacing (the old files are gone). Bad names, empty and missing sessions. Opening by name starts a new session with the transcript, and a new `PersistentService` replays the copied events. Continuing that session doesn't touch the snapshot, and a second load starts another session from the same point. A snapshot opened by ID starts a new session; an ordinary ID resumes in place. A legacy source. That the event log copy matters was confirmed by breaking it (the replay test fails). REPL, with a real engine on a persistent session service: the model's request after `/session load` contains the snapshot's turn and not a turn added to the original afterwards; save errors (no session, empty, usage, taken, bad name); list marker; `/resume <name>`; `/resume <id>` in place; `--force`. CLI: `--resume <name>` starts a new session, and `--continue` skips a newer snapshot. Both regression tests were confirmed to fail without their fixes. Binary smoke test against a local fake OpenAI server: save from a piped REPL, continue the original, then `--resume=fruit` twice. Both requests contained only the snapshot's history.
+
+---
+
+## 19. Google search and `/search` — ✅ done (M)
+
+**Backend.** Google's Custom Search JSON API is closed to new customers and shuts down on 2027-01-01, so `search_provider = "google"` uses Gemini's grounding with Google Search instead. It calls `generateContent` with the `google_search` tool over REST (like the other providers, and testable against a fake server), using the Gemini key (`search_api_key`, `[llm.gemini] api_key`, `GEMINI_API_KEY`) and `search_model`. Results are the grounding chunks. Their links are Google redirects (`/grounding-api-redirect/…`), which `web_fetch` won't follow to another host, so each is resolved in parallel by reading its `Location` without following it. One that can't be resolved is kept, and `/search web` skips it. A chunk's snippet is the answer text it supports, and Gemini's answer (thoughts left out) comes back as `answer`. Open alternatives were weighed: SearXNG (already supported) can include Google results without a key; Marginalia and YaCy were left out.
+
+**`/search web <terms>`.** Runs the configured provider as the user, with no approval prompt, since the user typed the query; it goes to the audit log as `user_search`. It asks for 10 results and keeps the first five readable ones: http(s), not a document or binary by extension, not an unresolved redirect, no duplicates (fragment ignored). The list is shown, then a turn starts with a prompt listing them (and the engine's summary, marked unverified). `tools.WithFetchGrants` puts exactly those URLs in the turn's context, so `web_fetch` reads them without asking (audited as `user-selected`). Any other URL, including another page on the same host, still asks. The transcript records the command, not the prompt.
+
+**`/search session <terms>`.** `session.Search` matches words and "quoted phrases" case-insensitively in the stored transcript, which keeps what compaction dropped from the model's context. Earlier `/search` lines are skipped. It ranks by distinct terms, then recency, keeps 12, and sends them oldest first with ±300-character excerpts cut at rune boundaries. With no match, the agent is still asked, with that stated.
+
+**Both** run as read-only turns (`runtime.WithReadOnly("search")`: plan mode's tool list, with its own refusal message). `doctor` reports the provider, or why it can't be used, and `--online` runs a test search. Prompt builders live in `pkg/runtime` (`WebSearchPrompt`, `SessionSearchPrompt`) beside `PlanPrompt`.
+
+**Not done.** Google search charges aren't in `/cost`. Search Suggestions (Google's HTML widget) aren't shown in the terminal. Vertex AI (project/location, no API key) isn't supported for search.
+
+**Tests.** Google: request path, key header, `google_search` tool, answer without thoughts, redirect resolved, a denied target dropped after resolution, an unresolvable link kept, snippets from supports; key and model config. User search with no approver, and unconfigured. Fetch grants: the exact URL (fragment ignored) passes without asking, another page on the host asks, and no grant asks. Transcript search: terms and phrases, ranking, skipping earlier searches, excerpts on UTF-8. Viable links. REPL with a real engine and no auto-approval: usage; five links shown and sent (no PDF, no duplicate, not the sixth); the handed-over page is fetched with no approver while another is refused; `create_file` is refused as read-only; the command is recorded. Session search with and without matches. The grant test was confirmed to fail without the grant. Binary smoke test against a fake SearXNG and OpenAI server: both commands reach the model with the expected prompts.
 
 ---
 

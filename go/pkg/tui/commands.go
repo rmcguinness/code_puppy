@@ -181,6 +181,7 @@ func printHelp() {
 		{"/mcp", "help.mcp"},
 		{"/tools", "help.tools"},
 		{"/plan <goal>", "help.plan"},
+		{"/search web|session <terms>", "help.search"},
 		{"!<command>", "help.shell"},
 		{"/sandbox", "help.sandbox"},
 		{"/attach [path|clear]", "help.attach"},

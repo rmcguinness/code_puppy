@@ -1,6 +1,6 @@
 # Manual Verification Checklist
 
-Everything here needs a person, a real terminal, real credentials, or GitHub. The automated suite (370 tests on macOS and Linux) covers the logic behind each item; this list checks the parts it can't. Each item has an **expected** result — if you see something else, note it next to the item.
+Everything here needs a person, a real terminal, real credentials, or GitHub. The automated suite (379 tests on macOS and Linux) covers the logic behind each item; this list checks the parts it can't. Each item has an **expected** result — if you see something else, note it next to the item.
 
 Setup for most items: `make build`, then use `./bin/code-puppy` (or put `bin/` on your `PATH`). Use a scratch Git repository as the workspace so edits are safe.
 
@@ -277,3 +277,14 @@ Set `fallback_models = ["anthropic/claude-sonnet-5"]` with a working Anthropic k
 - [ ] `/session save fruit`. **Expected:** refused with a hint about `--force`; with `--force` it's replaced and `/session list` shows one 📸 fruit.
 - [ ] Exit. `code-puppy --continue "which word?"`. **Expected:** continues your last ordinary session, not the snapshot. `code-puppy --resume=fruit "which word?"`: pineapple, in a new session.
 - [ ] In a session that used tools (e.g. edited a file), save, load, and ask what it just did. **Expected:** it knows about the tool calls, not only the chat text.
+
+## 30. `/search` and Google search 💲
+
+- [ ] `[web] search_provider = "google"` with a Gemini key. `code-puppy doctor --online`. **Expected:** `web search  google: N results`.
+- [ ] `/search web golang errors.Is vs errors.As`. **Expected:** up to five numbered links with real site URLs (no `vertexaisearch.cloud.google.com` links), "Handing these to the agent to read", then an answer that cites some of them. No approval prompt for those pages.
+- [ ] In the same answer, if the agent tries a page that wasn't listed. **Expected:** an approval prompt.
+- [ ] Ask it to save its findings to a file in that turn (e.g. `/search web … and write notes.md`). **Expected:** `create_file` is refused as read-only; no file.
+- [ ] `/search session <something said earlier>` after a `/compact`. **Expected:** "Found N messages…" and an answer that recalls the compacted detail.
+- [ ] `/search session nonsense-word`. **Expected:** "Nothing in this session's transcript mentions it…", and the agent says it never came up.
+- [ ] SearXNG instead: run `docker run -p 8888:8080 searxng/searxng` with `json` added to `search.formats`, set `search_provider = "searxng"` and `search_url = "http://localhost:8888"`, then `/search web …`. **Expected:** it works, with no API key.
+- [ ] Remove `search_provider`. `/search web x`. **Expected:** "Web search isn't set up…".

@@ -195,6 +195,20 @@ func runDoctor(ctx context.Context, g *globalFlags, online bool) []check {
 		}
 		add("shell sandbox", st, "%s", reg.ShellSandbox().Status())
 
+		switch {
+		case cfg.Web.SearchProvider == "":
+		case reg.SearchError() != nil:
+			add("web search", statusFail, "%v", reg.SearchError())
+		case !online:
+			add("web search", statusOK, "%s (use --online to run a test search)", reg.SearchProvider())
+		default:
+			if out, err := reg.WebSearch(ctx, "Go programming language", 3); err != nil {
+				add("web search", statusFail, "%s: %v", reg.SearchProvider(), err)
+			} else {
+				add("web search", statusOK, "%s: %d results", reg.SearchProvider(), len(out.Results))
+			}
+		}
+
 		for _, s := range cfg.MCP.Servers {
 			switch {
 			case s.Command != "":

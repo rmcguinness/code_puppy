@@ -141,11 +141,16 @@ type WebConfig struct {
 	AllowPrivate   bool     `toml:"allow_private"` // permit localhost/private network targets
 	MaxBytes       int64    `toml:"max_bytes"`
 	TimeoutSeconds int      `toml:"timeout_seconds"`
-	// SearchProvider enables web_search: "brave", "tavily", or "searxng"
-	// (self-hosted, needs SearchURL). Empty disables it.
-	SearchProvider   string `toml:"search_provider"`
-	SearchAPIKey     string `toml:"search_api_key"` // or BRAVE_API_KEY / TAVILY_API_KEY
-	SearchURL        string `toml:"search_url"`
+	// SearchProvider enables web_search and /search web: "brave",
+	// "tavily", "searxng" (self-hosted, needs SearchURL), or "google"
+	// (Gemini's grounding with Google Search; uses the Gemini API key).
+	// Empty disables it.
+	SearchProvider string `toml:"search_provider"`
+	SearchAPIKey   string `toml:"search_api_key"` // or BRAVE_API_KEY / TAVILY_API_KEY / GEMINI_API_KEY
+	SearchURL      string `toml:"search_url"`
+	// SearchModel is the Gemini model that runs "google" searches
+	// (default: llm.gemini.model, else gemini-3.8-flash).
+	SearchModel      string `toml:"search_model"`
 	SearchMaxResults int    `toml:"search_max_results"`
 }
 

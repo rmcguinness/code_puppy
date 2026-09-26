@@ -74,6 +74,8 @@ Subcommands: `doctor [--online]`, `config init|show|path`, `completion bash|zsh|
 | `/pin_model [<agent> <model>]`, `/unpin <agent>` | Run an agent on its own model (e.g. qa-kitten on a cheaper one); saved under `[agent_models]` |
 | `/model_settings [<model> [key=value…\|reset]]` | Show or set one model's temperature, max_tokens, top_p or seed (`key=` clears one); saved under `[model_settings."<model>"]` |
 | `/sandbox`, `/mcp`, `/tools` | Active policy; MCP servers; the tools the active agent can use |
+| `/search web <terms>` | Search the web and hand the top five readable links to the agent, which reads them and answers with citations. Those five URLs need no approval for that turn; other pages still do. The turn can't edit files or run commands |
+| `/search session <terms>` | Find what this session said about something: matching passages from the full transcript (including anything compacted away) go to the agent, which answers from them |
 | `/plan <goal>` | Ask for a plan without changing anything. The agent can read, search and delegate, but edits, commands and MCP tools are refused for that turn |
 | `!<command>` | Run a command yourself, like in your own terminal: in the workspace, with your environment, outside the agent's sandbox and approvals. The agent doesn't see it; the audit log records it |
 | `/attach [path\|clear]`, `/paste` | Queue an image (or the clipboard's) for your next message |
@@ -150,7 +152,12 @@ command = "jq -c . >> ~/tool-log.jsonl"
 command = "grep -qv 'password' || { echo 'no secrets' >&2; exit 2; }"
 ```
 
-**Web search** — set `web.search_provider` to `brave`, `tavily` (key in `web.search_api_key` or `BRAVE_API_KEY` / `TAVILY_API_KEY`) or `searxng` (`web.search_url`). Each search needs approval (rememberable per provider) because the query leaves your machine; results from `web.deny_domains` are dropped.
+**Web search** — set `web.search_provider` to one of:
+- `google`: Gemini's grounding with Google Search, using your Gemini key (`web.search_api_key`, `[llm.gemini] api_key` or `GEMINI_API_KEY`). It works whatever `llm.provider` is. `web.search_model` picks the Gemini model (default `llm.gemini.model`, else `gemini-3.8-flash`). Google bills per search query the model runs: 5,000 a month free across Gemini 3 models, then $14 per 1,000. `/cost` doesn't include this. Results are the pages Gemini cited, resolved from Google's redirect links, plus Gemini's summary.
+- `searxng` (`web.search_url`): open source and self-hosted; it can include Google results without an API key. Enable the JSON format in its `settings.yml` (`search: formats: [html, json]`).
+- `brave` or `tavily`: key in `web.search_api_key` or `BRAVE_API_KEY` / `TAVILY_API_KEY`.
+
+(Google's Custom Search JSON API isn't supported: it's closed to new customers and shuts down on 2027-01-01.) The agent's `web_search` asks for approval (rememberable per provider) because the query leaves your machine; your own `/search web` doesn't. Results from `web.deny_domains` are dropped. `code-puppy doctor --online` runs a test search.
 
 **Forged tools** — tools built by `universal_constructor` are saved with a manifest in `~/.code_puppy/uc_tools` and reloaded on start; `action: "delete"` removes one.
 

@@ -15,6 +15,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/retail-cortex/code_puppy/pkg/audit"
 	"github.com/retail-cortex/code_puppy/pkg/textutil"
 	"golang.org/x/net/html"
 	"google.golang.org/adk/v2/agent"
@@ -197,7 +198,11 @@ func (f *webFetcher) fetch(ctx context.Context, hooks *Hooks, raw string) WebFet
 		return fail(err)
 	}
 	host := strings.ToLower(u.Hostname())
-	if !matchDomain(f.cfg.AllowDomains, host) {
+	switch {
+	case matchDomain(f.cfg.AllowDomains, host):
+	case fetchGranted(ctx, u):
+		hooks.Audit().Log(audit.Entry{Kind: audit.KindApproval, Tool: "web_fetch", Detail: "GET " + u.String(), Decision: "user-selected"})
+	default:
 		if err := hooks.Approve(ctx, ApprovalRequest{
 			Tool: "web_fetch", Kind: ActionNetwork, Detail: "GET " + u.String(),
 			Key: "web:" + host, KeyLabel: "requests to " + host,

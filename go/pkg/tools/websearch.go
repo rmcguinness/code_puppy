@@ -2,6 +2,7 @@ package tools
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
@@ -11,6 +12,7 @@ import (
 	"net/url"
 	"os"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/retail-cortex/code_puppy/pkg/textutil"
@@ -28,9 +30,10 @@ const (
 
 // WebSearchConfig configures web_search.
 type WebSearchConfig struct {
-	Provider     string // brave | tavily | searxng
-	APIKey       string // brave/tavily; falls back to BRAVE_API_KEY / TAVILY_API_KEY
-	BaseURL      string // searxng instance, or an override for brave/tavily
+	Provider     string // brave | tavily | searxng | google
+	APIKey       string // brave/tavily/google; falls back to BRAVE_API_KEY / TAVILY_API_KEY / GEMINI_API_KEY
+	BaseURL      string // searxng instance, or an override for the others
+	Model        string // google: the Gemini model that runs the search (default gemini-3.8-flash)
 	MaxResults   int
 	DenyDomains  []string
 	AllowNetwork bool
@@ -47,7 +50,10 @@ type SearchResult struct {
 var searchEndpoints = map[string]string{
 	"brave":  "https://api.search.brave.com/res/v1/web/search",
 	"tavily": "https://api.tavily.com/search",
+	"google": "https://generativelanguage.googleapis.com/v1beta",
 }
+
+const googleSearchModel = "gemini-3.8-flash"
 
 type webSearcher struct {
 	cfg    WebSearchConfig
@@ -60,6 +66,10 @@ func NewWebSearchTool(cfg WebSearchConfig, hooks *Hooks) (tool.Tool, error) {
 	if err != nil {
 		return nil, err
 	}
+	return newWebSearchTool(s, hooks)
+}
+
+func newWebSearchTool(s *webSearcher, hooks *Hooks) (tool.Tool, error) {
 	return functiontool.New(
 		functiontool.Config{
 			Name:        "web_search",
@@ -84,13 +94,24 @@ func newWebSearcher(cfg WebSearchConfig) (*webSearcher, error) {
 		if cfg.APIKey == "" {
 			return nil, fmt.Errorf("web.search_provider %q needs web.search_api_key or %s_API_KEY", cfg.Provider, strings.ToUpper(cfg.Provider))
 		}
+	case "google":
+		if cfg.BaseURL == "" {
+			cfg.BaseURL = searchEndpoints["google"]
+		}
+		cfg.APIKey = cmp.Or(cfg.APIKey, os.Getenv("GEMINI_API_KEY"), os.Getenv("GOOGLE_API_KEY"))
+		if cfg.APIKey == "" {
+			return nil, errors.New(`web.search_provider "google" needs a Gemini API key: web.search_api_key, [llm.gemini] api_key, or GEMINI_API_KEY`)
+		}
+		if cfg.Model == "" {
+			cfg.Model = googleSearchModel
+		}
 	case "searxng":
 		if cfg.BaseURL == "" {
 			return nil, errors.New(`web.search_provider "searxng" needs web.search_url (your instance, e.g. http://localhost:8888)`)
 		}
 		cfg.BaseURL = strings.TrimSuffix(cfg.BaseURL, "/") + "/search"
 	default:
-		return nil, fmt.Errorf("unknown web.search_provider %q (use brave, tavily, or searxng)", cfg.Provider)
+		return nil, fmt.Errorf("unknown web.search_provider %q (use brave, tavily, searxng, or google)", cfg.Provider)
 	}
 	if u, err := url.Parse(cfg.BaseURL); err != nil || (u.Scheme != "https" && u.Scheme != "http") || u.Host == "" {
 		return nil, fmt.Errorf("invalid search endpoint %q", cfg.BaseURL)
@@ -114,34 +135,42 @@ type WebSearchInput struct {
 type WebSearchOutput struct {
 	Query   string         `json:"query"`
 	Results []SearchResult `json:"results"`
-	Error   string         `json:"error,omitempty"`
+	// Answer is the provider's own summary with the results (google only).
+	Answer string `json:"answer,omitempty"`
+	Error  string `json:"error,omitempty"`
 }
 
 func (s *webSearcher) search(ctx context.Context, hooks *Hooks, in WebSearchInput) WebSearchOutput {
-	out := WebSearchOutput{Query: in.Query, Results: []SearchResult{}}
-	fail := func(err error) WebSearchOutput { out.Error = err.Error(); return out }
-
 	q := strings.TrimSpace(in.Query)
-	if q == "" {
-		return fail(errors.New("query must not be empty"))
+	if q == "" || !s.cfg.AllowNetwork {
+		return s.run(ctx, q, in.MaxResults) // reports the problem
 	}
-	if !s.cfg.AllowNetwork {
-		return fail(errors.New("network access is disabled (sandbox.allow_network = false)"))
-	}
-	n := in.MaxResults
-	if n <= 0 {
-		n = s.cfg.MaxResults
-	}
-	n = min(n, searchMaxResults)
-
 	// The query itself leaves the machine, so it is approved like a request.
 	if err := hooks.Approve(ctx, ApprovalRequest{
 		Tool: "web_search", Kind: ActionNetwork,
 		Detail: fmt.Sprintf("Search %s for: %s", s.cfg.Provider, q),
 		Key:    "search:" + s.cfg.Provider, KeyLabel: "searches via " + s.cfg.Provider,
 	}); err != nil {
-		return fail(err)
+		return WebSearchOutput{Query: in.Query, Results: []SearchResult{}, Error: err.Error()}
 	}
+	return s.run(ctx, q, in.MaxResults)
+}
+
+// run searches without asking: for the agent after approval, or for the
+// user's own /search.
+func (s *webSearcher) run(ctx context.Context, q string, n int) WebSearchOutput {
+	out := WebSearchOutput{Query: q, Results: []SearchResult{}}
+	fail := func(err error) WebSearchOutput { out.Error = err.Error(); return out }
+	if q == "" {
+		return fail(errors.New("query must not be empty"))
+	}
+	if !s.cfg.AllowNetwork {
+		return fail(errors.New("network access is disabled (sandbox.allow_network = false)"))
+	}
+	if n <= 0 {
+		n = s.cfg.MaxResults
+	}
+	n = min(n, searchMaxResults)
 
 	var results []SearchResult
 	var err error
@@ -152,6 +181,8 @@ func (s *webSearcher) search(ctx context.Context, hooks *Hooks, in WebSearchInpu
 		results, err = s.tavily(ctx, q, n)
 	case "searxng":
 		results, err = s.searxng(ctx, q)
+	case "google":
+		results, out.Answer, err = s.google(ctx, q)
 	}
 	if err != nil {
 		return fail(err)
@@ -173,6 +204,9 @@ func (s *webSearcher) search(ctx context.Context, hooks *Hooks, in WebSearchInpu
 
 func (s *webSearcher) do(req *http.Request, into any) error {
 	req.Header.Set("Accept", "application/json")
+	if s.cfg.Provider == "google" {
+		req.Header.Set("x-goog-api-key", s.cfg.APIKey)
+	}
 	req.Header.Set("User-Agent", "code-puppy/2 (+web_search)")
 	resp, err := s.client.Do(req)
 	if err != nil {
@@ -269,4 +303,110 @@ func (s *webSearcher) searxng(ctx context.Context, q string) ([]SearchResult, er
 		out = append(out, SearchResult{Title: r.Title, URL: r.URL, Snippet: r.Content})
 	}
 	return out, nil
+}
+
+// google searches with Gemini's grounding with Google Search: the model
+// runs the queries and answers, and the grounding metadata lists the pages
+// it used. Those links are Google redirects, which web_fetch won't follow
+// to another host, so they are resolved to the pages they point to.
+func (s *webSearcher) google(ctx context.Context, q string) ([]SearchResult, string, error) {
+	payload, _ := json.Marshal(map[string]any{
+		"contents": []any{map[string]any{"role": "user", "parts": []any{map[string]any{"text": q}}}},
+		"tools":    []any{map[string]any{"google_search": map[string]any{}}},
+	})
+	u := strings.TrimSuffix(s.cfg.BaseURL, "/") + "/models/" + url.PathEscape(s.cfg.Model) + ":generateContent"
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, u, bytes.NewReader(payload))
+	if err != nil {
+		return nil, "", err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	var body struct {
+		Candidates []struct {
+			Content struct {
+				Parts []struct {
+					Text    string `json:"text"`
+					Thought bool   `json:"thought"`
+				} `json:"parts"`
+			} `json:"content"`
+			GroundingMetadata struct {
+				GroundingChunks []struct {
+					Web struct {
+						URI   string `json:"uri"`
+						Title string `json:"title"`
+					} `json:"web"`
+				} `json:"groundingChunks"`
+				GroundingSupports []struct {
+					Segment struct {
+						Text string `json:"text"`
+					} `json:"segment"`
+					GroundingChunkIndices []int `json:"groundingChunkIndices"`
+				} `json:"groundingSupports"`
+			} `json:"groundingMetadata"`
+		} `json:"candidates"`
+	}
+	if err := s.do(req, &body); err != nil {
+		return nil, "", err
+	}
+	if len(body.Candidates) == 0 {
+		return nil, "", errors.New("google search: no answer")
+	}
+	c := body.Candidates[0]
+	var answer strings.Builder
+	for _, p := range c.Content.Parts {
+		if !p.Thought {
+			answer.WriteString(p.Text)
+		}
+	}
+	gm := c.GroundingMetadata
+	// A chunk's snippet is the answer text it supports.
+	snippets := make([][]string, len(gm.GroundingChunks))
+	for _, sup := range gm.GroundingSupports {
+		for _, i := range sup.GroundingChunkIndices {
+			if i >= 0 && i < len(snippets) && sup.Segment.Text != "" {
+				snippets[i] = append(snippets[i], sup.Segment.Text)
+			}
+		}
+	}
+	out := make([]SearchResult, 0, len(gm.GroundingChunks))
+	for i, ch := range gm.GroundingChunks {
+		if ch.Web.URI == "" {
+			continue
+		}
+		out = append(out, SearchResult{Title: ch.Web.Title, URL: ch.Web.URI, Snippet: strings.Join(snippets[i], " … ")})
+	}
+	s.resolveRedirects(ctx, out)
+	return out, textutil.Ellipsize(strings.TrimSpace(answer.String()), 2000), nil
+}
+
+// resolveRedirects replaces Google grounding redirect links with their
+// targets, in parallel. A link that can't be resolved is kept as it is.
+func (s *webSearcher) resolveRedirects(ctx context.Context, results []SearchResult) {
+	client := &http.Client{
+		Timeout:       10 * time.Second,
+		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
+	}
+	var wg sync.WaitGroup
+	for i := range results {
+		u, err := url.Parse(results[i].URL)
+		if err != nil || !strings.HasPrefix(u.Path, "/grounding-api-redirect/") {
+			continue
+		}
+		wg.Add(1)
+		go func(r *SearchResult) {
+			defer wg.Done()
+			req, err := http.NewRequestWithContext(ctx, http.MethodGet, r.URL, nil)
+			if err != nil {
+				return
+			}
+			resp, err := client.Do(req)
+			if err != nil {
+				return
+			}
+			resp.Body.Close()
+			if loc, err := resp.Location(); err == nil && resp.StatusCode >= 300 && resp.StatusCode < 400 {
+				r.URL = loc.String()
+			}
+		}(&results[i])
+	}
+	wg.Wait()
 }

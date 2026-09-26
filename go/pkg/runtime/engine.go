@@ -57,7 +57,8 @@ type runState struct {
 	maxTurns    int
 	turns       atomic.Int64
 	attachments []*genai.Part
-	planOnly    bool // refuse tools that could change anything (see WithPlanOnly)
+	planOnly    bool   // refuse tools that could change anything (see WithPlanOnly)
+	mode        string // names a read-only mode other than plan in refusals (see WithReadOnly)
 }
 
 func stateFrom(ctx context.Context) *runState {

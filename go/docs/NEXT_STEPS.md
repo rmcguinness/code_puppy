@@ -4,7 +4,7 @@ Written 2026-09-24 at commit `7e211697` on `main`; updated 2026-09-25. Read this
 
 ## State
 
-Roadmap items 1–18 are done and committed; each has its own commit:
+Roadmap items 1–19 are done and committed; each has its own commit:
 
 | Commit | Change |
 |---|---|
@@ -20,7 +20,8 @@ Roadmap items 1–18 are done and committed; each has its own commit:
 | `7e211697` | Per-agent models (`[agent_models]`, `/pin_model`, `/unpin`) |
 | `b652f263` | Per-model settings (`[model_settings]`, `/model_settings`) |
 | `36c2758b` | Removed the committed editor swap file; `*.swp` ignored |
-| (the commit adding `pkg/session/snapshot.go`) | Named session snapshots (`/session save`, `/session load <name>`, `--resume=<name>`) |
+| `957c08b9` | Named session snapshots (`/session save`, `/session load <name>`, `--resume=<name>`) |
+| (the commit adding `pkg/tui/search.go`) | Google search via Gemini grounding; `/search web`, `/search session` |
 
 `go vet ./...` and `go test -race ./...` pass.
 
@@ -31,10 +32,9 @@ Roadmap items 1–18 are done and committed; each has its own commit:
 ## Open work, in suggested order
 
 1. **Manual verification (needs a person).** Nothing in `MANUAL_VERIFICATION.md` has been run yet. It covers real providers (💲 = paid calls), terminal behavior, the macOS and Linux sandboxes, MCP, steering, fallback and pinning. Record results in the file; any failure becomes the next task.
-2. **Anthropic server-side web search** (ROADMAP item 6, option a). It needs server-tool result blocks carried through the adapter in `pkg/runtime/anthropic.go`. The Brave/Tavily/SearXNG search already works with every provider.
-3. **Release tasks** from MANUAL_VERIFICATION section 18: pin the GitHub Actions in `.github/workflows/go-*.yml` to commit SHAs, cut `v0.1.0`, and verify the cosign signature and SBOMs.
-4. **Optional: reasoning settings per model.** Python's `/model_settings` also sets `reasoning_effort`, extended thinking and budgets. The Go wrapper (`pkg/runtime/settings.go`) is where they'd go, mapped to genai `ThinkingConfig`, which each adapter translates differently.
-5. **Optional:** the `python/` tree still names `gemini-2.5-flash` in four files. They were left alone because only the Go implementation was in scope.
+2. **Release tasks** from MANUAL_VERIFICATION section 18: pin the GitHub Actions in `.github/workflows/go-*.yml` to commit SHAs, cut `v0.1.0`, and verify the cosign signature and SBOMs.
+3. **Optional: reasoning settings per model.** Python's `/model_settings` also sets `reasoning_effort`, extended thinking and budgets. The Go wrapper (`pkg/runtime/settings.go`) is where they'd go, mapped to genai `ThinkingConfig`, which each adapter translates differently.
+4. **Optional:** the `python/` tree still names `gemini-2.5-flash` in four files. They were left alone because only the Go implementation was in scope.
 
 ## Decisions already made (don't redo without a reason)
 
@@ -46,6 +46,8 @@ Roadmap items 1–18 are done and committed; each has its own commit:
 - **`fallback_models` switches only before any output** and never on cancellation. Breakers are asked just before each attempt (regression tests guard this).
 - **Model settings are applied per built model, not per agent.** `newProviderModel` wraps every model, so each member of a fallback chain uses its own `[model_settings]`. Applying them in `newLLMAgent` would give fallbacks the primary's settings.
 - **Snapshots are never continued in place.** Loading one (by name or ID, `/session load`, `/resume`, `--resume=`) copies it to a new session, as Python's `/load_context` does, and `--continue` skips snapshots.
+- **No Anthropic server-side web search** (dropped by the user). **No Google Custom Search JSON API**: it shuts down on 2027-01-01, so `google` means Gemini grounding.
+- **`/search web` pre-approves exactly the URLs it hands over, for that turn only** (`tools.WithFetchGrants`); everything else the agent fetches still asks.
 - **Telemetry and OTel need one provider per process:** the ADK binds its tracer to the first global provider.
 
 ## Conventions used in this work

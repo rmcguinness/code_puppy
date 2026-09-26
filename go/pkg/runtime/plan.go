@@ -31,11 +31,20 @@ func PlanAllows(toolName string) bool { return planReadOnlyTools[toolName] }
 // a plan grounded in the code rather than an edit.
 func WithPlanOnly() ExecOption { return func(s *runState) { s.planOnly = true } }
 
+// WithReadOnly refuses the same tools as plan mode, for a prompt that only
+// looks things up (e.g. /search). mode names it in the refusal.
+func WithReadOnly(mode string) ExecOption {
+	return func(s *runState) { s.planOnly, s.mode = true, mode }
+}
+
 // planRefusal returns the tool result for a tool refused in plan mode, or
 // nil when the tool may run.
 func planRefusal(st *runState, toolName string) map[string]any {
 	if st == nil || !st.planOnly || planReadOnlyTools[toolName] {
 		return nil
+	}
+	if st.mode != "" {
+		return map[string]any{"error": fmt.Sprintf("%s is read-only: %s is disabled because it could change something.", st.mode, toolName)}
 	}
 	return map[string]any{"error": fmt.Sprintf("plan mode: %s is disabled because it could change something. Describe this step in the plan instead.", toolName)}
 }

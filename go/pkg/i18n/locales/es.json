@@ -229,6 +229,18 @@
     "snapshot.saved": "Instantánea {name} guardada ({messages}). /session load {name} inicia una sesión nueva a partir de ella.",
     "snapshot.taken": "Ya existe una instantánea llamada {name}; /session save {name} --force la reemplaza.",
     "snapshot.failed": "No se pudo guardar la instantánea: {error}",
-    "snapshot.branched": "Sesión {id} iniciada a partir de la instantánea {name} ({messages}); la instantánea no cambia."
+    "snapshot.branched": "Sesión {id} iniciada a partir de la instantánea {name} ({messages}); la instantánea no cambia.",
+    "help.search": "web: busca cinco páginas y el agente las lee; session: pregunta al agente qué se dijo sobre algo en esta sesión",
+    "search.usage": "Uso: /search web <términos>       busca cinco páginas; el agente las lee y responde\n     /search session <términos>   pregunta al agente qué se dijo sobre ello en esta sesión",
+    "search.no_fetch": "/search web necesita acceso web: pon [web] enabled = true.",
+    "search.not_setup": "La búsqueda web no está configurada ({error}). Pon [web] search_provider en google, brave, tavily o searxng; consulta el README.",
+    "search.searching": "Buscando {query} en {provider}…",
+    "search.failed": "La búsqueda falló: {error}",
+    "search.none": "No hay resultados legibles para {query}.",
+    "search.handoff": "Se los paso al agente para que los lea.",
+    "search.passages.one": "{count} mensaje",
+    "search.passages.other": "{count} mensajes",
+    "search.session_found": "Encontré {passages} sobre ello en esta sesión; se lo pregunto al agente.",
+    "search.session_none": "Nada en la transcripción de esta sesión lo menciona; se lo pregunto al agente de todos modos."
   }
 }

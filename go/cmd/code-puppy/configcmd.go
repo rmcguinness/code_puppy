@@ -187,9 +187,10 @@ enabled = true
 enabled = true
 # allow_domains = ["*.go.dev", "docs.python.org"]   # fetched without approval
 # deny_domains  = ["*.internal.example.com"]
-# search_provider = "brave"               # brave | tavily | searxng; enables web_search
-# search_api_key  = "..."                 # or BRAVE_API_KEY / TAVILY_API_KEY
+# search_provider = "google"              # google | brave | tavily | searxng; enables web_search and /search web
+# search_api_key  = "..."                 # google: defaults to the Gemini key; or BRAVE_API_KEY / TAVILY_API_KEY
 # search_url      = "http://localhost:8888" # searxng instance
+# search_model    = "gemini-3.8-flash"      # google: the Gemini model that searches
 
 # [agent_models]                                   # run agents on their own model (/pin_model, /unpin)
 # qa-kitten = "anthropic/claude-haiku-4-5"

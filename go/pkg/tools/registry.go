@@ -1,12 +1,13 @@
 package tools
 
 import (
+	"cmp"
 	"fmt"
-
-	"github.com/retail-cortex/code_puppy/pkg/audit"
+	"strings"
 	"time"
 
 	"github.com/retail-cortex/code_puppy/pkg/agents"
+	"github.com/retail-cortex/code_puppy/pkg/audit"
 	"github.com/retail-cortex/code_puppy/pkg/config"
 	"github.com/retail-cortex/code_puppy/pkg/images"
 	"github.com/retail-cortex/code_puppy/pkg/skills"
@@ -27,6 +28,9 @@ type Registry struct {
 	scripts     *ScriptHooks
 	images      *images.Store
 	imageOpts   images.Options
+	searcher    *webSearcher // nil: no search provider configured
+	searchErr   error        // why the configured provider can't be used
+	fetch       bool         // web_fetch is available
 }
 
 // NewRegistry initializes all standard Code Puppy tools. Call Close when done
@@ -153,17 +157,27 @@ func NewRegistry(cfg *config.Config, agentReg *agents.Registry, skillProv *skill
 			}, r.hooks)
 		}})
 	}
+	r.fetch = cfg.Web.Enabled
 	if cfg.Web.Enabled && cfg.Web.SearchProvider != "" {
+		sc := WebSearchConfig{
+			Provider:     cfg.Web.SearchProvider,
+			APIKey:       cfg.Web.SearchAPIKey,
+			BaseURL:      cfg.Web.SearchURL,
+			MaxResults:   cfg.Web.SearchMaxResults,
+			DenyDomains:  cfg.Web.DenyDomains,
+			AllowNetwork: sb.AllowNetwork,
+			Timeout:      time.Duration(cfg.Web.TimeoutSeconds) * time.Second,
+		}
+		if strings.EqualFold(sc.Provider, "google") {
+			sc.APIKey = cmp.Or(sc.APIKey, cfg.LLM.Gemini.APIKey)
+			sc.Model = cmp.Or(cfg.Web.SearchModel, cfg.LLM.Gemini.Model)
+		}
+		r.searcher, r.searchErr = newWebSearcher(sc)
 		entries = append(entries, entry{[]string{"web_search"}, func() (tool.Tool, error) {
-			return NewWebSearchTool(WebSearchConfig{
-				Provider:     cfg.Web.SearchProvider,
-				APIKey:       cfg.Web.SearchAPIKey,
-				BaseURL:      cfg.Web.SearchURL,
-				MaxResults:   cfg.Web.SearchMaxResults,
-				DenyDomains:  cfg.Web.DenyDomains,
-				AllowNetwork: sb.AllowNetwork,
-				Timeout:      time.Duration(cfg.Web.TimeoutSeconds) * time.Second,
-			}, r.hooks)
+			if r.searchErr != nil {
+				return nil, r.searchErr
+			}
+			return newWebSearchTool(r.searcher, r.hooks)
 		}})
 	}
 	if skillProv != nil {

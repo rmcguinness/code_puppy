@@ -229,6 +229,18 @@
     "snapshot.saved": "Saved snapshot {name} ({messages}). /session load {name} starts a new session from it.",
     "snapshot.taken": "A snapshot named {name} already exists; /session save {name} --force replaces it.",
     "snapshot.failed": "Could not save the snapshot: {error}",
-    "snapshot.branched": "Started session {id} from snapshot {name} ({messages}); the snapshot stays as saved."
+    "snapshot.branched": "Started session {id} from snapshot {name} ({messages}); the snapshot stays as saved.",
+    "help.search": "web: find five pages and have the agent read them; session: ask the agent what this session said about something",
+    "search.usage": "Usage: /search web <terms>       find five pages and have the agent read and answer\n       /search session <terms>   ask the agent what this session said about it",
+    "search.no_fetch": "/search web needs web access: set [web] enabled = true.",
+    "search.not_setup": "Web search isn't set up ({error}). Set [web] search_provider to google, brave, tavily or searxng; see the README.",
+    "search.searching": "Searching {provider} for {query}…",
+    "search.failed": "Search failed: {error}",
+    "search.none": "No readable results for {query}.",
+    "search.handoff": "Handing these to the agent to read.",
+    "search.passages.one": "{count} message",
+    "search.passages.other": "{count} messages",
+    "search.session_found": "Found {passages} about it in this session; asking the agent.",
+    "search.session_none": "Nothing in this session's transcript mentions it; asking the agent anyway."
   }
 }

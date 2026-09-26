@@ -229,6 +229,18 @@
     "snapshot.saved": "Instantané {name} enregistré ({messages}). /session load {name} démarre une nouvelle session à partir de celui-ci.",
     "snapshot.taken": "Un instantané nommé {name} existe déjà; /session save {name} --force le remplace.",
     "snapshot.failed": "Impossible d’enregistrer l’instantané : {error}",
-    "snapshot.branched": "Session {id} démarrée à partir de l’instantané {name} ({messages}); l’instantané reste tel quel."
+    "snapshot.branched": "Session {id} démarrée à partir de l’instantané {name} ({messages}); l’instantané reste tel quel.",
+    "help.search": "web : trouver cinq pages que l’agent lira; session : demander à l’agent ce qui a été dit sur un sujet dans cette session",
+    "search.usage": "Utilisation : /search web <termes>       trouver cinq pages que l’agent lit pour répondre\n               /search session <termes>   demander à l’agent ce que cette session en a dit",
+    "search.no_fetch": "/search web a besoin de l’accès web : mettez [web] enabled = true.",
+    "search.not_setup": "La recherche web n’est pas configurée ({error}). Mettez [web] search_provider à google, brave, tavily ou searxng; voir le README.",
+    "search.searching": "Recherche de {query} avec {provider}…",
+    "search.failed": "La recherche a échoué : {error}",
+    "search.none": "Aucun résultat lisible pour {query}.",
+    "search.handoff": "Je les passe à l’agent pour qu’il les lise.",
+    "search.passages.one": "{count} message",
+    "search.passages.other": "{count} messages",
+    "search.session_found": "Trouvé {passages} à ce sujet dans cette session; je pose la question à l’agent.",
+    "search.session_none": "Rien dans la transcription de cette session n’en parle; je pose quand même la question à l’agent."
   }
 }
