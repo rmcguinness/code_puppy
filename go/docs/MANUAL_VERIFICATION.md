@@ -166,7 +166,7 @@ prefix = "fs"
   ```
   **Expected:** `Verified OK` and every file `OK`. Then publish the draft.
   *Verified 2026-09-26 with cosign v3.1.3 (the bundle was made by cosign v2 in CI), using the exact identity `https://github.com/rmcguinness/code_puppy/.github/workflows/go-release.yml@refs/tags/v0.1.0`: `Verified OK`. A tampered `checksums.txt` and a wrong identity were both rejected. All 10 files `OK`. The SBOMs are SPDX 2.3 with 96 Go modules (95 in the binary's build info). The darwin/arm64 binary reports `0.1.0` and `vcs.revision=4e008b41`, and `doctor` runs. Draft assets need authentication: `gh api repos/<owner>/<repo>/releases/<id>/assets`, then download each asset with `Accept: application/octet-stream`. Not yet published.*
-- [ ] Publish the draft. Binaries aren't Apple-notarized: on macOS, a copy downloaded in a browser gets the quarantine flag, and Gatekeeper refuses to run it until it's cleared (`xattr -d com.apple.quarantine code-puppy`) or opened through Finder's context menu. Document this in the release notes, or notarize later.
+- [x] Publish the draft. *Published 2026-09-26 as Latest, after deleting a stray empty release on the same tag; the public `checksums.txt` is identical to the verified one.* Binaries aren't Apple-notarized: on macOS, a copy downloaded in a browser gets the quarantine flag, and Gatekeeper refuses to run it until it's cleared (`xattr -d com.apple.quarantine code-puppy`) or opened through Finder's context menu. Document this in the release notes, or notarize later.
 
 ## 19. Cost sanity 💲
 
