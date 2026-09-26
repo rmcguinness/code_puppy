@@ -274,7 +274,7 @@ func NewCreateFileTool(ws *Workspace, hooks *Hooks) (tool.Tool, error) {
 				verb, before = "Overwrite", string(existing)
 			}
 			if err := hooks.Approve(ctx, writeApproval(ws, "create_file", fmt.Sprintf("%s %s (%d bytes)", verb, rel, len(input.Content)),
-				unifiedDiff(rel, before, input.Content))); err != nil {
+				unifiedDiff(rel, before, input.Content), rel)); err != nil {
 				return fail(err.Error())
 			}
 			if input.Overwrite {
@@ -342,6 +342,7 @@ func NewDeleteFileTool(ws *Workspace, hooks *Hooks) (tool.Tool, error) {
 				Diff:     diff,
 				Key:      "delete:" + ws.Dir(),
 				KeyLabel: "file deletions in " + ws.Dir(),
+				Targets:  []string{rel},
 			}); err != nil {
 				return DeleteFileOutput{Path: input.Path, Error: err.Error()}, nil
 			}
@@ -360,7 +361,7 @@ func NewDeleteFileTool(ws *Workspace, hooks *Hooks) (tool.Tool, error) {
 
 // writeApproval builds an approval request for a file edit. Remembered
 // approvals cover all edits within the workspace.
-func writeApproval(ws *Workspace, tool, detail, diff string) ApprovalRequest {
+func writeApproval(ws *Workspace, tool, detail, diff string, paths ...string) ApprovalRequest {
 	return ApprovalRequest{
 		Tool:     tool,
 		Kind:     ActionWrite,
@@ -368,5 +369,6 @@ func writeApproval(ws *Workspace, tool, detail, diff string) ApprovalRequest {
 		Diff:     diff,
 		Key:      "write:" + ws.Dir(),
 		KeyLabel: "file edits in " + ws.Dir(),
+		Targets:  paths,
 	}
 }

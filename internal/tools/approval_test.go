@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -144,5 +145,27 @@ func TestMutatingToolsRespectApproval(t *testing.T) {
 			}
 			c.check(t, true)
 		})
+	}
+}
+
+// Approval requests name their targets, which policies such as a worker's
+// permissions match against.
+func TestApprovalRequestsNameTheirTargets(t *testing.T) {
+	ws, dir := newTestWorkspace(t)
+	var got [][]string
+	h := NewHooks(Policy{})
+	h.SetApprover(func(_ context.Context, req ApprovalRequest) (Decision, error) {
+		got = append(got, req.Targets)
+		return DecisionOnce, nil
+	})
+	create, err := NewCreateFileTool(ws, h)
+	if err != nil {
+		t.Fatal(err)
+	}
+	runTool(t, create.(runnerTool), map[string]any{"path": "reports/deps.md", "content": "x\n"})
+	cfg := ShellConfig{Workspace: ws, Hooks: h, Exec: &ExecEnv{Dir: dir}}
+	runShellCommand(context.Background(), cfg, RunShellCommandInput{Command: "echo hi"})
+	if len(got) != 2 || !slices.Equal(got[0], []string{"reports/deps.md"}) || !slices.Equal(got[1], []string{"echo hi"}) {
+		t.Errorf("targets %q", got)
 	}
 }

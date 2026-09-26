@@ -467,7 +467,7 @@ deny           = ["*-nightly"]
 
 ---
 
-## 24. Workers: scheduled runs defined in the workspace — 📋 planned (L)
+## 24. Workers: scheduled runs defined in the workspace — 🚧 in progress (L)
 
 **Goal.** A workspace defines workflows the service runs on a schedule, unattended: dependency reports, nightly checks, triage.
 
@@ -480,6 +480,12 @@ deny           = ["*-nightly"]
 - **Runs:** each run is a new session named after the worker and its start time (visible, resumable, audited), with a run record: status, start, duration, cost, refusals, the session ID. Limits are required (or come from policy defaults), so a schedule can't spend without bound. A run still going when the next is due is skipped by default; missed runs (machine asleep, service down) are skipped unless `catch_up: once`; a global cap limits concurrent runs.
 - **Service:** workers run only while the per-user service runs, so it gets a launchd/systemd user unit to start at login, and a registry of workspaces with enabled workers to watch even when no client has them open.
 - **API** (in phase 6's protos): `WorkerService` with `ListWorkers` (schedule, next run, enabled, hash), `EnableWorker(hash)`, `DisableWorker`, `RunNow`, `ListRuns`, `GetRun`, and watching a run over the turn event stream.
+
+**Steps.**
+1. ✅ **24a, definitions** (`internal/workers`). `Load(dir)` reads `workers/<name>/WORKER.md` (YAML frontmatter with unknown keys rejected, the body as the workflow); the directory name is the worker's name. `ParseSchedule` accepts five-field cron, descriptors (`@daily`, `@every 90m`) and fixed plain-text forms ("every N minutes/hours/days" with words or digits, "hourly", "daily/weekdays/weekends/every <weekday> at <time>", times like 6, 6:30 pm, 18:05, noon, midnight, a.m./p.m.), with a time zone; anything else is an error listing the accepted forms. The hash is the skills algorithm over the worker's directory. An unusable worker comes back with an `*InvalidError` listing every problem, so listings can show why. **Permissions** are `kind:pattern` with kinds `shell` (the command), `write`/`delete` (workspace-relative path globs; a trailing `/` covers a directory), `web` (a host, or a search provider) and `mcp` (`server:tool`); `Allows` requires every target of a request to be covered. To make that possible, `tools.ApprovalRequest` gained `Targets`, set by the file, shell, web, search and MCP tools; requests without targets (skill scripts, forged tools) can't be covered, so workers are refused them.
+2. **24b**, discovery in trusted workspaces, enabling pinned to the hash (state in `~/.code_puppy`), and `[workers.policy]` (the permission kinds allowed, default and maximum limits, concurrency).
+3. **24c**, the scheduler in the service: runs as sessions through `Workspace.Run` with an approver that allows only permitted actions and records refusals; limits (turns, cost, timeout); overlap and catch-up; run records; `WorkerService`; rescanning on change.
+4. **24d**, CLI commands (`code-puppy workers list|enable|disable|run|runs`) through the service, and a user unit to start the service at login.
 
 ---
 

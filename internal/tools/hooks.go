@@ -36,6 +36,12 @@ type ApprovalRequest struct {
 	Key string
 	// KeyLabel describes Key for the user ("this exact command").
 	KeyLabel string
+	// Targets are what the action is on, for policies that match them (a
+	// worker's permissions): workspace-relative paths for file changes (a
+	// patch may touch several), the command, the URL's host, the search
+	// provider, or the MCP tool as "server:tool". Empty when nothing can
+	// match, which such policies refuse.
+	Targets []string
 }
 
 // Decision is the user's answer to an approval request.

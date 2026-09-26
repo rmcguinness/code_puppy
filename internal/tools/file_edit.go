@@ -68,7 +68,7 @@ func NewReplaceInFileTool(ws *Workspace, hooks *Hooks) (tool.Tool, error) {
 			}
 			newContent := strings.Replace(content, input.TargetContent, input.ReplacementContent, count)
 			if err := hooks.Approve(ctx, writeApproval(ws, "replace_in_file",
-				fmt.Sprintf("Edit %s (%d replacement(s))", rel, count), unifiedDiff(rel, content, newContent))); err != nil {
+				fmt.Sprintf("Edit %s (%d replacement(s))", rel, count), unifiedDiff(rel, content, newContent), rel)); err != nil {
 				return fail(err.Error())
 			}
 			if err := ws.unchanged(rel, true, data); err != nil {
@@ -131,7 +131,7 @@ func NewDeleteSnippetTool(ws *Workspace, hooks *Hooks) (tool.Tool, error) {
 			}
 			newContent := strings.Replace(content, input.Snippet, "", 1)
 			if err := hooks.Approve(ctx, writeApproval(ws, "delete_snippet",
-				fmt.Sprintf("Remove a %d byte snippet from %s", len(input.Snippet), rel), unifiedDiff(rel, content, newContent))); err != nil {
+				fmt.Sprintf("Remove a %d byte snippet from %s", len(input.Snippet), rel), unifiedDiff(rel, content, newContent), rel)); err != nil {
 				return fail(err.Error())
 			}
 			if err := ws.unchanged(rel, true, data); err != nil {

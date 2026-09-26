@@ -12,6 +12,7 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/modelcontextprotocol/go-sdk v1.7.0
 	github.com/openai/openai-go/v3 v3.54.0
+	github.com/robfig/cron/v3 v3.0.1
 	github.com/rrmcguinness/modenv v0.0.1
 	github.com/spf13/cobra v1.10.2
 	go.opentelemetry.io/contrib/bridges/otelslog v0.20.1

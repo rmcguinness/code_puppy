@@ -471,7 +471,7 @@ func NewApplyPatchTool(ws *Workspace, hooks *Hooks) (tool.Tool, error) {
 			}
 
 			var diff strings.Builder
-			var names []string
+			var names, touched []string
 			for _, c := range plan {
 				d := unifiedDiff(c.path, c.before, c.after)
 				if c.target != c.path {
@@ -479,9 +479,13 @@ func NewApplyPatchTool(ws *Workspace, hooks *Hooks) (tool.Tool, error) {
 				}
 				diff.WriteString(d)
 				names = append(names, c.path)
+				touched = append(touched, c.path)
+				if c.target != c.path {
+					touched = append(touched, c.target)
+				}
 			}
 			if err := hooks.Approve(ctx, writeApproval(ws, "apply_patch",
-				fmt.Sprintf("Apply patch to %d file(s): %s", len(plan), strings.Join(names, ", ")), diff.String())); err != nil {
+				fmt.Sprintf("Apply patch to %d file(s): %s", len(plan), strings.Join(names, ", ")), diff.String(), touched...)); err != nil {
 				return fail(err)
 			}
 			for _, c := range plan {

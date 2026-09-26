@@ -205,7 +205,7 @@ func (f *webFetcher) fetch(ctx context.Context, hooks *Hooks, raw string) WebFet
 	default:
 		if err := hooks.Approve(ctx, ApprovalRequest{
 			Tool: "web_fetch", Kind: ActionNetwork, Detail: "GET " + u.String(),
-			Key: "web:" + host, KeyLabel: "requests to " + host,
+			Key: "web:" + host, KeyLabel: "requests to " + host, Targets: []string{host},
 		}); err != nil {
 			return fail(err)
 		}

@@ -464,6 +464,7 @@ func mcpApproval(server, toolName string, args map[string]any) ApprovalRequest {
 	return ApprovalRequest{
 		Tool: toolName, Kind: ActionMCP, Detail: detail,
 		Key: "mcp:" + server + ":" + toolName, KeyLabel: fmt.Sprintf("%s from %s", toolName, server),
+		Targets: []string{server + ":" + toolName},
 	}
 }
 

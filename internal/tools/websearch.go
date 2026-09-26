@@ -150,6 +150,7 @@ func (s *webSearcher) search(ctx context.Context, hooks *Hooks, in WebSearchInpu
 		Tool: "web_search", Kind: ActionNetwork,
 		Detail: fmt.Sprintf("Search %s for: %s", s.cfg.Provider, q),
 		Key:    "search:" + s.cfg.Provider, KeyLabel: "searches via " + s.cfg.Provider,
+		Targets: []string{s.cfg.Provider},
 	}); err != nil {
 		return WebSearchOutput{Query: in.Query, Results: []SearchResult{}, Error: err.Error()}
 	}

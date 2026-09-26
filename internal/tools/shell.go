@@ -106,6 +106,7 @@ func runShellCommand(ctx context.Context, cfg ShellConfig, input RunShellCommand
 		if err := cfg.Hooks.Approve(ctx, ApprovalRequest{
 			Tool: "run_shell_command", Kind: ActionCommand, Detail: detail,
 			Key: "cmd:" + cfg.Workspace.Dir() + "\x00" + input.Command, KeyLabel: "this exact command in this workspace",
+			Targets: []string{input.Command},
 		}); err != nil {
 			return RunShellCommandOutput{Error: err.Error()}
 		}
