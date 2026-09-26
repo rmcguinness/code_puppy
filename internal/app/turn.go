@@ -44,7 +44,7 @@ type Turn struct {
 	// (the pages a web search handed it).
 	FetchGrants []string
 	// OnAccepted, if set, runs once the prompt has passed prompt_submit
-	// hooks, before anything is recorded or sent.
+	// hooks and been recorded, just before it is sent.
 	OnAccepted func()
 	// OnFinished, if set, runs when the agent has stopped, before unread
 	// steer messages are collected: a front end still taking a steer message
@@ -81,9 +81,6 @@ func (w *Workspace) Run(ctx context.Context, sessionID string, t Turn, on func(E
 			return TurnResult{}, err
 		}
 	}
-	if t.OnAccepted != nil {
-		t.OnAccepted()
-	}
 
 	prompt, recorded := t.Text, t.Text
 	if t.Prompt != "" {
@@ -97,6 +94,11 @@ func (w *Workspace) Run(ctx context.Context, sessionID string, t Turn, on func(E
 		if !t.Accepted {
 			w.record("user", recorded+AttachmentNote(t.Images))
 		}
+	}
+	// After recording: a front end may take steer messages from here on,
+	// and they must follow the prompt in the transcript.
+	if t.OnAccepted != nil {
+		t.OnAccepted()
 	}
 
 	r := &relay{on: on}

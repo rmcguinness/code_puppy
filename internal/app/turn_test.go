@@ -187,3 +187,22 @@ func TestRelayMarksRepeatedText(t *testing.T) {
 		t.Errorf("transcript text %q", r.output.String())
 	}
 }
+
+// A front end may take steer messages as soon as the prompt is accepted;
+// the prompt must be in the transcript before any of them.
+func TestPromptIsRecordedBeforeSteering(t *testing.T) {
+	w, _ := openTestWith(t, nil, text("done"))
+	sid := newSession(t, w).ID
+	ctx := context.Background()
+	_, err := w.Run(ctx, sid, Turn{Text: "reformat", OnAccepted: func() {
+		if err := w.Steer(ctx, sid, "use tabs"); err != nil {
+			t.Error(err)
+		}
+	}}, ignore)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := transcript(t, w); len(got) < 2 || got[0] != "user: reformat" || got[1] != "user: use tabs" {
+		t.Errorf("transcript %q", got)
+	}
+}
