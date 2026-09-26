@@ -130,9 +130,18 @@ func TestDiscover(t *testing.T) {
 	writeWorker(t, root, "deps", valid)
 	writeWorker(t, root, "broken", "---\nschedule: whenever\n---\ndo it\n")
 	os.MkdirAll(filepath.Join(root, "notes"), 0o755) // no WORKER.md: ignored
-	list, errs := Discover(root, filepath.Join(root, "missing"))
-	if len(list) != 2 || len(errs) != 1 {
-		t.Errorf("found %d workers, errors %v", len(list), errs)
+	list, err := Discover(root, filepath.Join(root, "missing"))
+	if err != nil || len(list) != 2 {
+		t.Fatalf("found %d workers, %v", len(list), err)
+	}
+	invalid := 0
+	for _, f := range list {
+		if f.Err != nil {
+			invalid++
+		}
+	}
+	if invalid != 1 {
+		t.Errorf("%d invalid, want 1", invalid)
 	}
 }
 

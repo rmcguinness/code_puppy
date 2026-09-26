@@ -24,6 +24,7 @@ type Config struct {
 	CodePuppy CodePuppyConfig `toml:"code_puppy"`
 	LLM       LLMConfig       `toml:"llm"`
 	Skills    SkillsConfig    `toml:"skills"`
+	Workers   WorkersConfig   `toml:"workers"`
 	Tools     ToolsConfig     `toml:"tools"`
 	Session   SessionConfig   `toml:"session"`
 	Sandbox   SandboxConfig   `toml:"sandbox"`
@@ -143,6 +144,36 @@ type SkillsConfig struct {
 	// Policy caps what skills may ask for; a skill can make its own
 	// settings stricter but never looser.
 	Policy SkillPolicy `toml:"policy"`
+}
+
+// WorkersConfig controls workers: scheduled workflows a workspace defines
+// in workers/<name>/WORKER.md (see internal/workers).
+type WorkersConfig struct {
+	Enabled bool `toml:"enabled"`
+	// Paths are the directories holding worker directories, relative to
+	// the workspace.
+	Paths []string `toml:"paths"`
+	// Policy caps what any worker may do and spend.
+	Policy WorkerPolicy `toml:"policy"`
+}
+
+// WorkerPolicy is the host's limit on workers. A worker asks for
+// permissions and limits; the policy removes what it doesn't allow and
+// caps the rest.
+type WorkerPolicy struct {
+	// Allow are the permission kinds workers may be given: shell, write,
+	// delete, web, mcp.
+	Allow []string `toml:"allow"`
+	// Default limits fill in what a worker leaves out; Max caps them.
+	DefaultMaxTurns   int     `toml:"default_max_turns"`
+	DefaultMaxCostUSD float64 `toml:"default_max_cost_usd"`
+	DefaultTimeout    string  `toml:"default_timeout"`
+	MaxTurns          int     `toml:"max_turns"`
+	MaxCostUSD        float64 `toml:"max_cost_usd"`
+	MaxTimeout        string  `toml:"max_timeout"`
+	// MaxConcurrent is how many worker runs may go at once, across
+	// workspaces.
+	MaxConcurrent int `toml:"max_concurrent"`
 }
 
 // SkillPolicy is the host's limit on what skills' scripts may do. For each
@@ -328,6 +359,20 @@ func DefaultConfig() *Config {
 				APIKey:    os.Getenv("ANTHROPIC_API_KEY"),
 				Model:     "claude-opus-5",
 				Fallbacks: "default",
+			},
+		},
+		Workers: WorkersConfig{
+			Enabled: true,
+			Paths:   []string{"workers"},
+			Policy: WorkerPolicy{
+				Allow:             []string{"shell", "write", "delete", "web", "mcp"},
+				DefaultMaxTurns:   50,
+				DefaultMaxCostUSD: 1,
+				DefaultTimeout:    "30m",
+				MaxTurns:          200,
+				MaxCostUSD:        10,
+				MaxTimeout:        "2h",
+				MaxConcurrent:     2,
 			},
 		},
 		Skills: SkillsConfig{

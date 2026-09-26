@@ -22,6 +22,7 @@ import (
 	"github.com/retail-cortex/code_puppy/internal/session"
 	"github.com/retail-cortex/code_puppy/internal/skills"
 	"github.com/retail-cortex/code_puppy/internal/tools"
+	"github.com/retail-cortex/code_puppy/internal/workers"
 	"google.golang.org/adk/v2/model"
 )
 
@@ -34,6 +35,9 @@ type Options struct {
 	// Model replaces the model built from the configuration (tests use a
 	// mock). Agents with their own model still get theirs.
 	Model model.LLM
+	// Workers records which workers are enabled; one store serves every
+	// workspace in a process (nil: ~/.code_puppy/workers.json).
+	Workers *workers.Store
 	// NewModel builds models by name for /model, pins and agents' own
 	// models (nil: runtime.NewModel).
 	NewModel func(ctx context.Context, cfg *config.Config, name string) (model.LLM, error)
@@ -53,9 +57,11 @@ type Workspace struct {
 	modelErr error // set when the configured model failed to initialise
 	warn     func(string)
 	// reply is the language the model replies in, per workspace.
-	reply    *i18n.Localizer
-	lock     *workspaceLock
-	newModel func(ctx context.Context, cfg *config.Config, name string) (model.LLM, error)
+	reply *i18n.Localizer
+	lock  *workspaceLock
+	// workerStore records which workers are enabled.
+	workerStore *workers.Store
+	newModel    func(ctx context.Context, cfg *config.Config, name string) (model.LLM, error)
 }
 
 // Open wires registries, tools, the model and the engine for the workspace
@@ -70,6 +76,12 @@ func Open(ctx context.Context, cfg *config.Config, o Options) (*Workspace, error
 	w.reply = i18n.Current()
 	if w.newModel = o.NewModel; w.newModel == nil {
 		w.newModel = runtime.NewModel
+	}
+	if w.workerStore = o.Workers; w.workerStore == nil {
+		var err error
+		if w.workerStore, err = defaultWorkerStore(); err != nil {
+			return nil, err
+		}
 	}
 	// Everything relative resolves against the workspace, never the
 	// process's working directory: one process can hold several workspaces.

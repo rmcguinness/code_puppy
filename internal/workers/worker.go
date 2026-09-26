@@ -228,11 +228,18 @@ func hashDir(dir string) (string, error) {
 	return "sha256:" + hex.EncodeToString(h.Sum(nil)), nil
 }
 
+// Found is a worker found by Discover, with why it can't be used if it
+// can't.
+type Found struct {
+	Worker *Worker
+	Err    error
+}
+
 // Discover loads every worker under the directories given (each holding
-// <name>/WORKER.md). Invalid workers are returned with their errors;
-// directories without a WORKER.md are ignored.
-func Discover(dirs ...string) ([]*Worker, []error) {
-	var out []*Worker
+// <name>/WORKER.md), invalid ones included with their errors. Directories
+// without a WORKER.md are ignored; a root that can't be read is an error.
+func Discover(dirs ...string) ([]Found, error) {
+	var out []Found
 	var errs []error
 	for _, root := range dirs {
 		entries, err := os.ReadDir(root)
@@ -252,12 +259,11 @@ func Discover(dirs ...string) ([]*Worker, []error) {
 			}
 			w, err := Load(dir)
 			if w != nil {
-				out = append(out, w)
-			}
-			if err != nil {
+				out = append(out, Found{Worker: w, Err: err})
+			} else {
 				errs = append(errs, err)
 			}
 		}
 	}
-	return out, errs
+	return out, errors.Join(errs...)
 }
