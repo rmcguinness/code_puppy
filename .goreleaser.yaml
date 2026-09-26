@@ -41,7 +41,7 @@ checksum:
 sboms:
   - artifacts: archive
 
-# Keyless signing of the checksum file with Sigstore cosign v3 (requires the
+# Keyless signing of the checksum file with Sigstore cosign (requires the
 # workflow's id-token: write permission). The bundle holds the signature,
 # certificate and transparency-log proof. Verify with:
 #   cosign verify-blob --bundle checksums.txt.sigstore.json \

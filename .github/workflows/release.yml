@@ -4,6 +4,10 @@ on:
   push:
     tags: ["v*"]
 
+# Use exactly the Go version setup-go installs from go.mod; never download another.
+env:
+  GOTOOLCHAIN: local
+
 permissions:
   contents: write # create the GitHub release
   id-token: write # keyless cosign signing
@@ -19,12 +23,18 @@ jobs:
         with:
           go-version-file: go.mod
           cache-dependency-path: go.sum
+      # Release tools are pinned to exact versions, so a rebuild of a tag
+      # uses the same tools as the original release.
       - uses: sigstore/cosign-installer@7e8b541eb2e61bf99390e1afd4be13a184e9ebc5 # v3.10.1
+        with:
+          cosign-release: v2.6.1
       - uses: anchore/sbom-action/download-syft@006b7ce8314066bdf1765b4500370d40fa6917a3 # v0.24.2
+        with:
+          syft-version: v1.52.0
       - uses: goreleaser/goreleaser-action@e435ccd777264be153ace6237001ef4d979d3a7a # v6.4.0
         with:
           distribution: goreleaser
-          version: "~> v2"
+          version: v2.18.2
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
