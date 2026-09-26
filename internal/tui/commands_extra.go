@@ -483,8 +483,12 @@ func cmdLocale(ctx context.Context, args []string, app *App) {
 		return
 	}
 	// The interface follows the model's reply language.
-	if tag, err := app.Workspace.Locales().Resolve(res.Tag); err == nil {
-		i18n.SetCurrent(app.Workspace.Locales().Localizer(tag))
+	b := app.Locales
+	if b == nil {
+		b = i18n.Default()
+	}
+	if tag, err := b.Resolve(res.Tag); err == nil {
+		i18n.SetCurrent(b.Localizer(tag))
 	}
 	fmt.Printf("%s✅ %s%s\n", Green, i18n.T("locale.changed", "name", res.NativeName, "tag", res.Tag), Reset)
 	if !res.HasCatalog {

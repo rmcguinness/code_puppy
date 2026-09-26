@@ -33,10 +33,10 @@ scripts:
     timeout_seconds: 30
 ---
 `), 0o644)
-	if err := app.Workspace.Skills().DiscoverExternal([]string{dir}); err != nil {
+	if err := local(app).Skills().DiscoverExternal([]string{dir}); err != nil {
 		t.Fatal(err)
 	}
-	app.Workspace.Config().Skills.Policy.EnvPassthrough = []string{"GITHUB_TOKEN"}
+	local(app).Config().Skills.Policy.EnvPassthrough = []string{"GITHUB_TOKEN"}
 	run := func(cmd string) string {
 		return captureStdout(t, func() { HandleCommand(context.Background(), cmd, app) })
 	}
@@ -60,7 +60,7 @@ scripts:
 	if out := run("/skills show"); !strings.Contains(out, "Usage: /skills show") {
 		t.Errorf("usage:\n%s", out)
 	}
-	app.Workspace.Config().Skills.Policy.Languages = nil
+	local(app).Config().Skills.Policy.Languages = nil
 	if out := run("/skills list"); !strings.Contains(out, `2 scripts · blocked: language "python"`) {
 		t.Errorf("blocked list:\n%s", out)
 	}

@@ -98,7 +98,7 @@ func TestSearchWebHandsFiveReadableLinksToTheAgent(t *testing.T) {
 	if cf := res["create_file"]; len(cf) != 1 || !strings.Contains(fmt.Sprint(cf[0]["error"]), "search is read-only") {
 		t.Errorf("create_file result: %v", cf)
 	}
-	msgs := app.Workspace.Storage().Active().Messages
+	msgs := local(app).Storage().Active().Messages
 	if len(msgs) < 1 || msgs[0].Content != "/search web golang errors" {
 		t.Errorf("transcript: %+v", msgs)
 	}
@@ -108,7 +108,7 @@ func TestSearchSessionSendsMatchingPassages(t *testing.T) {
 	app, llm, _ := searchApp(t, "/search session pineapple\n/search session mango\n/exit\n",
 		genai.NewContentFromText("You chose pineapple on day one.", genai.RoleModel),
 		genai.NewContentFromText("Mango never came up.", genai.RoleModel))
-	st := app.Workspace.Storage()
+	st := local(app).Storage()
 	st.CreateSession("", "t", "code-puppy")
 	st.AddMessage("user", "let's pick a fruit")
 	st.AddMessage("model", "I suggest PINEAPPLE for the demo")

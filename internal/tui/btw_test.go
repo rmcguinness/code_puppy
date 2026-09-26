@@ -32,7 +32,7 @@ func TestBtwIsAnsweredAndForgotten(t *testing.T) {
 		t.Fatalf("the next prompt saw the side question:\n%s", next)
 	}
 	var recorded []string
-	for _, m := range app.Workspace.Storage().Active().Messages {
+	for _, m := range local(app).Storage().Active().Messages {
 		recorded = append(recorded, m.Content)
 	}
 	if got := strings.Join(recorded, "|"); got != "remember pineapple|noted|carry on|carrying on" {

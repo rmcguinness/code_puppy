@@ -10,7 +10,7 @@ import (
 
 func TestModelSettingsCommand(t *testing.T) {
 	app, _ := newCommandApp(t, "")
-	app.Workspace.Config().LLM.Provider = "openai"
+	local(app).Config().LLM.Provider = "openai"
 	run := func(cmd string) string {
 		return captureStdout(t, func() { HandleCommand(context.Background(), cmd, app) })
 	}
@@ -30,7 +30,7 @@ func TestModelSettingsCommand(t *testing.T) {
 	if !strings.Contains(out, "openai doesn't accept seed for gpt-5") {
 		t.Errorf("no warning about the unsupported seed:\n%s", out)
 	}
-	if s := app.Workspace.Engine().ModelSettings("gpt-5"); s.Temperature == nil || *s.Temperature != 0.3 || *s.MaxTokens != 2048 {
+	if s := local(app).Engine().ModelSettings("gpt-5"); s.Temperature == nil || *s.Temperature != 0.3 || *s.MaxTokens != 2048 {
 		t.Fatalf("engine: %+v", s)
 	}
 	if s, ok := savedConfig(t).ModelSettings["gpt-5"]; !ok || s.Seed == nil || *s.Seed != 7 {
@@ -41,7 +41,7 @@ func TestModelSettingsCommand(t *testing.T) {
 	if out := run("/model_settings gpt-5 top_p=0.5 temperature=9"); !strings.Contains(out, "Nothing changed") {
 		t.Errorf("invalid:\n%s", out)
 	}
-	if s := app.Workspace.Engine().ModelSettings("gpt-5"); s.TopP != nil || savedConfig(t).ModelSettings["gpt-5"].TopP != nil {
+	if s := local(app).Engine().ModelSettings("gpt-5"); s.TopP != nil || savedConfig(t).ModelSettings["gpt-5"].TopP != nil {
 		t.Fatalf("partly applied: %+v", s)
 	}
 	if out := run("/model_settings gpt-5 temperature"); !strings.Contains(out, "Expected key=value") {
@@ -59,7 +59,7 @@ func TestModelSettingsCommand(t *testing.T) {
 	}
 
 	out = run("/model_settings gpt-5 reset")
-	if !strings.Contains(out, "gpt-5 now uses the global settings") || !app.Workspace.Engine().ModelSettings("gpt-5").IsZero() {
+	if !strings.Contains(out, "gpt-5 now uses the global settings") || !local(app).Engine().ModelSettings("gpt-5").IsZero() {
 		t.Errorf("reset:\n%s", out)
 	}
 	if s := savedConfig(t).ModelSettings["gpt-5"]; !s.IsZero() {
@@ -70,7 +70,7 @@ func TestModelSettingsCommand(t *testing.T) {
 // A hand-written "provider/model" table is edited in place, not duplicated.
 func TestModelSettingsSavesUnderTheExistingKey(t *testing.T) {
 	app, _ := newCommandApp(t, "")
-	app.Workspace.Config().ModelSettings = map[string]config.ModelSettings{"openai/gpt-5": {}}
+	local(app).Config().ModelSettings = map[string]config.ModelSettings{"openai/gpt-5": {}}
 	captureStdout(t, func() { HandleCommand(context.Background(), "/model_settings gpt-5 temperature=0.4", app) })
 	saved := savedConfig(t).ModelSettings
 	if s, ok := saved["openai/gpt-5"]; !ok || s.Temperature == nil || len(saved) != 1 {

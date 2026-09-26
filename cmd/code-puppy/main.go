@@ -198,8 +198,7 @@ func runRoot(cmd *cobra.Command, o *rootOptions, args []string) (err error) {
 		input = tui.NewLineReader(os.Stdin, promptOut)
 	}
 	if input != nil {
-		w.Tools().Hooks().SetApprover(tui.NewApprover(input, cfg.UI.DiffLines))
-		w.Tools().Hooks().SetUserPrompter(tui.NewUserPrompter(input))
+		w.SetUI(tui.NewApprover(input, cfg.UI.DiffLines), tui.NewUserPrompter(input))
 	}
 
 	attachPrompt := ""
@@ -225,7 +224,7 @@ func runRoot(cmd *cobra.Command, o *rootOptions, args []string) (err error) {
 			prompt: prompt, sessionID: sess.ID, format: o.outputFormat, maxTurns: o.maxTurns, plan: o.plan,
 			input: input, stdinTTY: stdinTTY && !stdinUsed, stdout: os.Stdout,
 			markdown: pretty && cfg.UI.Markdown, spinner: pretty && cfg.UI.Spinner, width: terminalWidth(),
-			usageLines: pretty, images: attached,
+			usageLines: pretty, images: attached, theme: cfg.UI.Theme,
 		})
 	}
 
@@ -243,6 +242,7 @@ func runRoot(cmd *cobra.Command, o *rootOptions, args []string) (err error) {
 	}
 	return tui.RunREPL(ctx, &tui.App{
 		Workspace:     w,
+		Locales:       w.Locales(),
 		Version:       version,
 		Input:         input,
 		Attachments:   attached,
@@ -289,8 +289,8 @@ func resolvePrompt(flag string, args []string, stdinTTY, interactive bool, stdin
 }
 
 // newCompleter registers slash commands and dynamic argument sources.
-func newCompleter(w *app.Workspace) *tui.Completer {
-	c := tui.NewCompleter(w.Tools().Workspace().Dir())
+func newCompleter(w app.Backend) *tui.Completer {
+	c := tui.NewCompleter(w.Dir())
 	for _, cmd := range []string{"help", "agents", "model", "skills", "session", "set", "clear", "sandbox", "exit", "quit",
 		"undo", "checkpoints", "diff", "cost", "context", "compact", "memory", "approvals", "mcp", "resume", "locale", "attach", "paste",
 		"tools", "plan", "show", "pin_model", "unpin", "model_settings", "search", "btw", "rename", "envs"} {
@@ -307,53 +307,48 @@ func newCompleter(w *app.Workspace) *tui.Completer {
 	c.Command("undo", "--force")
 	c.Command("compact")
 	c.Command("set", "agency=", "puppy_name=", "owner_name=")
-	c.Dynamic("agent", func() []string {
-		var names []string
-		for _, a := range w.Agents().List() {
-			names = append(names, a.Name)
-		}
-		return names
-	})
 	agentNames := func() []string {
 		var names []string
-		for _, a := range w.Agents().List() {
+		for _, a := range w.ListAgents() {
 			names = append(names, a.Name)
 		}
 		return names
 	}
+	c.Dynamic("agent", agentNames)
 	c.Dynamic("pin_model", agentNames)
 	c.Dynamic("unpin", func() []string {
 		var names []string
-		for _, n := range agentNames() {
-			if _, pinned := w.Engine().AgentModel(n); pinned {
-				names = append(names, n)
+		for _, a := range w.ListAgents() {
+			if a.PinnedModel != "" {
+				names = append(names, a.Name)
 			}
 		}
 		return names
 	})
 	// Models in use (the main one and any agent's) and those with settings.
 	c.Dynamic("model_settings", func() []string {
-		names := []string{w.Engine().ModelName()}
-		for _, n := range agentNames() {
-			if m, pinned := w.Engine().AgentModel(n); pinned {
-				names = append(names, m)
+		names := []string{w.Model().Name}
+		for _, a := range w.ListAgents() {
+			if a.PinnedModel != "" {
+				names = append(names, a.PinnedModel)
 			}
 		}
-		for m := range w.Engine().AllModelSettings() {
+		for m := range w.AllModelSettings() {
 			names = append(names, m)
 		}
 		return names
 	})
 	c.Dynamic("locale", func() []string {
 		var tags []string
-		for _, m := range w.Locales().Available() {
-			tags = append(tags, m.Locale)
+		list, _ := w.AvailableLocales()
+		for _, m := range list {
+			tags = append(tags, m.Tag)
 		}
 		return tags
 	})
 	c.Dynamic("resume", func() []string {
 		var ids []string
-		if list, err := w.Storage().ListWorkspace(w.Storage().Workspace()); err == nil {
+		if list, err := w.ListSessions(false); err == nil {
 			for i, s := range list {
 				if i == 20 {
 					break
@@ -361,10 +356,10 @@ func newCompleter(w *app.Workspace) *tui.Completer {
 				ids = append(ids, s.ID)
 			}
 		}
-		if all, err := w.Storage().List(); err == nil {
+		if all, err := w.ListSessions(true); err == nil {
 			for _, s := range all {
-				if s.Name != "" {
-					ids = append(ids, s.Name)
+				if s.Snapshot != "" {
+					ids = append(ids, s.Snapshot)
 				}
 			}
 		}

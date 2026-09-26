@@ -20,12 +20,15 @@ import (
 // App is the REPL's state: the workspace it drives and the terminal.
 type App struct {
 	// Workspace is the program behind the REPL: every command and turn goes
-	// through it.
-	Workspace *core.Workspace
+	// through it. It runs here or in the Code Puppy service.
+	Workspace core.Backend
 	Version   string
 	Input     Input
 	// Printer configures output rendering.
 	Printer PrinterOptions
+	// Locales are the interface's translation catalogs (nil: the built-in
+	// ones). The interface language is the front end's own.
+	Locales *i18n.Bundle
 	// Attachments are images to send with the next prompt (/attach, /paste,
 	// --image).
 	Attachments []*images.Image
@@ -228,10 +231,10 @@ func RunREPL(ctx context.Context, app *App) error {
 			// SIGTERM: no prompt; deferred cleanup kills background processes.
 			return goodbye()
 		case errors.Is(err, io.EOF):
-			ConfirmExit(ctx, app.Input, app.Workspace.Tools().Processes(), interrupts, ExitPrompt{})
+			ConfirmExit(ctx, app.Input, app.Workspace.Processes(), interrupts, ExitPrompt{})
 			return goodbye()
 		case errors.Is(err, context.Canceled): // Ctrl+C at the prompt
-			if ConfirmExit(ctx, app.Input, app.Workspace.Tools().Processes(), interrupts, exitPrompt) {
+			if ConfirmExit(ctx, app.Input, app.Workspace.Processes(), interrupts, exitPrompt) {
 				return goodbye()
 			}
 			continue
@@ -281,7 +284,7 @@ func RunREPL(ctx context.Context, app *App) error {
 		if !plan { // a plan goal is text for the agent, even if it starts with "/"
 			handled, err := HandleCommand(ctx, line, app)
 			if errors.Is(err, ErrExit) {
-				if ConfirmExit(ctx, app.Input, app.Workspace.Tools().Processes(), interrupts, exitPrompt) {
+				if ConfirmExit(ctx, app.Input, app.Workspace.Processes(), interrupts, exitPrompt) {
 					return goodbye()
 				}
 				continue

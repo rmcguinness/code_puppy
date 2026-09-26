@@ -37,7 +37,7 @@ func newImageApp(t *testing.T, replies ...string) (*App, *runtime.MockLLM) {
 	}
 	llm := runtime.NewMockLLM("gemini-3.8-flash", contents...)
 	app := openApp(t, cfg, llm)
-	app.Workspace.Storage().CreateSession("", "t", "code-puppy")
+	local(app).Storage().CreateSession("", "t", "code-puppy")
 	return app, llm
 }
 
@@ -54,7 +54,7 @@ func sentImages(llm *runtime.MockLLM) int {
 
 func TestAttachCommandsAndMentions(t *testing.T) {
 	app, llm := newImageApp(t, "one", "two", "three")
-	ws := app.Workspace.Tools().Workspace().Dir()
+	ws := local(app).Tools().Workspace().Dir()
 	os.WriteFile(filepath.Join(ws, "a.png"), pngOf(t, 40, 30), 0o644)
 	os.WriteFile(filepath.Join(ws, "b.png"), pngOf(t, 50, 30), 0o644)
 	ctx := context.Background()
@@ -75,7 +75,7 @@ func TestAttachCommandsAndMentions(t *testing.T) {
 	// Queue plus an inline mention: both go with the prompt, then the
 	// queue is empty.
 	out = captureStdout(t, func() {
-		runTurn(ctx, app, app.Workspace.Storage().Active().ID, "compare these with @b.png", nil, turnOptions{})
+		runTurn(ctx, app, local(app).Storage().Active().ID, "compare these with @b.png", nil, turnOptions{})
 	})
 	if n := sentImages(llm); n != 2 {
 		t.Errorf("sent %d images, want 2", n)
@@ -83,7 +83,7 @@ func TestAttachCommandsAndMentions(t *testing.T) {
 	if len(app.Attachments) != 0 || !strings.Contains(out, "📎 b.png 50×30") {
 		t.Errorf("queue not emptied / not shown:\n%s", out)
 	}
-	msgs := app.Workspace.Storage().Active().Messages
+	msgs := local(app).Storage().Active().Messages
 	if last := msgs[len(msgs)-2].Content; !strings.Contains(last, "[images: a.png, b.png]") {
 		t.Errorf("transcript note missing: %q", last)
 	}
@@ -92,7 +92,7 @@ func TestAttachCommandsAndMentions(t *testing.T) {
 	HandleCommand(ctx, "/attach a.png", app)
 	calls := len(llm.Requests)
 	out = captureStdout(t, func() {
-		runTurn(ctx, app, app.Workspace.Storage().Active().ID, "what about @nope.png", nil, turnOptions{})
+		runTurn(ctx, app, local(app).Storage().Active().ID, "what about @nope.png", nil, turnOptions{})
 	})
 	if len(llm.Requests) != calls || len(app.Attachments) != 1 || !strings.Contains(out, "Nothing was sent") {
 		t.Errorf("bad mention should not send (calls %d→%d, queue %d):\n%s", calls, len(llm.Requests), len(app.Attachments), out)
@@ -103,7 +103,7 @@ func TestAttachCommandsAndMentions(t *testing.T) {
 	}
 
 	// Plain prompts send no images.
-	runTurn(ctx, app, app.Workspace.Storage().Active().ID, "just text, mail me@example.png", nil, turnOptions{})
+	runTurn(ctx, app, local(app).Storage().Active().ID, "just text, mail me@example.png", nil, turnOptions{})
 	if n := sentImages(llm); n != 0 {
 		t.Errorf("plain prompt sent %d images", n)
 	}
@@ -139,7 +139,7 @@ func TestPaste(t *testing.T) {
 	if len(app.Attachments) != 1 || !strings.HasPrefix(app.Attachments[0].Name, "clipboard-") {
 		t.Fatalf("paste: %s", out)
 	}
-	runTurn(ctx, app, app.Workspace.Storage().Active().ID, "what is this?", nil, turnOptions{})
+	runTurn(ctx, app, local(app).Storage().Active().ID, "what is this?", nil, turnOptions{})
 	if sentImages(llm) != 1 {
 		t.Error("pasted image not sent")
 	}

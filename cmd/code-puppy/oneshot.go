@@ -65,12 +65,13 @@ type oneShotOptions struct {
 	width      int
 	usageLines bool
 	images     []*images.Image
+	theme      string // Markdown theme
 }
 
 // runOneShot executes a single prompt and exits. Background processes are
 // never left behind: the user is asked (text mode on a terminal) or they are
 // killed.
-func runOneShot(ctx context.Context, w *app.Workspace, o oneShotOptions) error {
+func runOneShot(ctx context.Context, w app.Backend, o oneShotOptions) error {
 	start := time.Now()
 	out := o.stdout
 	sid := o.sessionID
@@ -81,7 +82,7 @@ func runOneShot(ctx context.Context, w *app.Workspace, o oneShotOptions) error {
 	var enc *json.Encoder
 	switch o.format {
 	case formatText:
-		printer = tui.NewPrinter(tui.PrinterOptions{Out: out, Markdown: o.markdown, Theme: w.Config().UI.Theme, Width: o.width, Spinner: o.spinner})
+		printer = tui.NewPrinter(tui.PrinterOptions{Out: out, Markdown: o.markdown, Theme: o.theme, Width: o.width, Spinner: o.spinner})
 		handler = printer.Handle
 	case formatStreamJSON:
 		enc = json.NewEncoder(out)
@@ -96,7 +97,7 @@ func runOneShot(ctx context.Context, w *app.Workspace, o oneShotOptions) error {
 				printer.Begin()
 			}
 			if enc != nil {
-				_ = enc.Encode(map[string]any{"type": "session", "session_id": sid, "model": w.Engine().ModelName(), "agent": w.Engine().ActiveAgent()})
+				_ = enc.Encode(map[string]any{"type": "session", "session_id": sid, "model": w.Model().Name, "agent": w.ActiveAgent().Name})
 			}
 		},
 	}, handler)
@@ -111,7 +112,7 @@ func runOneShot(ctx context.Context, w *app.Workspace, o oneShotOptions) error {
 		runErr = withCode(exitInterrupted, runErr)
 	}
 
-	usage := w.Engine().Usage(sid)
+	usage, _ := w.SessionUsage() // sid is the active session
 	if o.format == formatText {
 		if o.usageLines {
 			if line := tui.UsageLine(runtime.Usage{}, usage); line != "" {
@@ -139,7 +140,7 @@ func runOneShot(ctx context.Context, w *app.Workspace, o oneShotOptions) error {
 	interrupts := make(chan os.Signal, 1)
 	signal.Notify(interrupts, os.Interrupt)
 	defer signal.Stop(interrupts)
-	tui.ConfirmExit(context.Background(), o.input, w.Tools().Processes(), interrupts, tui.ExitPrompt{
+	tui.ConfirmExit(context.Background(), o.input, w.Processes(), interrupts, tui.ExitPrompt{
 		CanPrompt: o.format == formatText && ctx.Err() == nil && o.stdinTTY && o.input != nil,
 	})
 	return runErr

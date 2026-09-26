@@ -74,7 +74,7 @@ func cmdAttach(args []string, app *App) {
 }
 
 func cmdPaste(ctx context.Context, app *App) {
-	if !app.Workspace.Config().Images.Enabled {
+	if !app.Workspace.ImagesEnabled() {
 		fmt.Println(i18n.T("attach.disabled"))
 		return
 	}

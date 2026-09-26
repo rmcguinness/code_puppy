@@ -19,14 +19,14 @@ func TestRenameTitleAndResumeHint(t *testing.T) {
 		"Usage: /rename <name>",
 		"Session renamed to Login work.",
 		"\033]0;\007", // restored at exit
-		"Resume with: code-puppy --resume=" + app.Workspace.Storage().Active().ID,
+		"Resume with: code-puppy --resume=" + local(app).Storage().Active().ID,
 	} {
 		if !strings.Contains(out, want) {
 			t.Errorf("output lacks %q:\n%q", want, out)
 		}
 	}
-	if app.Workspace.Storage().Active().Title != "Login work" {
-		t.Fatalf("title %q", app.Workspace.Storage().Active().Title)
+	if local(app).Storage().Active().Title != "Login work" {
+		t.Fatalf("title %q", local(app).Storage().Active().Title)
 	}
 }
 

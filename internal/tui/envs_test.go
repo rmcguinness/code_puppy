@@ -22,10 +22,10 @@ func TestEnvsListPruneRemove(t *testing.T) {
 	skillsDir := t.TempDir()
 	os.MkdirAll(filepath.Join(skillsDir, "s"), 0o755)
 	os.WriteFile(filepath.Join(skillsDir, "s", "SKILL.md"), []byte("---\nname: s\nscripts:\n  - name: r\n    language: python\n    inline_code: x\n    dependencies: [\"six==1.16.0\"]\n---\n"), 0o644)
-	if err := app.Workspace.Skills().DiscoverExternal([]string{skillsDir}); err != nil {
+	if err := local(app).Skills().DiscoverExternal([]string{skillsDir}); err != nil {
 		t.Fatal(err)
 	}
-	envs := app.Workspace.Tools().SkillScripts().Envs()
+	envs := local(app).Tools().SkillScripts().Envs()
 	dir := filepath.Join(home, ".code_puppy", "envs")
 	mk := func(key string, marker bool, deps ...string) {
 		os.MkdirAll(filepath.Join(dir, key, "lib"), 0o700)

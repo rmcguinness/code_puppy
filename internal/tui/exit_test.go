@@ -134,7 +134,7 @@ func TestConfirmExitForceQuit(t *testing.T) {
 
 func TestREPLExitWithBackgroundProcesses(t *testing.T) {
 	app := newTestApp(t, nil)
-	pm := app.Workspace.Tools().Processes()
+	pm := local(app).Tools().Processes()
 	startSleep(t, pm, "30")
 
 	// /exit -> cancel -> keep working -> /exit -> kill.
@@ -156,7 +156,7 @@ func TestREPLExitWithBackgroundProcesses(t *testing.T) {
 
 func TestREPLCtrlCAtPromptWithBackgroundProcess(t *testing.T) {
 	app := newTestApp(t, nil)
-	pm := app.Workspace.Tools().Processes()
+	pm := local(app).Tools().Processes()
 	startSleep(t, pm, "30")
 	pr, pw := io.Pipe()
 	app.Input = NewLineReader(pr, io.Discard)

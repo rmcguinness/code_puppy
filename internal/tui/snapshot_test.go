@@ -29,7 +29,7 @@ func TestSessionSaveAndLoadRestoreTheModelsContext(t *testing.T) {
 	app, llm := newCommandApp(t, "")
 	// The workspace keeps transcripts and the model's events side by side,
 	// which snapshots copy together.
-	st, eng := app.Workspace.Storage(), app.Workspace.Engine()
+	st, eng := local(app).Storage(), local(app).Engine()
 	ctx := context.Background()
 	run := func(cmd string) string { return captureStdout(t, func() { HandleCommand(ctx, cmd, app) }) }
 	turn := func(prompt string) {

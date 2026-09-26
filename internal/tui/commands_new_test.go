@@ -44,14 +44,14 @@ func TestPlanCommandRefusesEditsAndRecordsTheGoal(t *testing.T) {
 	if llm.Calls() != 2 {
 		t.Fatalf("want 2 model calls for the plan, got %d", llm.Calls())
 	}
-	if _, err := os.Stat(filepath.Join(app.Workspace.Tools().Workspace().Dir(), "notes.txt")); err == nil {
+	if _, err := os.Stat(filepath.Join(local(app).Tools().Workspace().Dir(), "notes.txt")); err == nil {
 		t.Fatal("/plan created a file")
 	}
 	first := llm.Requests[0].Contents
 	if text := first[len(first)-1].Parts[0].Text; !strings.Contains(text, "plan-only mode") || !strings.Contains(text, "add notes.txt") {
 		t.Fatalf("plan prompt = %q", text)
 	}
-	if got := userMessages(app.Workspace.Storage()); len(got) != 1 || got[0] != "/plan add notes.txt" {
+	if got := userMessages(local(app).Storage()); len(got) != 1 || got[0] != "/plan add notes.txt" {
 		t.Fatalf("transcript = %v", got)
 	}
 }
@@ -70,7 +70,7 @@ func TestShellPassthroughRunsInWorkspaceWithoutTheAgent(t *testing.T) {
 	if llm.Calls() != 0 {
 		t.Fatalf("! reached the agent (%d calls)", llm.Calls())
 	}
-	b, err := os.ReadFile(filepath.Join(app.Workspace.Tools().Workspace().Dir(), "made.txt"))
+	b, err := os.ReadFile(filepath.Join(local(app).Tools().Workspace().Dir(), "made.txt"))
 	if err != nil || strings.TrimSpace(string(b)) != "hi" {
 		t.Fatalf("command did not run in the workspace: %q %v", b, err)
 	}
@@ -79,7 +79,7 @@ func TestShellPassthroughRunsInWorkspaceWithoutTheAgent(t *testing.T) {
 			t.Errorf("output missing %q:\n%s", want, out)
 		}
 	}
-	if len(userMessages(app.Workspace.Storage())) != 0 {
+	if len(userMessages(local(app).Storage())) != 0 {
 		t.Fatal("! commands were recorded as prompts")
 	}
 }
@@ -105,7 +105,7 @@ func TestCtrlCDuringShellPassthroughDoesNotExit(t *testing.T) {
 
 func TestToolsAndShowCommands(t *testing.T) {
 	app, _ := newCommandApp(t, "")
-	app.Workspace.Config().MCP.Servers = []config.MCPServerConfig{{Name: "gh", Prefix: "gh"}, {Name: "qa-only", Agents: []string{"qa-kitten"}}}
+	local(app).Config().MCP.Servers = []config.MCPServerConfig{{Name: "gh", Prefix: "gh"}, {Name: "qa-only", Agents: []string{"qa-kitten"}}}
 	out := captureStdout(t, func() { HandleCommand(context.Background(), "/tools", app) })
 	for _, want := range []string{"read_file", "run_shell_command", "mcp:gh", "gh__"} {
 		if !strings.Contains(out, want) {

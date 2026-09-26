@@ -7,11 +7,9 @@ import (
 	"os"
 	"os/exec"
 	goruntime "runtime"
-	"strconv"
 	"strings"
 	"time"
 
-	"github.com/retail-cortex/code_puppy/internal/audit"
 	"github.com/retail-cortex/code_puppy/internal/i18n"
 )
 
@@ -69,11 +67,11 @@ func runShellPassthrough(ctx context.Context, app *App, command string, interrup
 	}
 	slog.InfoContext(ctx, "user shell command", "exit_code", code, "elapsed", elapsed)
 	if app.Workspace != nil {
-		entry := audit.Entry{Kind: audit.KindUserShell, Detail: command, Decision: "exit " + strconv.Itoa(code)}
+		var startErr error
 		if err != nil && cmd.ProcessState == nil {
-			entry.Error = err.Error()
+			startErr = err
 		}
-		app.Workspace.Audit().Log(entry)
+		app.Workspace.AuditShell(command, code, startErr)
 	}
 }
 
