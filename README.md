@@ -301,7 +301,7 @@ curl --unix-socket ~/.code_puppy/run/code-puppy.sock -H 'Content-Type: applicati
   -d '{"workspace": "/path/to/project"}' http://localhost/codepuppy.v1.WorkspaceService/GetModel
 ```
 
-A workspace has one owner at a time: while the service has it open, `code-puppy` in that directory says so instead of opening it too.
+When the service is running, `code-puppy` attaches to it (the REPL says so), so the CLI, the desktop app and other clients share one copy of each workspace; `--local` runs the workspace in-process instead. A workspace has one owner at a time, so `--local` on a workspace the service holds is refused. `CODE_PUPPY_SOCKET` moves the socket for both.
 
 ## 📦 Build, Test, Release
 

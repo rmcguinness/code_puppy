@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"os"
@@ -9,8 +10,11 @@ import (
 	"strings"
 
 	"github.com/retail-cortex/code_puppy/internal/app"
+	"github.com/retail-cortex/code_puppy/internal/client"
 	"github.com/retail-cortex/code_puppy/internal/config"
+	"github.com/retail-cortex/code_puppy/internal/i18n"
 	"github.com/retail-cortex/code_puppy/internal/observability"
+	"github.com/retail-cortex/code_puppy/internal/server"
 )
 
 // globalFlags are shared by the root command and subcommands.
@@ -81,4 +85,27 @@ func startObservability(ctx context.Context, cfg *config.Config, warn func(strin
 		}
 		logFile.Close()
 	}
+}
+
+// openBackend attaches to the workspace in the Code Puppy service when one
+// is running (unless local), and otherwise opens it in this process. It
+// also returns the interface's translation catalogs, which are always this
+// process's, and whether it attached.
+func openBackend(ctx context.Context, cfg *config.Config, local, streaming bool, warn func(string)) (app.Backend, *i18n.Bundle, bool, error) {
+	socket := server.DefaultSocket()
+	if !local && server.Running(socket) {
+		r, err := client.Attach(ctx, socket, cfg.Tools.WorkspaceDir, warn)
+		if err != nil {
+			return nil, nil, false, fmt.Errorf("attaching to the Code Puppy service at %s: %w (--local runs without it)", socket, err)
+		}
+		return r, app.SetupLocale(cfg, warn), true, nil
+	}
+	w, err := app.Open(ctx, cfg, app.Options{Streaming: streaming, Warn: warn})
+	if errors.Is(err, app.ErrWorkspaceBusy) {
+		return nil, nil, false, withCode(exitUsage, fmt.Errorf("%w (another code-puppy has it open)", err))
+	}
+	if err != nil {
+		return nil, nil, false, err
+	}
+	return w, w.Locales(), false, nil
 }

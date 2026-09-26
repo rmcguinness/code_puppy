@@ -171,6 +171,7 @@
     "resume.starting": "Reprise de la session {id} ({messages})",
     "resume.other_workspace_id": "la session {id} a été démarrée dans {workspace}; les références de fichiers de son historique peuvent ne pas correspondre à cet espace de travail",
     "startup.placeholder_model": "exécutez 'code-puppy doctor' pour vérifier votre configuration; un modèle provisoire est utilisé",
+    "startup.attached": "Connecté au service Code Puppy ({socket}); --local l’exécute ici.",
     "startup.model_failed": "échec de l’initialisation du modèle : {error}",
     "startup.line_editor": "éditeur de ligne non disponible : {error}",
     "help.attach": "Joindre une image à votre prochain message (ou lister/vider la file)",

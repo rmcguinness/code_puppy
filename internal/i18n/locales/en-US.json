@@ -171,6 +171,7 @@
     "resume.starting": "Resuming session {id} ({messages})",
     "resume.other_workspace_id": "session {id} was started in {workspace}; file references in its history may not match this workspace",
     "startup.placeholder_model": "run 'code-puppy doctor' to check your configuration; using a placeholder model",
+    "startup.attached": "Attached to the Code Puppy service ({socket}); --local runs here instead.",
     "startup.model_failed": "model initialization failed: {error}",
     "startup.line_editor": "line editor unavailable: {error}",
     "help.attach": "Queue an image for your next message (or list/clear the queue)",

@@ -14,6 +14,7 @@ import (
 	"github.com/retail-cortex/code_puppy/internal/app"
 	"github.com/retail-cortex/code_puppy/internal/config"
 	"github.com/retail-cortex/code_puppy/internal/i18n"
+	"github.com/retail-cortex/code_puppy/internal/server"
 	"github.com/retail-cortex/code_puppy/internal/tui"
 	"github.com/spf13/cobra"
 )
@@ -32,6 +33,7 @@ type rootOptions struct {
 	maxTurns     int
 	plan         bool
 	images       []string
+	local        bool
 }
 
 func main() {
@@ -89,6 +91,7 @@ Exit codes: 0 success, 1 error, 2 usage, 3 --max-turns reached,
 	f.StringVar(&o.outputFormat, "output-format", formatText, "Output for one-shot runs: text, json, or stream-json")
 	f.IntVar(&o.maxTurns, "max-turns", 0, "Stop after this many model calls in a one-shot run (0 = unlimited)")
 	f.BoolVar(&o.plan, "plan", false, "One-shot plan: the agent may read and search but not edit or run commands")
+	f.BoolVar(&o.local, "local", false, "Run the workspace in this process even when the Code Puppy service is running")
 	f.StringArrayVar(&o.images, "image", nil, "Attach an image to the first prompt (repeatable); @file.png in a prompt also works")
 
 	root.AddCommand(newDoctorCommand(&o.global), newConfigCommand(&o.global), newServeCommand(&o.global))
@@ -150,12 +153,12 @@ func runRoot(cmd *cobra.Command, o *rootOptions, args []string) (err error) {
 		}
 	}()
 
-	w, err := app.Open(ctx, cfg, app.Options{Streaming: pretty, Warn: warnFn})
-	if errors.Is(err, app.ErrWorkspaceBusy) {
-		return withCode(exitUsage, fmt.Errorf("%w (the Code Puppy service or another code-puppy has it open)", err))
-	}
+	w, locales, remote, err := openBackend(ctx, cfg, o.local, pretty, warnFn)
 	if err != nil {
 		return err
+	}
+	if remote && !oneShot {
+		fmt.Fprintf(os.Stderr, "%s🔌 %s%s\n", tui.Dim, i18n.T("startup.attached", "socket", server.DefaultSocket()), tui.Reset)
 	}
 	defer func() {
 		if cerr := w.Close(); cerr != nil && err == nil {
@@ -242,7 +245,7 @@ func runRoot(cmd *cobra.Command, o *rootOptions, args []string) (err error) {
 	}
 	return tui.RunREPL(ctx, &tui.App{
 		Workspace:     w,
-		Locales:       w.Locales(),
+		Locales:       locales,
 		Version:       version,
 		Input:         input,
 		Attachments:   attached,

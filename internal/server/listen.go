@@ -22,8 +22,14 @@ const BaseURL = "http://code-puppy"
 // ErrRunning reports a service already answering on the socket.
 var ErrRunning = errors.New("a Code Puppy service is already running")
 
-// DefaultSocket is where the per-user service listens.
-func DefaultSocket() string { return config.ExpandHome("~/.code_puppy/run/code-puppy.sock") }
+// DefaultSocket is where the per-user service listens:
+// $CODE_PUPPY_SOCKET, or ~/.code_puppy/run/code-puppy.sock.
+func DefaultSocket() string {
+	if p := os.Getenv("CODE_PUPPY_SOCKET"); p != "" {
+		return config.ExpandHome(p)
+	}
+	return config.ExpandHome("~/.code_puppy/run/code-puppy.sock")
+}
 
 // Listen opens the Unix socket at path for this user only. It refuses when
 // a service already answers there, and replaces a socket left by one that
