@@ -68,6 +68,9 @@ type Image struct {
 	SHA256        string // of Data
 	OriginalBytes int
 	Resized       bool
+	// Size is len(Data), kept for an image whose data stays elsewhere (one
+	// held by the Code Puppy service).
+	Size int
 }
 
 // URI is the reference stored in conversation history.
@@ -75,7 +78,11 @@ func (img *Image) URI() string { return URIScheme + img.SHA256 }
 
 // Summary is a short human description: "shot.png 1280×720, 210 KB".
 func (img *Image) Summary() string {
-	return fmt.Sprintf("%s %d×%d, %s", img.Name, img.Width, img.Height, humanBytes(len(img.Data)))
+	n := len(img.Data)
+	if n == 0 {
+		n = img.Size
+	}
+	return fmt.Sprintf("%s %d×%d, %s", img.Name, img.Width, img.Height, humanBytes(n))
 }
 
 // ErrNotImage is returned for data that isn't a supported image.

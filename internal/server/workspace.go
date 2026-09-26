@@ -67,7 +67,11 @@ func (h workspaceService) GetModel(ctx context.Context, r req[pb.GetModelRequest
 		return nil, err
 	}
 	m := w.Model()
-	return ok(&pb.GetModelResponse{Name: m.Name, Provider: m.Provider})
+	out := &pb.GetModelResponse{Name: m.Name, Provider: m.Provider}
+	if err := w.ModelErr(); err != nil {
+		out.Unavailable = app.ModelErrorSummary(err, w.Config())
+	}
+	return ok(out)
 }
 
 func (h workspaceService) SetModel(ctx context.Context, r req[pb.SetModelRequest]) (*connect.Response[pb.SetModelResponse], error) {
@@ -150,6 +154,7 @@ func (h workspaceService) GetSettings(ctx context.Context, r req[pb.GetSettingsR
 	return ok(&pb.GetSettingsResponse{
 		PuppyName: st.PuppyName, OwnerName: st.OwnerName, Agency: st.Agency,
 		Model: st.Model.Name, Provider: st.Model.Provider, Agent: st.Agent, Locale: st.Locale,
+		ImagesEnabled: w.ImagesEnabled(),
 	})
 }
 
@@ -398,6 +403,18 @@ func (h workspaceService) AddImage(ctx context.Context, r req[pb.AddImageRequest
 		return nil, toAPI(err)
 	}
 	return ok(&pb.AddImageResponse{Image: w.keepImage(img)})
+}
+
+func (h workspaceService) GetSearchProvider(ctx context.Context, r req[pb.GetSearchProviderRequest]) (*connect.Response[pb.GetSearchProviderResponse], error) {
+	w, err := h.s.workspace(ctx, r.Msg.Workspace)
+	if err != nil {
+		return nil, err
+	}
+	provider, err := w.SearchProvider()
+	if err != nil {
+		return nil, toAPI(err)
+	}
+	return ok(&pb.GetSearchProviderResponse{Provider: provider})
 }
 
 func (h workspaceService) SearchWeb(ctx context.Context, r req[pb.SearchWebRequest]) (*connect.Response[pb.SearchWebResponse], error) {

@@ -95,6 +95,9 @@ func (s *Server) workspace(ctx context.Context, dir string) (*workspace, error) 
 		return w, nil
 	}
 	aw, err := s.open(ctx, key)
+	if errors.Is(err, app.ErrWorkspaceBusy) {
+		return nil, apiError(connect.CodeFailedPrecondition, "WORKSPACE_BUSY", err, "workspace", key)
+	}
 	if err != nil {
 		return nil, apiError(connect.CodeFailedPrecondition, "OPEN_FAILED", err, "workspace", key)
 	}

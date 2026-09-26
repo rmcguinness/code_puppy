@@ -85,6 +85,9 @@ service WorkspaceService {
   rpc LoadImage(LoadImageRequest) returns (LoadImageResponse);
   // Stores image data (e.g. pasted) for a prompt (IMAGES_DISABLED).
   rpc AddImage(AddImageRequest) returns (AddImageResponse);
+  // Names the web search provider (NO_FETCH when the agent can't fetch
+  // pages, so a search would give it nothing to read).
+  rpc GetSearchProvider(GetSearchProviderRequest) returns (GetSearchProviderResponse);
   // Searches the web and prepares the prompt that hands the readable results
   // to the agent (NO_FETCH, NO_SEARCH): run it as a turn with fetch_grants
   // set to the links' URLs.
@@ -155,6 +158,9 @@ message GetModelResponse {
   string name = 1;
   // The configured provider.
   string provider = 2;
+  // Why the configured model couldn't be built, if it couldn't; the
+  // workspace then runs on a placeholder model.
+  string unavailable = 3;
 }
 
 message SetModelRequest {
@@ -260,6 +266,8 @@ message GetSettingsResponse {
   string agent = 6;
   // The language the model replies in.
   string locale = 7;
+  // Images can be attached to prompts.
+  bool images_enabled = 8;
 }
 
 message SetSettingRequest {
@@ -594,6 +602,14 @@ message AddImageResponse {
 message Link {
   string title = 1;
   string url = 2;
+}
+
+message GetSearchProviderRequest {
+  string workspace = 1;
+}
+
+message GetSearchProviderResponse {
+  string provider = 1;
 }
 
 message SearchWebRequest {

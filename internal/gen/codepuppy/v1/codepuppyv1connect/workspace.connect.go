@@ -125,6 +125,9 @@ const (
 	// WorkspaceServiceAddImageProcedure is the fully-qualified name of the WorkspaceService's AddImage
 	// RPC.
 	WorkspaceServiceAddImageProcedure = "/codepuppy.v1.WorkspaceService/AddImage"
+	// WorkspaceServiceGetSearchProviderProcedure is the fully-qualified name of the WorkspaceService's
+	// GetSearchProvider RPC.
+	WorkspaceServiceGetSearchProviderProcedure = "/codepuppy.v1.WorkspaceService/GetSearchProvider"
 	// WorkspaceServiceSearchWebProcedure is the fully-qualified name of the WorkspaceService's
 	// SearchWeb RPC.
 	WorkspaceServiceSearchWebProcedure = "/codepuppy.v1.WorkspaceService/SearchWeb"
@@ -197,6 +200,9 @@ type WorkspaceServiceClient interface {
 	LoadImage(context.Context, *connect.Request[v1.LoadImageRequest]) (*connect.Response[v1.LoadImageResponse], error)
 	// Stores image data (e.g. pasted) for a prompt (IMAGES_DISABLED).
 	AddImage(context.Context, *connect.Request[v1.AddImageRequest]) (*connect.Response[v1.AddImageResponse], error)
+	// Names the web search provider (NO_FETCH when the agent can't fetch
+	// pages, so a search would give it nothing to read).
+	GetSearchProvider(context.Context, *connect.Request[v1.GetSearchProviderRequest]) (*connect.Response[v1.GetSearchProviderResponse], error)
 	// Searches the web and prepares the prompt that hands the readable results
 	// to the agent (NO_FETCH, NO_SEARCH): run it as a turn with fetch_grants
 	// set to the links' URLs.
@@ -400,6 +406,12 @@ func NewWorkspaceServiceClient(httpClient connect.HTTPClient, baseURL string, op
 			connect.WithSchema(workspaceServiceMethods.ByName("AddImage")),
 			connect.WithClientOptions(opts...),
 		),
+		getSearchProvider: connect.NewClient[v1.GetSearchProviderRequest, v1.GetSearchProviderResponse](
+			httpClient,
+			baseURL+WorkspaceServiceGetSearchProviderProcedure,
+			connect.WithSchema(workspaceServiceMethods.ByName("GetSearchProvider")),
+			connect.WithClientOptions(opts...),
+		),
 		searchWeb: connect.NewClient[v1.SearchWebRequest, v1.SearchWebResponse](
 			httpClient,
 			baseURL+WorkspaceServiceSearchWebProcedure,
@@ -442,6 +454,7 @@ type workspaceServiceClient struct {
 	revokeApprovals     *connect.Client[v1.RevokeApprovalsRequest, v1.RevokeApprovalsResponse]
 	loadImage           *connect.Client[v1.LoadImageRequest, v1.LoadImageResponse]
 	addImage            *connect.Client[v1.AddImageRequest, v1.AddImageResponse]
+	getSearchProvider   *connect.Client[v1.GetSearchProviderRequest, v1.GetSearchProviderResponse]
 	searchWeb           *connect.Client[v1.SearchWebRequest, v1.SearchWebResponse]
 }
 
@@ -600,6 +613,11 @@ func (c *workspaceServiceClient) AddImage(ctx context.Context, req *connect.Requ
 	return c.addImage.CallUnary(ctx, req)
 }
 
+// GetSearchProvider calls codepuppy.v1.WorkspaceService.GetSearchProvider.
+func (c *workspaceServiceClient) GetSearchProvider(ctx context.Context, req *connect.Request[v1.GetSearchProviderRequest]) (*connect.Response[v1.GetSearchProviderResponse], error) {
+	return c.getSearchProvider.CallUnary(ctx, req)
+}
+
 // SearchWeb calls codepuppy.v1.WorkspaceService.SearchWeb.
 func (c *workspaceServiceClient) SearchWeb(ctx context.Context, req *connect.Request[v1.SearchWebRequest]) (*connect.Response[v1.SearchWebResponse], error) {
 	return c.searchWeb.CallUnary(ctx, req)
@@ -672,6 +690,9 @@ type WorkspaceServiceHandler interface {
 	LoadImage(context.Context, *connect.Request[v1.LoadImageRequest]) (*connect.Response[v1.LoadImageResponse], error)
 	// Stores image data (e.g. pasted) for a prompt (IMAGES_DISABLED).
 	AddImage(context.Context, *connect.Request[v1.AddImageRequest]) (*connect.Response[v1.AddImageResponse], error)
+	// Names the web search provider (NO_FETCH when the agent can't fetch
+	// pages, so a search would give it nothing to read).
+	GetSearchProvider(context.Context, *connect.Request[v1.GetSearchProviderRequest]) (*connect.Response[v1.GetSearchProviderResponse], error)
 	// Searches the web and prepares the prompt that hands the readable results
 	// to the agent (NO_FETCH, NO_SEARCH): run it as a turn with fetch_grants
 	// set to the links' URLs.
@@ -871,6 +892,12 @@ func NewWorkspaceServiceHandler(svc WorkspaceServiceHandler, opts ...connect.Han
 		connect.WithSchema(workspaceServiceMethods.ByName("AddImage")),
 		connect.WithHandlerOptions(opts...),
 	)
+	workspaceServiceGetSearchProviderHandler := connect.NewUnaryHandler(
+		WorkspaceServiceGetSearchProviderProcedure,
+		svc.GetSearchProvider,
+		connect.WithSchema(workspaceServiceMethods.ByName("GetSearchProvider")),
+		connect.WithHandlerOptions(opts...),
+	)
 	workspaceServiceSearchWebHandler := connect.NewUnaryHandler(
 		WorkspaceServiceSearchWebProcedure,
 		svc.SearchWeb,
@@ -941,6 +968,8 @@ func NewWorkspaceServiceHandler(svc WorkspaceServiceHandler, opts ...connect.Han
 			workspaceServiceLoadImageHandler.ServeHTTP(w, r)
 		case WorkspaceServiceAddImageProcedure:
 			workspaceServiceAddImageHandler.ServeHTTP(w, r)
+		case WorkspaceServiceGetSearchProviderProcedure:
+			workspaceServiceGetSearchProviderHandler.ServeHTTP(w, r)
 		case WorkspaceServiceSearchWebProcedure:
 			workspaceServiceSearchWebHandler.ServeHTTP(w, r)
 		default:
@@ -1074,6 +1103,10 @@ func (UnimplementedWorkspaceServiceHandler) LoadImage(context.Context, *connect.
 
 func (UnimplementedWorkspaceServiceHandler) AddImage(context.Context, *connect.Request[v1.AddImageRequest]) (*connect.Response[v1.AddImageResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("codepuppy.v1.WorkspaceService.AddImage is not implemented"))
+}
+
+func (UnimplementedWorkspaceServiceHandler) GetSearchProvider(context.Context, *connect.Request[v1.GetSearchProviderRequest]) (*connect.Response[v1.GetSearchProviderResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("codepuppy.v1.WorkspaceService.GetSearchProvider is not implemented"))
 }
 
 func (UnimplementedWorkspaceServiceHandler) SearchWeb(context.Context, *connect.Request[v1.SearchWebRequest]) (*connect.Response[v1.SearchWebResponse], error) {

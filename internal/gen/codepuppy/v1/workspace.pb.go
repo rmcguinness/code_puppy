@@ -637,7 +637,10 @@ type GetModelResponse struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	Name  string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
 	// The configured provider.
-	Provider      string `protobuf:"bytes,2,opt,name=provider,proto3" json:"provider,omitempty"`
+	Provider string `protobuf:"bytes,2,opt,name=provider,proto3" json:"provider,omitempty"`
+	// Why the configured model couldn't be built, if it couldn't; the
+	// workspace then runs on a placeholder model.
+	Unavailable   string `protobuf:"bytes,3,opt,name=unavailable,proto3" json:"unavailable,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -682,6 +685,13 @@ func (x *GetModelResponse) GetName() string {
 func (x *GetModelResponse) GetProvider() string {
 	if x != nil {
 		return x.Provider
+	}
+	return ""
+}
+
+func (x *GetModelResponse) GetUnavailable() string {
+	if x != nil {
+		return x.Unavailable
 	}
 	return ""
 }
@@ -1510,7 +1520,9 @@ type GetSettingsResponse struct {
 	Provider  string                 `protobuf:"bytes,5,opt,name=provider,proto3" json:"provider,omitempty"`
 	Agent     string                 `protobuf:"bytes,6,opt,name=agent,proto3" json:"agent,omitempty"`
 	// The language the model replies in.
-	Locale        string `protobuf:"bytes,7,opt,name=locale,proto3" json:"locale,omitempty"`
+	Locale string `protobuf:"bytes,7,opt,name=locale,proto3" json:"locale,omitempty"`
+	// Images can be attached to prompts.
+	ImagesEnabled bool `protobuf:"varint,8,opt,name=images_enabled,json=imagesEnabled,proto3" json:"images_enabled,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1592,6 +1604,13 @@ func (x *GetSettingsResponse) GetLocale() string {
 		return x.Locale
 	}
 	return ""
+}
+
+func (x *GetSettingsResponse) GetImagesEnabled() bool {
+	if x != nil {
+		return x.ImagesEnabled
+	}
+	return false
 }
 
 type SetSettingRequest struct {
@@ -4515,6 +4534,94 @@ func (x *Link) GetUrl() string {
 	return ""
 }
 
+type GetSearchProviderRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Workspace     string                 `protobuf:"bytes,1,opt,name=workspace,proto3" json:"workspace,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetSearchProviderRequest) Reset() {
+	*x = GetSearchProviderRequest{}
+	mi := &file_codepuppy_v1_workspace_proto_msgTypes[80]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetSearchProviderRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetSearchProviderRequest) ProtoMessage() {}
+
+func (x *GetSearchProviderRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_codepuppy_v1_workspace_proto_msgTypes[80]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetSearchProviderRequest.ProtoReflect.Descriptor instead.
+func (*GetSearchProviderRequest) Descriptor() ([]byte, []int) {
+	return file_codepuppy_v1_workspace_proto_rawDescGZIP(), []int{80}
+}
+
+func (x *GetSearchProviderRequest) GetWorkspace() string {
+	if x != nil {
+		return x.Workspace
+	}
+	return ""
+}
+
+type GetSearchProviderResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Provider      string                 `protobuf:"bytes,1,opt,name=provider,proto3" json:"provider,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetSearchProviderResponse) Reset() {
+	*x = GetSearchProviderResponse{}
+	mi := &file_codepuppy_v1_workspace_proto_msgTypes[81]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetSearchProviderResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetSearchProviderResponse) ProtoMessage() {}
+
+func (x *GetSearchProviderResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_codepuppy_v1_workspace_proto_msgTypes[81]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetSearchProviderResponse.ProtoReflect.Descriptor instead.
+func (*GetSearchProviderResponse) Descriptor() ([]byte, []int) {
+	return file_codepuppy_v1_workspace_proto_rawDescGZIP(), []int{81}
+}
+
+func (x *GetSearchProviderResponse) GetProvider() string {
+	if x != nil {
+		return x.Provider
+	}
+	return ""
+}
+
 type SearchWebRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Workspace     string                 `protobuf:"bytes,1,opt,name=workspace,proto3" json:"workspace,omitempty"`
@@ -4525,7 +4632,7 @@ type SearchWebRequest struct {
 
 func (x *SearchWebRequest) Reset() {
 	*x = SearchWebRequest{}
-	mi := &file_codepuppy_v1_workspace_proto_msgTypes[80]
+	mi := &file_codepuppy_v1_workspace_proto_msgTypes[82]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4537,7 +4644,7 @@ func (x *SearchWebRequest) String() string {
 func (*SearchWebRequest) ProtoMessage() {}
 
 func (x *SearchWebRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_codepuppy_v1_workspace_proto_msgTypes[80]
+	mi := &file_codepuppy_v1_workspace_proto_msgTypes[82]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4550,7 +4657,7 @@ func (x *SearchWebRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SearchWebRequest.ProtoReflect.Descriptor instead.
 func (*SearchWebRequest) Descriptor() ([]byte, []int) {
-	return file_codepuppy_v1_workspace_proto_rawDescGZIP(), []int{80}
+	return file_codepuppy_v1_workspace_proto_rawDescGZIP(), []int{82}
 }
 
 func (x *SearchWebRequest) GetWorkspace() string {
@@ -4580,7 +4687,7 @@ type SearchWebResponse struct {
 
 func (x *SearchWebResponse) Reset() {
 	*x = SearchWebResponse{}
-	mi := &file_codepuppy_v1_workspace_proto_msgTypes[81]
+	mi := &file_codepuppy_v1_workspace_proto_msgTypes[83]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4592,7 +4699,7 @@ func (x *SearchWebResponse) String() string {
 func (*SearchWebResponse) ProtoMessage() {}
 
 func (x *SearchWebResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_codepuppy_v1_workspace_proto_msgTypes[81]
+	mi := &file_codepuppy_v1_workspace_proto_msgTypes[83]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4605,7 +4712,7 @@ func (x *SearchWebResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SearchWebResponse.ProtoReflect.Descriptor instead.
 func (*SearchWebResponse) Descriptor() ([]byte, []int) {
-	return file_codepuppy_v1_workspace_proto_rawDescGZIP(), []int{81}
+	return file_codepuppy_v1_workspace_proto_rawDescGZIP(), []int{83}
 }
 
 func (x *SearchWebResponse) GetProvider() string {
@@ -4665,10 +4772,11 @@ const file_codepuppy_v1_workspace_proto_rawDesc = "" +
 	"\x10SetAgentResponse\x12-\n" +
 	"\x05agent\x18\x01 \x01(\v2\x17.codepuppy.v1.AgentInfoR\x05agent\"/\n" +
 	"\x0fGetModelRequest\x12\x1c\n" +
-	"\tworkspace\x18\x01 \x01(\tR\tworkspace\"B\n" +
+	"\tworkspace\x18\x01 \x01(\tR\tworkspace\"d\n" +
 	"\x10GetModelResponse\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x1a\n" +
-	"\bprovider\x18\x02 \x01(\tR\bprovider\"A\n" +
+	"\bprovider\x18\x02 \x01(\tR\bprovider\x12 \n" +
+	"\vunavailable\x18\x03 \x01(\tR\vunavailable\"A\n" +
 	"\x0fSetModelRequest\x12\x1c\n" +
 	"\tworkspace\x18\x01 \x01(\tR\tworkspace\x12\x10\n" +
 	"\x03ref\x18\x02 \x01(\tR\x03ref\"1\n" +
@@ -4728,7 +4836,7 @@ const file_codepuppy_v1_workspace_proto_rawDesc = "" +
 	"\vunsupported\x18\x02 \x03(\tR\vunsupported\x12)\n" +
 	"\x05saved\x18\x03 \x01(\v2\x13.codepuppy.v1.SavedR\x05saved\"2\n" +
 	"\x12GetSettingsRequest\x12\x1c\n" +
-	"\tworkspace\x18\x01 \x01(\tR\tworkspace\"\xcb\x01\n" +
+	"\tworkspace\x18\x01 \x01(\tR\tworkspace\"\xf2\x01\n" +
 	"\x13GetSettingsResponse\x12\x1d\n" +
 	"\n" +
 	"puppy_name\x18\x01 \x01(\tR\tpuppyName\x12\x1d\n" +
@@ -4738,7 +4846,8 @@ const file_codepuppy_v1_workspace_proto_rawDesc = "" +
 	"\x05model\x18\x04 \x01(\tR\x05model\x12\x1a\n" +
 	"\bprovider\x18\x05 \x01(\tR\bprovider\x12\x14\n" +
 	"\x05agent\x18\x06 \x01(\tR\x05agent\x12\x16\n" +
-	"\x06locale\x18\a \x01(\tR\x06locale\"Y\n" +
+	"\x06locale\x18\a \x01(\tR\x06locale\x12%\n" +
+	"\x0eimages_enabled\x18\b \x01(\bR\rimagesEnabled\"Y\n" +
 	"\x11SetSettingRequest\x12\x1c\n" +
 	"\tworkspace\x18\x01 \x01(\tR\tworkspace\x12\x10\n" +
 	"\x03key\x18\x02 \x01(\tR\x03key\x12\x14\n" +
@@ -4924,14 +5033,18 @@ const file_codepuppy_v1_workspace_proto_rawDesc = "" +
 	"\x05image\x18\x01 \x01(\v2\x13.codepuppy.v1.ImageR\x05image\".\n" +
 	"\x04Link\x12\x14\n" +
 	"\x05title\x18\x01 \x01(\tR\x05title\x12\x10\n" +
-	"\x03url\x18\x02 \x01(\tR\x03url\"F\n" +
+	"\x03url\x18\x02 \x01(\tR\x03url\"8\n" +
+	"\x18GetSearchProviderRequest\x12\x1c\n" +
+	"\tworkspace\x18\x01 \x01(\tR\tworkspace\"7\n" +
+	"\x19GetSearchProviderResponse\x12\x1a\n" +
+	"\bprovider\x18\x01 \x01(\tR\bprovider\"F\n" +
 	"\x10SearchWebRequest\x12\x1c\n" +
 	"\tworkspace\x18\x01 \x01(\tR\tworkspace\x12\x14\n" +
 	"\x05terms\x18\x02 \x01(\tR\x05terms\"q\n" +
 	"\x11SearchWebResponse\x12\x1a\n" +
 	"\bprovider\x18\x01 \x01(\tR\bprovider\x12(\n" +
 	"\x05links\x18\x02 \x03(\v2\x12.codepuppy.v1.LinkR\x05links\x12\x16\n" +
-	"\x06prompt\x18\x03 \x01(\tR\x06prompt2\xdc\x14\n" +
+	"\x06prompt\x18\x03 \x01(\tR\x06prompt2\xc2\x15\n" +
 	"\x10WorkspaceService\x12[\n" +
 	"\x0eListWorkspaces\x12#.codepuppy.v1.ListWorkspacesRequest\x1a$.codepuppy.v1.ListWorkspacesResponse\x12[\n" +
 	"\x0eCloseWorkspace\x12#.codepuppy.v1.CloseWorkspaceRequest\x1a$.codepuppy.v1.CloseWorkspaceResponse\x12O\n" +
@@ -4968,7 +5081,8 @@ const file_codepuppy_v1_workspace_proto_rawDesc = "" +
 	"\rListApprovals\x12\".codepuppy.v1.ListApprovalsRequest\x1a#.codepuppy.v1.ListApprovalsResponse\x12^\n" +
 	"\x0fRevokeApprovals\x12$.codepuppy.v1.RevokeApprovalsRequest\x1a%.codepuppy.v1.RevokeApprovalsResponse\x12L\n" +
 	"\tLoadImage\x12\x1e.codepuppy.v1.LoadImageRequest\x1a\x1f.codepuppy.v1.LoadImageResponse\x12I\n" +
-	"\bAddImage\x12\x1d.codepuppy.v1.AddImageRequest\x1a\x1e.codepuppy.v1.AddImageResponse\x12L\n" +
+	"\bAddImage\x12\x1d.codepuppy.v1.AddImageRequest\x1a\x1e.codepuppy.v1.AddImageResponse\x12d\n" +
+	"\x11GetSearchProvider\x12&.codepuppy.v1.GetSearchProviderRequest\x1a'.codepuppy.v1.GetSearchProviderResponse\x12L\n" +
 	"\tSearchWeb\x12\x1e.codepuppy.v1.SearchWebRequest\x1a\x1f.codepuppy.v1.SearchWebResponseB\xbe\x01\n" +
 	"\x10com.codepuppy.v1B\x0eWorkspaceProtoP\x01ZIgithub.com/retail-cortex/code_puppy/internal/gen/codepuppy/v1;codepuppyv1\xa2\x02\x03CXX\xaa\x02\fCodepuppy.V1\xca\x02\fCodepuppy\\V1\xe2\x02\x18Codepuppy\\V1\\GPBMetadata\xea\x02\rCodepuppy::V1b\x06proto3"
 
@@ -4984,7 +5098,7 @@ func file_codepuppy_v1_workspace_proto_rawDescGZIP() []byte {
 	return file_codepuppy_v1_workspace_proto_rawDescData
 }
 
-var file_codepuppy_v1_workspace_proto_msgTypes = make([]protoimpl.MessageInfo, 83)
+var file_codepuppy_v1_workspace_proto_msgTypes = make([]protoimpl.MessageInfo, 85)
 var file_codepuppy_v1_workspace_proto_goTypes = []any{
 	(*Saved)(nil),                       // 0: codepuppy.v1.Saved
 	(*ListWorkspacesRequest)(nil),       // 1: codepuppy.v1.ListWorkspacesRequest
@@ -5066,12 +5180,14 @@ var file_codepuppy_v1_workspace_proto_goTypes = []any{
 	(*AddImageRequest)(nil),             // 77: codepuppy.v1.AddImageRequest
 	(*AddImageResponse)(nil),            // 78: codepuppy.v1.AddImageResponse
 	(*Link)(nil),                        // 79: codepuppy.v1.Link
-	(*SearchWebRequest)(nil),            // 80: codepuppy.v1.SearchWebRequest
-	(*SearchWebResponse)(nil),           // 81: codepuppy.v1.SearchWebResponse
-	nil,                                 // 82: codepuppy.v1.GetModelSettingsResponse.AllEntry
-	(*durationpb.Duration)(nil),         // 83: google.protobuf.Duration
-	(*timestamppb.Timestamp)(nil),       // 84: google.protobuf.Timestamp
-	(*ErrorInfo)(nil),                   // 85: codepuppy.v1.ErrorInfo
+	(*GetSearchProviderRequest)(nil),    // 80: codepuppy.v1.GetSearchProviderRequest
+	(*GetSearchProviderResponse)(nil),   // 81: codepuppy.v1.GetSearchProviderResponse
+	(*SearchWebRequest)(nil),            // 82: codepuppy.v1.SearchWebRequest
+	(*SearchWebResponse)(nil),           // 83: codepuppy.v1.SearchWebResponse
+	nil,                                 // 84: codepuppy.v1.GetModelSettingsResponse.AllEntry
+	(*durationpb.Duration)(nil),         // 85: google.protobuf.Duration
+	(*timestamppb.Timestamp)(nil),       // 86: google.protobuf.Timestamp
+	(*ErrorInfo)(nil),                   // 87: codepuppy.v1.ErrorInfo
 }
 var file_codepuppy_v1_workspace_proto_depIdxs = []int32{
 	7,  // 0: codepuppy.v1.ListAgentsResponse.agents:type_name -> codepuppy.v1.AgentInfo
@@ -5079,17 +5195,17 @@ var file_codepuppy_v1_workspace_proto_depIdxs = []int32{
 	0,  // 2: codepuppy.v1.PinModelResponse.saved:type_name -> codepuppy.v1.Saved
 	0,  // 3: codepuppy.v1.UnpinModelResponse.saved:type_name -> codepuppy.v1.Saved
 	20, // 4: codepuppy.v1.ModelSettingsInfo.settings:type_name -> codepuppy.v1.ModelSettings
-	82, // 5: codepuppy.v1.GetModelSettingsResponse.all:type_name -> codepuppy.v1.GetModelSettingsResponse.AllEntry
+	84, // 5: codepuppy.v1.GetModelSettingsResponse.all:type_name -> codepuppy.v1.GetModelSettingsResponse.AllEntry
 	21, // 6: codepuppy.v1.GetModelSettingsResponse.model:type_name -> codepuppy.v1.ModelSettingsInfo
 	24, // 7: codepuppy.v1.UpdateModelSettingsRequest.changes:type_name -> codepuppy.v1.Setting
 	21, // 8: codepuppy.v1.UpdateModelSettingsResponse.model:type_name -> codepuppy.v1.ModelSettingsInfo
 	0,  // 9: codepuppy.v1.UpdateModelSettingsResponse.saved:type_name -> codepuppy.v1.Saved
 	32, // 10: codepuppy.v1.SkillInfo.tools:type_name -> codepuppy.v1.SkillTool
 	33, // 11: codepuppy.v1.SkillInfo.scripts:type_name -> codepuppy.v1.SkillScript
-	83, // 12: codepuppy.v1.SkillScript.timeout:type_name -> google.protobuf.Duration
+	85, // 12: codepuppy.v1.SkillScript.timeout:type_name -> google.protobuf.Duration
 	31, // 13: codepuppy.v1.ListSkillsResponse.skills:type_name -> codepuppy.v1.SkillInfo
 	31, // 14: codepuppy.v1.GetSkillResponse.skill:type_name -> codepuppy.v1.SkillInfo
-	84, // 15: codepuppy.v1.Env.last_used:type_name -> google.protobuf.Timestamp
+	86, // 15: codepuppy.v1.Env.last_used:type_name -> google.protobuf.Timestamp
 	38, // 16: codepuppy.v1.ListEnvsResponse.envs:type_name -> codepuppy.v1.Env
 	44, // 17: codepuppy.v1.PruneEnvsResponse.failed:type_name -> codepuppy.v1.EnvError
 	46, // 18: codepuppy.v1.ListMCPServersResponse.servers:type_name -> codepuppy.v1.MCPServer
@@ -5097,10 +5213,10 @@ var file_codepuppy_v1_workspace_proto_depIdxs = []int32{
 	50, // 20: codepuppy.v1.ListToolsResponse.mcp:type_name -> codepuppy.v1.MCPOffer
 	57, // 21: codepuppy.v1.ListLocalesResponse.locales:type_name -> codepuppy.v1.LocaleInfo
 	0,  // 22: codepuppy.v1.SetLocaleResponse.saved:type_name -> codepuppy.v1.Saved
-	84, // 23: codepuppy.v1.Checkpoint.time:type_name -> google.protobuf.Timestamp
+	86, // 23: codepuppy.v1.Checkpoint.time:type_name -> google.protobuf.Timestamp
 	62, // 24: codepuppy.v1.ListCheckpointsResponse.checkpoints:type_name -> codepuppy.v1.Checkpoint
-	85, // 25: codepuppy.v1.UndoResponse.error:type_name -> codepuppy.v1.ErrorInfo
-	84, // 26: codepuppy.v1.Approval.added:type_name -> google.protobuf.Timestamp
+	87, // 25: codepuppy.v1.UndoResponse.error:type_name -> codepuppy.v1.ErrorInfo
+	86, // 26: codepuppy.v1.Approval.added:type_name -> google.protobuf.Timestamp
 	69, // 27: codepuppy.v1.ListApprovalsResponse.approvals:type_name -> codepuppy.v1.Approval
 	74, // 28: codepuppy.v1.LoadImageResponse.image:type_name -> codepuppy.v1.Image
 	74, // 29: codepuppy.v1.AddImageResponse.image:type_name -> codepuppy.v1.Image
@@ -5137,41 +5253,43 @@ var file_codepuppy_v1_workspace_proto_depIdxs = []int32{
 	72, // 60: codepuppy.v1.WorkspaceService.RevokeApprovals:input_type -> codepuppy.v1.RevokeApprovalsRequest
 	75, // 61: codepuppy.v1.WorkspaceService.LoadImage:input_type -> codepuppy.v1.LoadImageRequest
 	77, // 62: codepuppy.v1.WorkspaceService.AddImage:input_type -> codepuppy.v1.AddImageRequest
-	80, // 63: codepuppy.v1.WorkspaceService.SearchWeb:input_type -> codepuppy.v1.SearchWebRequest
-	2,  // 64: codepuppy.v1.WorkspaceService.ListWorkspaces:output_type -> codepuppy.v1.ListWorkspacesResponse
-	4,  // 65: codepuppy.v1.WorkspaceService.CloseWorkspace:output_type -> codepuppy.v1.CloseWorkspaceResponse
-	6,  // 66: codepuppy.v1.WorkspaceService.GetSandbox:output_type -> codepuppy.v1.GetSandboxResponse
-	9,  // 67: codepuppy.v1.WorkspaceService.ListAgents:output_type -> codepuppy.v1.ListAgentsResponse
-	11, // 68: codepuppy.v1.WorkspaceService.SetAgent:output_type -> codepuppy.v1.SetAgentResponse
-	13, // 69: codepuppy.v1.WorkspaceService.GetModel:output_type -> codepuppy.v1.GetModelResponse
-	15, // 70: codepuppy.v1.WorkspaceService.SetModel:output_type -> codepuppy.v1.SetModelResponse
-	17, // 71: codepuppy.v1.WorkspaceService.PinModel:output_type -> codepuppy.v1.PinModelResponse
-	19, // 72: codepuppy.v1.WorkspaceService.UnpinModel:output_type -> codepuppy.v1.UnpinModelResponse
-	23, // 73: codepuppy.v1.WorkspaceService.GetModelSettings:output_type -> codepuppy.v1.GetModelSettingsResponse
-	26, // 74: codepuppy.v1.WorkspaceService.UpdateModelSettings:output_type -> codepuppy.v1.UpdateModelSettingsResponse
-	28, // 75: codepuppy.v1.WorkspaceService.GetSettings:output_type -> codepuppy.v1.GetSettingsResponse
-	30, // 76: codepuppy.v1.WorkspaceService.SetSetting:output_type -> codepuppy.v1.SetSettingResponse
-	35, // 77: codepuppy.v1.WorkspaceService.ListSkills:output_type -> codepuppy.v1.ListSkillsResponse
-	37, // 78: codepuppy.v1.WorkspaceService.GetSkill:output_type -> codepuppy.v1.GetSkillResponse
-	40, // 79: codepuppy.v1.WorkspaceService.ListEnvs:output_type -> codepuppy.v1.ListEnvsResponse
-	42, // 80: codepuppy.v1.WorkspaceService.RemoveEnv:output_type -> codepuppy.v1.RemoveEnvResponse
-	45, // 81: codepuppy.v1.WorkspaceService.PruneEnvs:output_type -> codepuppy.v1.PruneEnvsResponse
-	48, // 82: codepuppy.v1.WorkspaceService.ListMCPServers:output_type -> codepuppy.v1.ListMCPServersResponse
-	52, // 83: codepuppy.v1.WorkspaceService.ListTools:output_type -> codepuppy.v1.ListToolsResponse
-	54, // 84: codepuppy.v1.WorkspaceService.ReloadMemory:output_type -> codepuppy.v1.ReloadMemoryResponse
-	56, // 85: codepuppy.v1.WorkspaceService.AddMemory:output_type -> codepuppy.v1.AddMemoryResponse
-	59, // 86: codepuppy.v1.WorkspaceService.ListLocales:output_type -> codepuppy.v1.ListLocalesResponse
-	61, // 87: codepuppy.v1.WorkspaceService.SetLocale:output_type -> codepuppy.v1.SetLocaleResponse
-	64, // 88: codepuppy.v1.WorkspaceService.ListCheckpoints:output_type -> codepuppy.v1.ListCheckpointsResponse
-	66, // 89: codepuppy.v1.WorkspaceService.Undo:output_type -> codepuppy.v1.UndoResponse
-	68, // 90: codepuppy.v1.WorkspaceService.GetDiff:output_type -> codepuppy.v1.GetDiffResponse
-	71, // 91: codepuppy.v1.WorkspaceService.ListApprovals:output_type -> codepuppy.v1.ListApprovalsResponse
-	73, // 92: codepuppy.v1.WorkspaceService.RevokeApprovals:output_type -> codepuppy.v1.RevokeApprovalsResponse
-	76, // 93: codepuppy.v1.WorkspaceService.LoadImage:output_type -> codepuppy.v1.LoadImageResponse
-	78, // 94: codepuppy.v1.WorkspaceService.AddImage:output_type -> codepuppy.v1.AddImageResponse
-	81, // 95: codepuppy.v1.WorkspaceService.SearchWeb:output_type -> codepuppy.v1.SearchWebResponse
-	64, // [64:96] is the sub-list for method output_type
-	32, // [32:64] is the sub-list for method input_type
+	80, // 63: codepuppy.v1.WorkspaceService.GetSearchProvider:input_type -> codepuppy.v1.GetSearchProviderRequest
+	82, // 64: codepuppy.v1.WorkspaceService.SearchWeb:input_type -> codepuppy.v1.SearchWebRequest
+	2,  // 65: codepuppy.v1.WorkspaceService.ListWorkspaces:output_type -> codepuppy.v1.ListWorkspacesResponse
+	4,  // 66: codepuppy.v1.WorkspaceService.CloseWorkspace:output_type -> codepuppy.v1.CloseWorkspaceResponse
+	6,  // 67: codepuppy.v1.WorkspaceService.GetSandbox:output_type -> codepuppy.v1.GetSandboxResponse
+	9,  // 68: codepuppy.v1.WorkspaceService.ListAgents:output_type -> codepuppy.v1.ListAgentsResponse
+	11, // 69: codepuppy.v1.WorkspaceService.SetAgent:output_type -> codepuppy.v1.SetAgentResponse
+	13, // 70: codepuppy.v1.WorkspaceService.GetModel:output_type -> codepuppy.v1.GetModelResponse
+	15, // 71: codepuppy.v1.WorkspaceService.SetModel:output_type -> codepuppy.v1.SetModelResponse
+	17, // 72: codepuppy.v1.WorkspaceService.PinModel:output_type -> codepuppy.v1.PinModelResponse
+	19, // 73: codepuppy.v1.WorkspaceService.UnpinModel:output_type -> codepuppy.v1.UnpinModelResponse
+	23, // 74: codepuppy.v1.WorkspaceService.GetModelSettings:output_type -> codepuppy.v1.GetModelSettingsResponse
+	26, // 75: codepuppy.v1.WorkspaceService.UpdateModelSettings:output_type -> codepuppy.v1.UpdateModelSettingsResponse
+	28, // 76: codepuppy.v1.WorkspaceService.GetSettings:output_type -> codepuppy.v1.GetSettingsResponse
+	30, // 77: codepuppy.v1.WorkspaceService.SetSetting:output_type -> codepuppy.v1.SetSettingResponse
+	35, // 78: codepuppy.v1.WorkspaceService.ListSkills:output_type -> codepuppy.v1.ListSkillsResponse
+	37, // 79: codepuppy.v1.WorkspaceService.GetSkill:output_type -> codepuppy.v1.GetSkillResponse
+	40, // 80: codepuppy.v1.WorkspaceService.ListEnvs:output_type -> codepuppy.v1.ListEnvsResponse
+	42, // 81: codepuppy.v1.WorkspaceService.RemoveEnv:output_type -> codepuppy.v1.RemoveEnvResponse
+	45, // 82: codepuppy.v1.WorkspaceService.PruneEnvs:output_type -> codepuppy.v1.PruneEnvsResponse
+	48, // 83: codepuppy.v1.WorkspaceService.ListMCPServers:output_type -> codepuppy.v1.ListMCPServersResponse
+	52, // 84: codepuppy.v1.WorkspaceService.ListTools:output_type -> codepuppy.v1.ListToolsResponse
+	54, // 85: codepuppy.v1.WorkspaceService.ReloadMemory:output_type -> codepuppy.v1.ReloadMemoryResponse
+	56, // 86: codepuppy.v1.WorkspaceService.AddMemory:output_type -> codepuppy.v1.AddMemoryResponse
+	59, // 87: codepuppy.v1.WorkspaceService.ListLocales:output_type -> codepuppy.v1.ListLocalesResponse
+	61, // 88: codepuppy.v1.WorkspaceService.SetLocale:output_type -> codepuppy.v1.SetLocaleResponse
+	64, // 89: codepuppy.v1.WorkspaceService.ListCheckpoints:output_type -> codepuppy.v1.ListCheckpointsResponse
+	66, // 90: codepuppy.v1.WorkspaceService.Undo:output_type -> codepuppy.v1.UndoResponse
+	68, // 91: codepuppy.v1.WorkspaceService.GetDiff:output_type -> codepuppy.v1.GetDiffResponse
+	71, // 92: codepuppy.v1.WorkspaceService.ListApprovals:output_type -> codepuppy.v1.ListApprovalsResponse
+	73, // 93: codepuppy.v1.WorkspaceService.RevokeApprovals:output_type -> codepuppy.v1.RevokeApprovalsResponse
+	76, // 94: codepuppy.v1.WorkspaceService.LoadImage:output_type -> codepuppy.v1.LoadImageResponse
+	78, // 95: codepuppy.v1.WorkspaceService.AddImage:output_type -> codepuppy.v1.AddImageResponse
+	81, // 96: codepuppy.v1.WorkspaceService.GetSearchProvider:output_type -> codepuppy.v1.GetSearchProviderResponse
+	83, // 97: codepuppy.v1.WorkspaceService.SearchWeb:output_type -> codepuppy.v1.SearchWebResponse
+	65, // [65:98] is the sub-list for method output_type
+	32, // [32:65] is the sub-list for method input_type
 	32, // [32:32] is the sub-list for extension type_name
 	32, // [32:32] is the sub-list for extension extendee
 	0,  // [0:32] is the sub-list for field type_name
@@ -5190,7 +5308,7 @@ func file_codepuppy_v1_workspace_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_codepuppy_v1_workspace_proto_rawDesc), len(file_codepuppy_v1_workspace_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   83,
+			NumMessages:   85,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
