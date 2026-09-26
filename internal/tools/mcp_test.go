@@ -3,6 +3,8 @@ package tools
 import (
 	"context"
 	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 
@@ -30,9 +32,11 @@ func inMemoryMCP(t *testing.T, names ...string) tool.Toolset {
 	clientT, serverT := mcp.NewInMemoryTransports()
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
-	if _, err := server.Connect(ctx, serverT, nil); err != nil {
+	ss, err := server.Connect(ctx, serverT, nil)
+	if err != nil {
 		t.Fatal(err)
 	}
+	t.Cleanup(func() { ss.Close() }) // ends the client session over the pipe too
 	ts, err := mcptoolset.New(mcptoolset.Config{Transport: clientT})
 	if err != nil {
 		t.Fatal(err)
@@ -208,5 +212,34 @@ func TestMCPToolsetsForAgents(t *testing.T) {
 	var nilManager *MCPManager
 	if nilManager.ToolsetsFor("x", true) != nil {
 		t.Error("nil manager should offer nothing")
+	}
+}
+
+// Closing the manager ends an HTTP server's session: the ADK toolset has
+// no Close, so without closingTransport its goroutines would outlive the
+// workspace (goleak, in TestMain, would catch them).
+func TestMCPManagerCloseEndsHTTPSessions(t *testing.T) {
+	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "1.0"}, nil)
+	mcp.AddTool(server, &mcp.Tool{Name: "ping", Description: "ping"}, func(ctx context.Context, req *mcp.CallToolRequest, in echoArgs) (*mcp.CallToolResult, any, error) {
+		return &mcp.CallToolResult{}, nil, nil
+	})
+	handler := mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server { return server }, nil)
+	srv := httptest.NewServer(handler)
+	defer srv.Close()
+
+	m, err := NewMCPManager([]config.MCPServerConfig{{Name: "remote", URL: srv.URL}}, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tl, err := m.Toolsets()[0].Tools(createTestToolContext())
+	if err != nil || len(tl) != 1 {
+		t.Fatalf("tools = %v, %v", tl, err)
+	}
+	m.Close()
+	if tl, _ := m.Toolsets()[0].Tools(createTestToolContext()); len(tl) != 0 {
+		t.Error("a closed manager reconnected")
+	}
+	for ss := range server.Sessions() { // the test server's side of it
+		ss.Close()
 	}
 }

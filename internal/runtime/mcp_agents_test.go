@@ -19,9 +19,11 @@ func inMemoryServer(t *testing.T, name string) *mcptoolset.Config {
 	ct, st := mcp.NewInMemoryTransports()
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
-	if _, err := server.Connect(ctx, st, nil); err != nil {
+	ss, err := server.Connect(ctx, st, nil)
+	if err != nil {
 		t.Fatal(err)
 	}
+	t.Cleanup(func() { ss.Close() }) // ends the client session over the pipe too
 	return &mcptoolset.Config{Transport: ct}
 }
 

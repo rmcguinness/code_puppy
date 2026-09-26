@@ -2,6 +2,7 @@ package tools
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"os"
@@ -34,8 +35,9 @@ type MCPManager struct {
 type mcpServer struct {
 	cfg       config.MCPServerConfig
 	toolset   tool.Toolset
-	allowed   map[string]bool // optional allow-list
-	transport *stdioTransport // stdio servers only
+	allowed   map[string]bool   // optional allow-list
+	conns     *closingTransport // nil for toolsets built by the caller
+	transport *stdioTransport   // stdio servers only
 	health    *breaker.Breaker
 }
 
@@ -97,6 +99,64 @@ func (t *stdioTransport) Close() {
 	t.cur = nil
 	t.mu.Unlock()
 	stopProcess(cur)
+}
+
+// closingTransport remembers the connections it makes, so closing it ends
+// the sessions over them. The ADK toolset keeps its session open for good
+// and has no Close of its own; without this, every HTTP server connected
+// by a workspace would keep its session's goroutines after the workspace
+// closed.
+type closingTransport struct {
+	inner mcp.Transport
+
+	mu     sync.Mutex
+	conns  map[*closingConn]bool
+	closed bool
+}
+
+var errMCPClosed = errors.New("mcp server closed")
+
+func (t *closingTransport) Connect(ctx context.Context) (mcp.Connection, error) {
+	conn, err := t.inner.Connect(ctx)
+	if err != nil {
+		return nil, err
+	}
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if t.closed {
+		conn.Close()
+		return nil, errMCPClosed
+	}
+	c := &closingConn{Connection: conn, owner: t}
+	if t.conns == nil {
+		t.conns = map[*closingConn]bool{}
+	}
+	t.conns[c] = true
+	return c, nil
+}
+
+// Close closes every open connection and refuses new ones.
+func (t *closingTransport) Close() {
+	t.mu.Lock()
+	t.closed = true
+	conns := t.conns
+	t.conns = nil
+	t.mu.Unlock()
+	for c := range conns {
+		c.Connection.Close()
+	}
+}
+
+type closingConn struct {
+	mcp.Connection
+	owner *closingTransport
+}
+
+func (c *closingConn) Close() error {
+	c.owner.mu.Lock()
+	delete(c.owner.conns, c)
+	c.owner.mu.Unlock()
+	return c.Connection.Close()
 }
 
 func stopProcess(cmd *guardedCmd) {
@@ -164,10 +224,11 @@ func NewMCPManager(cfgs []config.MCPServerConfig, env *ExecEnv, reserved []strin
 				return nil, fmt.Errorf("mcp server %q: %w", c.Name, err)
 			}
 			srv.transport = &stdioTransport{build: build}
-			tsCfg.Transport = srv.transport
+			srv.conns = &closingTransport{inner: srv.transport}
 		} else {
-			tsCfg.Endpoint = c.URL
+			srv.conns = &closingTransport{inner: &mcp.StreamableClientTransport{Endpoint: c.URL}}
 		}
+		tsCfg.Transport = srv.conns
 		ts, err := mcptoolset.New(tsCfg)
 		if err != nil {
 			return nil, fmt.Errorf("mcp server %q: %w", c.Name, err)
@@ -275,12 +336,15 @@ func (m *MCPManager) Lookup(toolName string) (server string, autoApprove, ok boo
 	return s.cfg.Name, s.cfg.AutoApprove, true
 }
 
-// Close stops stdio server processes.
+// Close ends every server session and stops stdio server processes.
 func (m *MCPManager) Close() {
 	if m == nil {
 		return
 	}
 	for _, s := range m.servers {
+		if s.conns != nil {
+			s.conns.Close()
+		}
 		if s.transport != nil {
 			s.transport.Close()
 		}
