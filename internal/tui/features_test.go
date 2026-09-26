@@ -201,7 +201,7 @@ func TestREPLTurnUndoDiffCost(t *testing.T) {
 			t.Error(err)
 		}
 	})
-	made := filepath.Join(app.Tools.Workspace().Dir(), "made.txt")
+	made := filepath.Join(app.Workspace.Tools().Workspace().Dir(), "made.txt")
 	if _, err := os.Stat(made); !os.IsNotExist(err) {
 		t.Error("/undo did not remove the file the turn created")
 	}
@@ -215,7 +215,7 @@ func TestREPLTurnUndoDiffCost(t *testing.T) {
 func TestApprovalsAndMemoryCommands(t *testing.T) {
 	app := newFullApp(t)
 	ctx := context.Background()
-	hooks := app.Tools.Hooks()
+	hooks := app.Workspace.Tools().Hooks()
 	hooks.Store().Add("cmd:ls -la", "")
 
 	out := captureStdout(t, func() { HandleCommand(ctx, "/approvals", app) })
@@ -230,12 +230,10 @@ func TestApprovalsAndMemoryCommands(t *testing.T) {
 		t.Errorf("bad revoke index: %s", out)
 	}
 
-	reloaded := 0
-	app.ReloadMemory = func(context.Context) ([]string, error) { reloaded++; return []string{"PUPPY.md"}, nil }
 	captureStdout(t, func() { HandleCommand(ctx, "/memory add always run go vet", app) })
-	b, err := os.ReadFile(filepath.Join(app.Tools.Workspace().Dir(), "PUPPY.md"))
-	if err != nil || !strings.Contains(string(b), "- always run go vet") || reloaded != 1 {
-		t.Errorf("/memory add: %q %v reloaded=%d", b, err, reloaded)
+	b, err := os.ReadFile(filepath.Join(app.Workspace.Dir(), "PUPPY.md"))
+	if err != nil || !strings.Contains(string(b), "- always run go vet") {
+		t.Errorf("/memory add: %q %v", b, err)
 	}
 	if out := captureStdout(t, func() { HandleCommand(ctx, "/memory", app) }); !strings.Contains(out, "PUPPY.md") {
 		t.Errorf("/memory: %s", out)
@@ -250,13 +248,13 @@ func TestApprovalsAndMemoryCommands(t *testing.T) {
 
 func TestResumeCommand(t *testing.T) {
 	app := newFullApp(t)
-	rec, _ := app.Storage.CreateSession("", "earlier", "code-puppy")
-	app.Storage.AddMessage("user", "remember the plan")
-	app.Storage.CreateSession("", "later", "code-puppy")
+	rec, _ := app.Workspace.Storage().CreateSession("", "earlier", "code-puppy")
+	app.Workspace.Storage().AddMessage("user", "remember the plan")
+	app.Workspace.Storage().CreateSession("", "later", "code-puppy")
 
 	out := captureStdout(t, func() { HandleCommand(context.Background(), "/resume "+rec.ID, app) })
-	if app.Storage.Active().ID != rec.ID || !strings.Contains(out, "remember the plan") {
-		t.Errorf("resume: active=%s out=%s", app.Storage.Active().ID, out)
+	if app.Workspace.Storage().Active().ID != rec.ID || !strings.Contains(out, "remember the plan") {
+		t.Errorf("resume: active=%s out=%s", app.Workspace.Storage().Active().ID, out)
 	}
 	if out := captureStdout(t, func() { HandleCommand(context.Background(), "/resume ../../etc", app) }); !strings.Contains(out, "invalid session id") {
 		t.Errorf("bad id: %s", out)
@@ -308,7 +306,7 @@ func TestCtrlCAtApprovalCancelsTurn(t *testing.T) {
 		&genai.Content{Role: genai.RoleModel, Parts: []*genai.Part{{FunctionCall: &genai.FunctionCall{Name: "create_file", Args: map[string]any{"path": "x.txt", "content": "x"}}}}},
 		genai.NewContentFromText("should never be reached", genai.RoleModel))
 	app := openApp(t, cfg, llm)
-	reg := app.Tools
+	reg := app.Workspace.Tools()
 	in := &ctrlCInput{lines: []string{"make x"}}
 	app.Input = in
 	reg.Hooks().SetApprover(NewApprover(in, 0))
@@ -330,10 +328,10 @@ func TestCtrlCAtApprovalCancelsTurn(t *testing.T) {
 
 func TestSessionListScopedToWorkspace(t *testing.T) {
 	app := newFullApp(t)
-	app.Storage.SetWorkspace("/proj/other")
-	app.Storage.CreateSession("", "elsewhere", "code-puppy")
-	app.Storage.SetWorkspace("/proj/here")
-	app.Storage.CreateSession("", "local", "code-puppy")
+	app.Workspace.Storage().SetWorkspace("/proj/other")
+	app.Workspace.Storage().CreateSession("", "elsewhere", "code-puppy")
+	app.Workspace.Storage().SetWorkspace("/proj/here")
+	app.Workspace.Storage().CreateSession("", "local", "code-puppy")
 
 	out := captureStdout(t, func() { HandleCommand(context.Background(), "/session list", app) })
 	if !strings.Contains(out, "local") || strings.Contains(out, "elsewhere") || !strings.Contains(out, "(1)") {
@@ -351,10 +349,10 @@ func TestCompactCommand(t *testing.T) {
 	if out := captureStdout(t, func() { HandleCommand(ctx, "/compact", app) }); !strings.Contains(out, "No active session") {
 		t.Errorf("no session: %s", out)
 	}
-	app.Storage.CreateSession("", "t", "code-puppy")
-	sid := app.Storage.Active().ID
+	app.Workspace.Storage().CreateSession("", "t", "code-puppy")
+	sid := app.Workspace.Storage().Active().ID
 	for _, p := range []string{"make a file", "second turn"} {
-		if err := app.Engine.Execute(ctx, sid, p, nil); err != nil {
+		if err := app.Workspace.Engine().Execute(ctx, sid, p, nil); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -363,7 +361,7 @@ func TestCompactCommand(t *testing.T) {
 		t.Errorf("/compact output: %s", out)
 	}
 	fresh := newFullApp(t)
-	fresh.Storage.CreateSession("", "t", "code-puppy")
+	fresh.Workspace.Storage().CreateSession("", "t", "code-puppy")
 	if out := captureStdout(t, func() { HandleCommand(ctx, "/compact", fresh) }); !strings.Contains(out, "nothing to compact") {
 		t.Errorf("empty session: %s", out)
 	}

@@ -232,7 +232,7 @@ func newSteerApp(t *testing.T, message string, cfgFn func(*config.Config), repli
 	in := &fakeSteerInput{LineReader: NewLineReader(strings.NewReader(""), io.Discard), message: message, typed: make(chan struct{})}
 	llm := runtime.NewMockLLM("gemini-3.8-flash", replies...)
 	app := openApp(t, cfg, &gatedLLM{MockLLM: llm, gate: in.typed})
-	app.Storage.CreateSession("", "t", "code-puppy")
+	app.Workspace.Storage().CreateSession("", "t", "code-puppy")
 	app.Input = in
 	return app, llm
 }
@@ -253,7 +253,7 @@ func userMessages(st *session.Storage) []string {
 
 func TestREPLSteerReachesTheAgentMidTurn(t *testing.T) {
 	app, llm := newSteerApp(t, "use tabs", nil, listFilesCall(), genai.NewContentFromText("done", genai.RoleModel))
-	runTurn(context.Background(), app, app.Storage.Active().ID, "reformat", nil, turnOptions{})
+	runTurn(context.Background(), app, app.Workspace.Storage().Active().ID, "reformat", nil, turnOptions{})
 
 	if n := llm.Calls(); n != 2 {
 		t.Fatalf("want 2 model calls, got %d", n)
@@ -269,7 +269,7 @@ func TestREPLSteerReachesTheAgentMidTurn(t *testing.T) {
 	if !found {
 		t.Fatal("steer message not in the tool result the model read")
 	}
-	if got := fmt.Sprint(userMessages(app.Storage)); got != "[reformat use tabs]" {
+	if got := fmt.Sprint(userMessages(app.Workspace.Storage())); got != "[reformat use tabs]" {
 		t.Fatalf("transcript user messages = %s", got)
 	}
 }
@@ -278,7 +278,7 @@ func TestREPLLateSteerIsSentAsTheNextPrompt(t *testing.T) {
 	app, llm := newSteerApp(t, "and add a test", nil,
 		genai.NewContentFromText("done", genai.RoleModel),       // no tool call: the message can't ride along
 		genai.NewContentFromText("test added", genai.RoleModel)) // the follow-up turn
-	runTurn(context.Background(), app, app.Storage.Active().ID, "fix the bug", nil, turnOptions{})
+	runTurn(context.Background(), app, app.Workspace.Storage().Active().ID, "fix the bug", nil, turnOptions{})
 
 	if n := llm.Calls(); n != 2 {
 		t.Fatalf("want a follow-up turn (2 model calls), got %d", n)
@@ -287,7 +287,7 @@ func TestREPLLateSteerIsSentAsTheNextPrompt(t *testing.T) {
 	if last.Role != genai.RoleUser || !strings.Contains(last.Parts[0].Text, "and add a test") {
 		t.Fatalf("follow-up prompt = %+v", last)
 	}
-	if got := fmt.Sprint(userMessages(app.Storage)); got != "[fix the bug and add a test]" {
+	if got := fmt.Sprint(userMessages(app.Workspace.Storage())); got != "[fix the bug and add a test]" {
 		t.Fatalf("message recorded twice or not at all: %s", got)
 	}
 }
@@ -296,7 +296,7 @@ func TestREPLSteerGoesThroughPromptHooks(t *testing.T) {
 	app, llm := newSteerApp(t, "my password is hunter2", func(c *config.Config) {
 		c.Hooks.PromptSubmit = []config.HookConfig{{Command: `grep -q password && { echo "no secrets" >&2; exit 2; }; exit 0`}}
 	}, listFilesCall(), genai.NewContentFromText("done", genai.RoleModel))
-	runTurn(context.Background(), app, app.Storage.Active().ID, "reformat", nil, turnOptions{})
+	runTurn(context.Background(), app, app.Workspace.Storage().Active().ID, "reformat", nil, turnOptions{})
 
 	for _, c := range llm.Requests[len(llm.Requests)-1].Contents {
 		for _, p := range c.Parts {
@@ -305,7 +305,7 @@ func TestREPLSteerGoesThroughPromptHooks(t *testing.T) {
 			}
 		}
 	}
-	if got := fmt.Sprint(userMessages(app.Storage)); strings.Contains(got, "hunter2") {
+	if got := fmt.Sprint(userMessages(app.Workspace.Storage())); strings.Contains(got, "hunter2") {
 		t.Fatalf("blocked message recorded: %s", got)
 	}
 }

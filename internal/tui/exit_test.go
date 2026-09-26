@@ -134,8 +134,8 @@ func TestConfirmExitForceQuit(t *testing.T) {
 
 func TestREPLExitWithBackgroundProcesses(t *testing.T) {
 	app := newTestApp(t, nil)
-	app.Processes = newPM(t)
-	startSleep(t, app.Processes, "30")
+	pm := app.Workspace.Tools().Processes()
+	startSleep(t, pm, "30")
 
 	// /exit -> cancel -> keep working -> /exit -> kill.
 	app.Input = input("/exit\nc\n/exit\nk\n")
@@ -149,15 +149,15 @@ func TestREPLExitWithBackgroundProcesses(t *testing.T) {
 	case <-time.After(10 * time.Second):
 		t.Fatal("REPL did not exit")
 	}
-	if len(app.Processes.Running()) != 0 {
+	if len(pm.Running()) != 0 {
 		t.Error("background process survived REPL exit")
 	}
 }
 
 func TestREPLCtrlCAtPromptWithBackgroundProcess(t *testing.T) {
 	app := newTestApp(t, nil)
-	app.Processes = newPM(t)
-	startSleep(t, app.Processes, "30")
+	pm := app.Workspace.Tools().Processes()
+	startSleep(t, pm, "30")
 	pr, pw := io.Pipe()
 	app.Input = NewLineReader(pr, io.Discard)
 	sigs := make(chan os.Signal, 1)
@@ -180,7 +180,7 @@ func TestREPLCtrlCAtPromptWithBackgroundProcess(t *testing.T) {
 		t.Fatal("REPL did not exit after choosing kill")
 	}
 	pw.Close()
-	if len(app.Processes.Running()) != 0 {
+	if len(pm.Running()) != 0 {
 		t.Error("background process survived")
 	}
 }

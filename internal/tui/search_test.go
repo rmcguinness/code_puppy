@@ -11,33 +11,8 @@ import (
 
 	"github.com/retail-cortex/code_puppy/internal/config"
 	"github.com/retail-cortex/code_puppy/internal/runtime"
-	"github.com/retail-cortex/code_puppy/internal/tools"
 	"google.golang.org/genai"
 )
-
-func TestViableLinks(t *testing.T) {
-	in := []tools.SearchResult{
-		{URL: "https://a.example/doc#intro"},
-		{URL: "https://A.example/doc"}, // same page
-		{URL: "https://b.example/paper.PDF"},
-		{URL: "ftp://c.example/"},
-		{URL: "https://vertexaisearch.cloud.google.com/grounding-api-redirect/x"},
-		{URL: "https://d.example/"},
-		{URL: "https://e.example/"},
-		{URL: "https://f.example/"},
-		{URL: "https://g.example/"},
-		{URL: "https://h.example/"},
-	}
-	got := viableLinks(in, 5)
-	var urls []string
-	for _, r := range got {
-		urls = append(urls, r.URL)
-	}
-	want := "https://a.example/doc#intro https://d.example/ https://e.example/ https://f.example/ https://g.example/"
-	if strings.Join(urls, " ") != want {
-		t.Fatalf("got %v", urls)
-	}
-}
 
 // searchApp is a REPL app with web access, a SearXNG-style search server
 // returning pages served locally, and no auto-approval: only the pages
@@ -123,7 +98,7 @@ func TestSearchWebHandsFiveReadableLinksToTheAgent(t *testing.T) {
 	if cf := res["create_file"]; len(cf) != 1 || !strings.Contains(fmt.Sprint(cf[0]["error"]), "search is read-only") {
 		t.Errorf("create_file result: %v", cf)
 	}
-	msgs := app.Storage.Active().Messages
+	msgs := app.Workspace.Storage().Active().Messages
 	if len(msgs) < 1 || msgs[0].Content != "/search web golang errors" {
 		t.Errorf("transcript: %+v", msgs)
 	}
@@ -133,7 +108,7 @@ func TestSearchSessionSendsMatchingPassages(t *testing.T) {
 	app, llm, _ := searchApp(t, "/search session pineapple\n/search session mango\n/exit\n",
 		genai.NewContentFromText("You chose pineapple on day one.", genai.RoleModel),
 		genai.NewContentFromText("Mango never came up.", genai.RoleModel))
-	st := app.Storage
+	st := app.Workspace.Storage()
 	st.CreateSession("", "t", "code-puppy")
 	st.AddMessage("user", "let's pick a fruit")
 	st.AddMessage("model", "I suggest PINEAPPLE for the demo")

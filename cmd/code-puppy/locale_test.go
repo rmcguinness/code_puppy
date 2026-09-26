@@ -51,12 +51,9 @@ func TestLocaleReachesModelAndConfig(t *testing.T) {
 		return lastSystemText(llm)
 	}
 
-	tag, _ := e.Locales().Resolve("ES-sp")
-	l := e.Locales().Localizer(tag)
-	i18n.SetCurrent(l)
-	path, err := e.SetLocale(ctx, l)
-	if err != nil || path != cfgFile {
-		t.Fatalf("setLocale = %q, %v", path, err)
+	res, err := e.SetLocale(ctx, "ES-sp")
+	if err != nil || res.Tag != "es" || res.Saved.Path != cfgFile || res.Saved.Err != nil {
+		t.Fatalf("SetLocale = %+v, %v", res, err)
 	}
 	if sys := run(); !strings.Contains(sys, "## Response Language") || !strings.Contains(sys, "Spanish") {
 		t.Errorf("system prompt lacks the reply-language instruction:\n%s", sys)
@@ -77,10 +74,7 @@ func TestLocaleReachesModelAndConfig(t *testing.T) {
 		t.Errorf("after reload: %s", got)
 	}
 
-	enTag, _ := e.Locales().Resolve("en-US")
-	en := e.Locales().Localizer(enTag)
-	i18n.SetCurrent(en)
-	if _, err := e.SetLocale(ctx, en); err != nil {
+	if _, err := e.SetLocale(ctx, "en-US"); err != nil {
 		t.Fatal(err)
 	}
 	if sys := run(); strings.Contains(sys, "Response Language") {

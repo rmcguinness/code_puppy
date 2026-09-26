@@ -27,8 +27,8 @@ func runShellPassthrough(ctx context.Context, app *App, command string, interrup
 		return
 	}
 	dir := "."
-	if app.Tools != nil {
-		dir = app.Tools.Workspace().Dir()
+	if app.Workspace != nil {
+		dir = app.Workspace.Dir()
 	}
 	fmt.Printf("%s🐚 $ %s%s  %s%s%s\n", Bold, safe(command), Reset, Dim, i18n.T("shell.direct"), Reset)
 
@@ -68,12 +68,12 @@ func runShellPassthrough(ctx context.Context, app *App, command string, interrup
 		fmt.Printf("%s❌ %s%s %s(%s)%s\n\n", Red, i18n.T("shell.exit_code", "code", code), Reset, Dim, elapsed, Reset)
 	}
 	slog.InfoContext(ctx, "user shell command", "exit_code", code, "elapsed", elapsed)
-	if app.Tools != nil {
+	if app.Workspace != nil {
 		entry := audit.Entry{Kind: audit.KindUserShell, Detail: command, Decision: "exit " + strconv.Itoa(code)}
 		if err != nil && cmd.ProcessState == nil {
 			entry.Error = err.Error()
 		}
-		app.Tools.Hooks().Audit().Log(entry)
+		app.Workspace.Audit().Log(entry)
 	}
 }
 

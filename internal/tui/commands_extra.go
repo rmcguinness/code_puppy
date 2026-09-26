@@ -10,8 +10,6 @@ import (
 
 	core "github.com/retail-cortex/code_puppy/internal/app"
 	"github.com/retail-cortex/code_puppy/internal/i18n"
-	"github.com/retail-cortex/code_puppy/internal/memory"
-	"github.com/retail-cortex/code_puppy/internal/runtime"
 	"github.com/retail-cortex/code_puppy/internal/textutil"
 )
 
@@ -58,14 +56,6 @@ func handleExtraCommand(ctx context.Context, cmd string, args []string, app *App
 	case "model_settings":
 		cmdModelSettings(args, app)
 	default:
-		return false
-	}
-	return true
-}
-
-func needTools(app *App) bool {
-	if app.Tools == nil {
-		fmt.Println(i18n.T("common.not_available"))
 		return false
 	}
 	return true
@@ -122,12 +112,12 @@ func cmdDiff(ctx context.Context, args []string, app *App) {
 }
 
 func cmdCost(app *App) {
-	active := app.Storage.Active()
-	if active == nil {
+	u, err := app.Workspace.SessionUsage()
+	if err != nil {
 		fmt.Println(i18n.T("session.none_active"))
 		return
 	}
-	u := app.Engine.Usage(active.ID)
+	active, _ := app.Workspace.ActiveSession()
 	fmt.Printf("\n%s💰 %s%s\n", Bold, i18n.T("cost.title", "id", safe(active.ID)), Reset)
 	fmt.Printf("  %s\n", i18n.T("cost.calls", "count", u.Calls))
 	fmt.Printf("  %s\n", i18n.T("cost.input", "input", humanTokens(u.Input), "cached", humanTokens(u.Cached), "written", humanTokens(u.CacheWrite)))
@@ -135,23 +125,21 @@ func cmdCost(app *App) {
 	if u.Priced {
 		fmt.Printf("  %s\n", i18n.T("cost.estimate", "cost", fmt.Sprintf("$%.4f", u.CostUSD)))
 	} else {
-		fmt.Printf("  %s\n", i18n.T("cost.unknown", "model", strconv.Quote(app.Engine.ModelName())))
+		fmt.Printf("  %s\n", i18n.T("cost.unknown", "model", strconv.Quote(app.Workspace.Model().Name)))
 	}
 	fmt.Println()
 }
 
 func cmdContext(app *App) {
-	active := app.Storage.Active()
-	if active == nil {
+	c, err := app.Workspace.Context()
+	if err != nil {
 		fmt.Println(i18n.T("session.none_active"))
 		return
 	}
-	u := app.Engine.Usage(active.ID)
-	c := app.Cfg.Context
-	fmt.Printf("\n%s🧠 %s%s %s\n", Bold, i18n.T("context.title"), Reset, i18n.T("context.size", "tokens", humanTokens(u.LastPrompt)))
-	if c.Compaction && c.TokenThreshold > 0 {
-		pct := float64(u.LastPrompt) / float64(c.TokenThreshold) * 100
-		fmt.Printf("  %s\n\n", i18n.T("context.threshold", "threshold", humanTokens(int64(c.TokenThreshold)), "percent", fmt.Sprintf("%.0f", pct), "keep", c.RetainEvents))
+	fmt.Printf("\n%s🧠 %s%s %s\n", Bold, i18n.T("context.title"), Reset, i18n.T("context.size", "tokens", humanTokens(c.Tokens)))
+	if c.AutoCompact {
+		pct := float64(c.Tokens) / float64(c.Threshold) * 100
+		fmt.Printf("  %s\n\n", i18n.T("context.threshold", "threshold", humanTokens(int64(c.Threshold)), "percent", fmt.Sprintf("%.0f", pct), "keep", c.Keep))
 	} else {
 		fmt.Println("  " + i18n.T("context.auto_off"))
 		fmt.Println()
@@ -159,16 +147,14 @@ func cmdContext(app *App) {
 }
 
 func cmdCompact(ctx context.Context, args []string, app *App) {
-	active := app.Storage.Active()
-	if active == nil {
+	if _, ok := app.Workspace.ActiveSession(); !ok {
 		fmt.Println(i18n.T("session.none_active"))
 		return
 	}
-	before := app.Engine.Usage(active.ID)
 	fmt.Printf("%s🗜️  %s%s\n", Dim, i18n.T("compact.running"), Reset)
-	res, err := app.Engine.Compact(ctx, active.ID, strings.Join(args, " "), 1)
+	res, err := app.Workspace.Compact(ctx, strings.Join(args, " "))
 	if err != nil {
-		if errors.Is(err, runtime.ErrNothingToCompact) {
+		if errors.Is(err, core.ErrNothingToCompact) {
 			fmt.Printf("%s%v%s\n", Yellow, err, Reset)
 			return
 		}
@@ -176,7 +162,7 @@ func cmdCompact(ctx context.Context, args []string, app *App) {
 		return
 	}
 	fmt.Printf("%s✅ %s%s\n", Green, i18n.T("compact.done", "events", res.EventsCompacted, "chars", res.SummaryChars), Reset)
-	if line := UsageLine(before, app.Engine.Usage(active.ID)); line != "" {
+	if line := UsageLine(res.Before, res.After); line != "" {
 		fmt.Printf("%s%s%s\n", Dim, line, Reset)
 	}
 }
@@ -188,17 +174,13 @@ func cmdMemory(ctx context.Context, args []string, app *App) {
 	}
 	switch sub {
 	case "show", "reload":
-		if app.ReloadMemory == nil {
-			fmt.Println(i18n.T("memory.unavailable"))
-			return
-		}
-		paths, err := app.ReloadMemory(ctx)
+		paths, err := app.Workspace.ReloadMemory(ctx)
 		if err != nil {
 			fmt.Printf("%s❌ %v%s\n", Red, err, Reset)
 			return
 		}
 		if len(paths) == 0 {
-			fmt.Println(i18n.T("memory.none", "files", strings.Join(app.Cfg.Memory.Files, ", ")))
+			fmt.Println(i18n.T("memory.none", "files", strings.Join(app.Workspace.MemoryFiles(), ", ")))
 			return
 		}
 		fmt.Printf("\n%s📝 %s%s\n", Bold, i18n.T("memory.loaded"), Reset)
@@ -207,20 +189,10 @@ func cmdMemory(ctx context.Context, args []string, app *App) {
 		}
 		fmt.Println()
 	case "add":
-		if !needTools(app) {
-			return
-		}
-		file := "PUPPY.md"
-		if len(app.Cfg.Memory.Files) > 0 {
-			file = app.Cfg.Memory.Files[len(app.Cfg.Memory.Files)-1]
-		}
-		path, err := memory.Append(app.Tools.Workspace().Dir(), file, strings.Join(args[1:], " "))
+		path, err := app.Workspace.AddMemory(ctx, strings.Join(args[1:], " "))
 		if err != nil {
 			fmt.Printf("%s❌ %v%s\n", Red, err, Reset)
 			return
-		}
-		if app.ReloadMemory != nil {
-			app.ReloadMemory(ctx)
 		}
 		fmt.Printf("%s✅ %s%s\n", Green, i18n.T("memory.added", "path", safe(path)), Reset)
 	default:
@@ -489,44 +461,34 @@ func PrintRecap(msgs []core.Message, n int) {
 }
 
 func cmdLocale(ctx context.Context, args []string, app *App) {
-	b := app.Locales
-	if b == nil {
-		b = i18n.Default()
-	}
 	if len(args) == 0 {
 		cur := i18n.Current()
 		fmt.Printf("\n%s🌐 %s%s\n", Bold, i18n.T("locale.current", "name", cur.NativeName(), "tag", cur.Tag()), Reset)
+		list, dir := app.Workspace.AvailableLocales()
 		var names []string
-		for _, m := range b.Available() {
-			names = append(names, m.Locale+" ("+m.Name+")")
+		for _, m := range list {
+			names = append(names, m.Tag+" ("+m.Name+")")
 		}
 		fmt.Println("  " + i18n.T("locale.available", "list", strings.Join(names, ", ")))
-		if app.Cfg != nil && app.Cfg.UI.LocalesDir != "" {
-			fmt.Printf("  %s%s%s\n", Dim, i18n.T("locale.custom_hint", "dir", app.Cfg.UI.LocalesDir), Reset)
+		if dir != "" {
+			fmt.Printf("  %s%s%s\n", Dim, i18n.T("locale.custom_hint", "dir", dir), Reset)
 		}
 		fmt.Println()
 		return
 	}
-	if app.SetLocale == nil {
-		fmt.Println(i18n.T("locale.unavailable"))
-		return
-	}
 	input := strings.Join(args, " ")
-	tag, err := b.Resolve(input)
+	res, err := app.Workspace.SetLocale(ctx, input)
 	if err != nil {
 		fmt.Printf("%s❌ %s%s\n", Red, i18n.T("locale.unknown", "input", strconv.Quote(safe(input))), Reset)
 		return
 	}
-	l := b.Localizer(tag)
-	i18n.SetCurrent(l)
-	path, err := app.SetLocale(ctx, l)
-	fmt.Printf("%s✅ %s%s\n", Green, i18n.T("locale.changed", "name", l.NativeName(), "tag", tag), Reset)
-	if !l.HasCatalog() {
-		fmt.Printf("%s%s%s\n", Yellow, i18n.T("locale.no_catalog", "name", l.LanguageName()), Reset)
+	fmt.Printf("%s✅ %s%s\n", Green, i18n.T("locale.changed", "name", res.NativeName, "tag", res.Tag), Reset)
+	if !res.HasCatalog {
+		fmt.Printf("%s%s%s\n", Yellow, i18n.T("locale.no_catalog", "name", res.LanguageName), Reset)
 	}
-	if err != nil {
-		fmt.Printf("%s⚠️  %s%s\n", Yellow, i18n.T("locale.save_failed", "error", safe(err.Error())), Reset)
-	} else if path != "" {
-		fmt.Printf("%s%s%s\n", Dim, i18n.T("locale.saved", "path", safe(path)), Reset)
+	if res.Saved.Err != nil {
+		fmt.Printf("%s⚠️  %s%s\n", Yellow, i18n.T("locale.save_failed", "error", safe(res.Saved.Err.Error())), Reset)
+	} else if res.Saved.Path != "" {
+		fmt.Printf("%s%s%s\n", Dim, i18n.T("locale.saved", "path", safe(res.Saved.Path)), Reset)
 	}
 }

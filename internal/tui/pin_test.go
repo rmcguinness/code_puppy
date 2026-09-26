@@ -54,7 +54,7 @@ func TestPinModelAndUnpin(t *testing.T) {
 	if !strings.Contains(out, "qa-kitten now runs on claude-haiku-4-5") || !strings.Contains(out, "Saved in") {
 		t.Errorf("pin:\n%s", out)
 	}
-	if m, pinned := app.Engine.AgentModel("qa-kitten"); !pinned || m != "claude-haiku-4-5" {
+	if m, pinned := app.Workspace.Engine().AgentModel("qa-kitten"); !pinned || m != "claude-haiku-4-5" {
 		t.Fatalf("engine pin: %s %v", m, pinned)
 	}
 	if got := savedConfig(t).AgentModels; len(got) != 1 || got["qa-kitten"] != "anthropic/claude-haiku-4-5" {
@@ -68,7 +68,7 @@ func TestPinModelAndUnpin(t *testing.T) {
 	}
 
 	out = run("/unpin qa-kitten")
-	if _, pinned := app.Engine.AgentModel("qa-kitten"); pinned || !strings.Contains(out, "qa-kitten now runs on gemini-3.8-flash") {
+	if _, pinned := app.Workspace.Engine().AgentModel("qa-kitten"); pinned || !strings.Contains(out, "qa-kitten now runs on gemini-3.8-flash") {
 		t.Fatalf("unpin:\n%s", out)
 	}
 	if got := savedConfig(t).AgentModels; len(got) != 0 {
@@ -84,8 +84,8 @@ func TestModelCommandNotesAPinnedActiveAgent(t *testing.T) {
 	if !strings.Contains(out, "code-puppy is pinned to claude-sonnet-5") {
 		t.Fatalf("no note that the active agent keeps its pin:\n%s", out)
 	}
-	if app.Engine.ModelName() != "claude-sonnet-5" {
-		t.Fatalf("active agent's model = %s", app.Engine.ModelName())
+	if app.Workspace.Engine().ModelName() != "claude-sonnet-5" {
+		t.Fatalf("active agent's model = %s", app.Workspace.Engine().ModelName())
 	}
 }
 
@@ -99,7 +99,7 @@ func TestUnpinRestoresTheAgentsOwnDefault(t *testing.T) {
 	ctx := context.Background()
 	captureStdout(t, func() { HandleCommand(ctx, "/pin_model reviewer anthropic/claude-sonnet-5", app) })
 	out := captureStdout(t, func() { HandleCommand(ctx, "/unpin reviewer", app) })
-	if m, _ := app.Engine.AgentModel("reviewer"); m != "claude-haiku-4-5" {
+	if m, _ := app.Workspace.Engine().AgentModel("reviewer"); m != "claude-haiku-4-5" {
 		t.Fatalf("after /unpin reviewer runs on %s, want its default_model:\n%s", m, out)
 	}
 }

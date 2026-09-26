@@ -221,30 +221,6 @@ func (w *Workspace) LoadAttachments(paths []string, prompt string, warn func(str
 	return out, nil
 }
 
-// ReloadMemory re-reads project instruction files into the engine and
-// returns their paths.
-func (w *Workspace) ReloadMemory(ctx context.Context) ([]string, error) {
-	w.memory = memory.Load(w.tools.Workspace().Dir(), w.cfg.Memory)
-	if err := w.engine.SetInstructions(ctx, w.instructions()); err != nil {
-		return nil, err
-	}
-	paths := make([]string, len(w.memory))
-	for i, d := range w.memory {
-		paths[i] = d.Path
-	}
-	return paths, nil
-}
-
-// SetLocale applies the active locale to the model's instructions and saves
-// it as ui.locale in the config file, which it returns.
-func (w *Workspace) SetLocale(ctx context.Context, l *i18n.Localizer) (string, error) {
-	if err := w.engine.SetInstructions(ctx, w.instructions()); err != nil {
-		return "", err
-	}
-	w.cfg.UI.Locale = l.Tag().String()
-	return config.SaveUILocale(config.ConfigDir(""), w.cfg.UI.Locale)
-}
-
 // instructions are the extra system instructions: project memory plus, for
 // non-English locales, which language to reply in.
 func (w *Workspace) instructions() string {

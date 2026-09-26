@@ -230,8 +230,7 @@ func openAppWith(t *testing.T, cfg *config.Config, o core.Options) *App {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { w.Close() })
-	return &App{Workspace: w, Cfg: cfg, Engine: w.Engine(), Agents: w.Agents(), Skills: w.Skills(), Storage: w.Storage(),
-		Tools: w.Tools(), Processes: w.Tools().Processes(), Printer: PrinterOptions{Out: io.Discard}}
+	return &App{Workspace: w, Printer: PrinterOptions{Out: io.Discard}}
 }
 
 // savedConfig reads back the config file that commands save to.
@@ -268,13 +267,13 @@ func TestHandleCommandModel(t *testing.T) {
 	if handled, err := HandleCommand(ctx, "/model mock-b", app); !handled || err != nil {
 		t.Fatalf("handled=%v err=%v", handled, err)
 	}
-	if app.Engine.ModelName() != "mock-b" || app.Cfg.CodePuppy.DefaultModel != "mock-b" {
-		t.Errorf("model not switched: engine=%q cfg=%q", app.Engine.ModelName(), app.Cfg.CodePuppy.DefaultModel)
+	if app.Workspace.Engine().ModelName() != "mock-b" || app.Workspace.Config().CodePuppy.DefaultModel != "mock-b" {
+		t.Errorf("model not switched: engine=%q cfg=%q", app.Workspace.Engine().ModelName(), app.Workspace.Config().CodePuppy.DefaultModel)
 	}
 	// Negative: factory failure leaves the current model in place.
 	HandleCommand(ctx, "/model bad-model", app)
-	if app.Engine.ModelName() != "mock-b" || app.Cfg.CodePuppy.DefaultModel != "mock-b" {
-		t.Errorf("failed switch changed model to %q", app.Engine.ModelName())
+	if app.Workspace.Engine().ModelName() != "mock-b" || app.Workspace.Config().CodePuppy.DefaultModel != "mock-b" {
+		t.Errorf("failed switch changed model to %q", app.Workspace.Engine().ModelName())
 	}
 }
 
@@ -283,29 +282,29 @@ func TestHandleCommandSetAndSession(t *testing.T) {
 	app := newTestApp(t, nil)
 
 	HandleCommand(ctx, "/set agency=low", app)
-	if app.Cfg.CodePuppy.AgencyLevel != "low" {
-		t.Errorf("agency not updated: %q", app.Cfg.CodePuppy.AgencyLevel)
+	if app.Workspace.Config().CodePuppy.AgencyLevel != "low" {
+		t.Errorf("agency not updated: %q", app.Workspace.Config().CodePuppy.AgencyLevel)
 	}
 	// Negative: invalid agency rejected.
 	HandleCommand(ctx, "/set agency=reckless", app)
-	if app.Cfg.CodePuppy.AgencyLevel != "low" {
-		t.Errorf("invalid agency accepted: %q", app.Cfg.CodePuppy.AgencyLevel)
+	if app.Workspace.Config().CodePuppy.AgencyLevel != "low" {
+		t.Errorf("invalid agency accepted: %q", app.Workspace.Config().CodePuppy.AgencyLevel)
 	}
 	// Values with spaces are kept whole.
 	HandleCommand(ctx, "/set owner_name=Ada Lovelace", app)
-	if app.Cfg.CodePuppy.OwnerName != "Ada Lovelace" {
-		t.Errorf("owner_name = %q", app.Cfg.CodePuppy.OwnerName)
+	if app.Workspace.Config().CodePuppy.OwnerName != "Ada Lovelace" {
+		t.Errorf("owner_name = %q", app.Workspace.Config().CodePuppy.OwnerName)
 	}
 
 	// /session new records the active agent and becomes active.
 	HandleCommand(ctx, "/agent helios", app)
 	HandleCommand(ctx, "/session new", app)
-	if a := app.Storage.Active(); a == nil || a.Agent != "helios" {
+	if a := app.Workspace.Storage().Active(); a == nil || a.Agent != "helios" {
 		t.Errorf("new session should use active agent, got %+v", a)
 	}
 	// Negative: unknown agent keeps current one.
 	HandleCommand(ctx, "/agent ghost", app)
-	if app.Engine.ActiveAgent() != "helios" {
+	if app.Workspace.Engine().ActiveAgent() != "helios" {
 		t.Errorf("unknown agent changed active agent")
 	}
 }
@@ -336,7 +335,7 @@ func TestRunREPLUsesCurrentSession(t *testing.T) {
 		t.Fatal(err)
 	}
 	// The second prompt must be recorded in the session created by /session new.
-	active := app.Storage.Active()
+	active := app.Workspace.Storage().Active()
 	if active == nil || len(active.Messages) == 0 || active.Messages[0].Content != "second" {
 		t.Errorf("expected 'second' in the new active session, got %+v", active)
 	}
@@ -452,7 +451,7 @@ func TestREPLInterruptAtPromptExits(t *testing.T) {
 func TestREPLInterruptCancelsTurnOnly(t *testing.T) {
 	app := newTestApp(t, nil)
 	llm := &blockingLLM{started: make(chan struct{}, 1)}
-	if err := app.Engine.SetModel(context.Background(), llm); err != nil {
+	if err := app.Workspace.Engine().SetModel(context.Background(), llm); err != nil {
 		t.Fatal(err)
 	}
 	pr, pw := io.Pipe()

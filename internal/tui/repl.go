@@ -11,47 +11,25 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/retail-cortex/code_puppy/internal/agents"
 	core "github.com/retail-cortex/code_puppy/internal/app"
-	"github.com/retail-cortex/code_puppy/internal/config"
 	"github.com/retail-cortex/code_puppy/internal/i18n"
 	"github.com/retail-cortex/code_puppy/internal/images"
 	"github.com/retail-cortex/code_puppy/internal/runtime"
-	"github.com/retail-cortex/code_puppy/internal/session"
-	"github.com/retail-cortex/code_puppy/internal/skills"
-	"github.com/retail-cortex/code_puppy/internal/tools"
 	sessionsdk "google.golang.org/adk/v2/session"
 )
 
-// App bundles the dependencies the REPL and slash commands operate on.
+// App is the REPL's state: the workspace it drives and the terminal.
 type App struct {
-	// Workspace runs turns and steering; the fields below are its parts.
+	// Workspace is the program behind the REPL: every command and turn goes
+	// through it.
 	Workspace *core.Workspace
 	Version   string
-	Cfg       *config.Config
-	Engine    *runtime.Engine
-	Agents    *agents.Registry
-	Skills    *skills.Provider
-	Storage   *session.Storage
 	Input     Input
-	// Tools gives commands access to checkpoints, approvals, MCP and hooks.
-	Tools *tools.Registry
-	// Processes are the background processes to account for on exit.
-	Processes *tools.ProcessManager
-	// SandboxSummary describes the active sandbox (shown by /sandbox).
-	SandboxSummary []string
-	// Printer configures output rendering; Transcript is set per turn.
+	// Printer configures output rendering.
 	Printer PrinterOptions
-	// ReloadMemory re-reads project instruction files and returns their paths.
-	ReloadMemory func(ctx context.Context) ([]string, error)
 	// Attachments are images to send with the next prompt (/attach, /paste,
 	// --image).
 	Attachments []*images.Image
-	// Locales are the loaded translation catalogs (nil: the built-in ones).
-	Locales *i18n.Bundle
-	// SetLocale applies a new interface language to the model's reply
-	// instructions and saves it to the config; it returns the file written.
-	SetLocale func(ctx context.Context, l *i18n.Localizer) (string, error)
 	// TerminalTitle shows the session's name in the terminal window title.
 	TerminalTitle bool
 	// Interrupts delivers Ctrl+C. If nil, RunREPL subscribes to os.Interrupt
@@ -211,9 +189,9 @@ func (p *Printer) Handle(ev *sessionsdk.Event) error {
 
 // RunREPL runs the interactive REPL prompt loop until /exit, EOF, or ctx is cancelled.
 func RunREPL(ctx context.Context, app *App) error {
-	PrintBanner(app.Version, app.Engine.ActiveAgent(), app.Engine.ModelName())
-	if len(app.SandboxSummary) > 0 {
-		fmt.Printf("🛡️  %s%s%s\n", Dim, safe(app.SandboxSummary[0]), Reset)
+	PrintBanner(app.Version, app.Workspace.ActiveAgent().Name, app.Workspace.Model().Name)
+	if sandbox := app.Workspace.SandboxSummary(); len(sandbox) > 0 {
+		fmt.Printf("🛡️  %s%s%s\n", Dim, safe(sandbox[0]), Reset)
 		fmt.Printf("   %s%s%s\n", Dim, i18n.T("repl.hint"), Reset)
 		if _, ok := app.Input.(steerInput); ok {
 			fmt.Printf("   %s%s%s\n", Dim, i18n.T("steer.hint"), Reset)
@@ -258,7 +236,7 @@ func RunREPL(ctx context.Context, app *App) error {
 				shownTitle = t
 			}
 		}
-		prompt := fmt.Sprintf("%s🐶 [%s]> %s", Bold+Green, app.Engine.ActiveAgent(), Reset)
+		prompt := fmt.Sprintf("%s🐶 [%s]> %s", Bold+Green, app.Workspace.ActiveAgent().Name, Reset)
 		idleCtx, stopIdle := cancelOnSignal(ctx, interrupts)
 		line, err := app.Input.ReadInput(idleCtx, prompt)
 		stopIdle()
@@ -268,10 +246,10 @@ func RunREPL(ctx context.Context, app *App) error {
 			// SIGTERM: no prompt; deferred cleanup kills background processes.
 			return goodbye()
 		case errors.Is(err, io.EOF):
-			ConfirmExit(ctx, app.Input, app.Processes, interrupts, ExitPrompt{})
+			ConfirmExit(ctx, app.Input, app.Workspace.Tools().Processes(), interrupts, ExitPrompt{})
 			return goodbye()
 		case errors.Is(err, context.Canceled): // Ctrl+C at the prompt
-			if ConfirmExit(ctx, app.Input, app.Processes, interrupts, exitPrompt) {
+			if ConfirmExit(ctx, app.Input, app.Workspace.Tools().Processes(), interrupts, exitPrompt) {
 				return goodbye()
 			}
 			continue
@@ -305,7 +283,7 @@ func RunREPL(ctx context.Context, app *App) error {
 				continue
 			}
 			if t, ok := prepareSearch(ctx, app, rest, interrupts); ok {
-				runTurn(t.ctx, app, active.ID, t.recorded, interrupts, turnOptions{prompt: t.prompt, readOnly: "search"})
+				runTurn(ctx, app, active.ID, t.recorded, interrupts, turnOptions{prompt: t.prompt, readOnly: "search", grants: t.grants})
 			}
 			continue
 		}
@@ -321,7 +299,7 @@ func RunREPL(ctx context.Context, app *App) error {
 		if !plan { // a plan goal is text for the agent, even if it starts with "/"
 			handled, err := HandleCommand(ctx, line, app)
 			if errors.Is(err, ErrExit) {
-				if ConfirmExit(ctx, app.Input, app.Processes, interrupts, exitPrompt) {
+				if ConfirmExit(ctx, app.Input, app.Workspace.Tools().Processes(), interrupts, exitPrompt) {
 					return goodbye()
 				}
 				continue
@@ -358,6 +336,8 @@ type turnOptions struct {
 	// aside: a /btw question, answered in a throwaway copy of the session
 	// (runtime.Engine.Aside) and recorded nowhere.
 	aside bool
+	// grants are URLs the agent may fetch without asking (/search web).
+	grants []string
 }
 
 // runTurn sends one prompt to the agent and renders the result.
@@ -379,7 +359,7 @@ func runTurn(ctx context.Context, app *App, sessionID, line string, interrupts <
 	stopSteering := func() {}
 	res, streamErr := app.Workspace.Run(turnCtx, sessionID, core.Turn{
 		Text: line, Prompt: o.prompt, Plan: o.plan, ReadOnly: o.readOnly, Aside: o.aside, Accepted: o.accepted,
-		Images: attached,
+		Images: attached, FetchGrants: o.grants,
 		OnAccepted: func() {
 			if len(attached) > 0 {
 				for _, img := range attached {

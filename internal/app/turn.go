@@ -10,6 +10,7 @@ import (
 	"github.com/retail-cortex/code_puppy/internal/images"
 	"github.com/retail-cortex/code_puppy/internal/runtime"
 	"github.com/retail-cortex/code_puppy/internal/textutil"
+	"github.com/retail-cortex/code_puppy/internal/tools"
 	adksession "google.golang.org/adk/v2/session"
 )
 
@@ -39,6 +40,9 @@ type Turn struct {
 	Images []*images.Image
 	// MaxTurns limits the model calls in the turn (0: unlimited).
 	MaxTurns int
+	// FetchGrants are URLs the agent may fetch in this turn without asking
+	// (the pages a web search handed it).
+	FetchGrants []string
 	// OnAccepted, if set, runs once the prompt has passed prompt_submit
 	// hooks, before anything is recorded or sent.
 	OnAccepted func()
@@ -107,6 +111,9 @@ func (w *Workspace) Run(ctx context.Context, sessionID string, t Turn, on runtim
 	}
 
 	res := TurnResult{Before: w.engine.Usage(sessionID)}
+	if len(t.FetchGrants) > 0 {
+		ctx = tools.WithFetchGrants(ctx, t.FetchGrants)
+	}
 	var err error
 	if t.Aside {
 		err = w.engine.Aside(ctx, sessionID, prompt, handler)

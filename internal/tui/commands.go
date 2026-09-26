@@ -121,7 +121,7 @@ func HandleCommand(ctx context.Context, input string, app *App) (bool, error) {
 
 	case "sandbox":
 		fmt.Printf("\n%s🛡️  %s:%s\n", Bold, i18n.T("sandbox.title"), Reset)
-		for _, line := range app.SandboxSummary {
+		for _, line := range app.Workspace.SandboxSummary() {
 			fmt.Printf("  %s\n", safe(line))
 		}
 		fmt.Println()

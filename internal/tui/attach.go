@@ -9,7 +9,6 @@ import (
 
 	"github.com/retail-cortex/code_puppy/internal/i18n"
 	"github.com/retail-cortex/code_puppy/internal/images"
-	"github.com/retail-cortex/code_puppy/internal/tools"
 )
 
 // collectAttachments gathers the images for this prompt: those queued with
@@ -42,10 +41,7 @@ func collectAttachments(app *App, line string) ([]*images.Image, bool) {
 }
 
 func loadImage(app *App, path string) (*images.Image, error) {
-	if app.Tools == nil {
-		return nil, tools.ErrImagesDisabled
-	}
-	return app.Tools.LoadImage(path)
+	return app.Workspace.LoadImage(path)
 }
 
 func cmdAttach(args []string, app *App) {
@@ -78,7 +74,7 @@ func cmdAttach(args []string, app *App) {
 }
 
 func cmdPaste(ctx context.Context, app *App) {
-	if app.Tools == nil || app.Tools.Images() == nil {
+	if !app.Workspace.Config().Images.Enabled {
 		fmt.Println(i18n.T("attach.disabled"))
 		return
 	}
@@ -91,7 +87,7 @@ func cmdPaste(ctx context.Context, app *App) {
 		}
 		return
 	}
-	img, err := app.Tools.AddImage("clipboard-"+time.Now().Format("150405")+".png", data)
+	img, err := app.Workspace.AddImage("clipboard-"+time.Now().Format("150405")+".png", data)
 	if err != nil {
 		fmt.Printf("%s❌ %s%s\n", Red, i18n.T("attach.failed", "path", "clipboard", "error", safe(err.Error())), Reset)
 		return

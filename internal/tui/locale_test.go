@@ -2,7 +2,8 @@ package tui
 
 import (
 	"context"
-	"errors"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -14,14 +15,9 @@ func TestLocaleCommand(t *testing.T) {
 	i18n.SetCurrent(nil)
 	app := newTestApp(t, nil)
 	ctx := context.Background()
-	var applied []string
-	app.SetLocale = func(ctx context.Context, l *i18n.Localizer) (string, error) {
-		applied = append(applied, l.Tag().String())
-		return "/cfg/.env.toml", nil
-	}
 
 	out := captureStdout(t, func() { HandleCommand(ctx, "/locale", app) })
-	for _, want := range []string{"Interface language: English (US) (en-US)", "es (Español)", "fr-CA (Français (Canada))", app.Cfg.UI.LocalesDir} {
+	for _, want := range []string{"Interface language: English (US) (en-US)", "es (Español)", "fr-CA (Français (Canada))", app.Workspace.Config().UI.LocalesDir} {
 		if !strings.Contains(out, want) {
 			t.Errorf("/locale output lacks %q:\n%s", want, out)
 		}
@@ -29,10 +25,10 @@ func TestLocaleCommand(t *testing.T) {
 
 	// The user's example: "/locale ES-sp" means Spanish.
 	out = captureStdout(t, func() { HandleCommand(ctx, "/locale ES-sp", app) })
-	if strings.Join(applied, ",") != "es" || i18n.Current().Tag().String() != "es" {
-		t.Fatalf("applied %v, current %v", applied, i18n.Current().Tag())
+	if saved := savedConfig(t).UI.Locale; saved != "es" || i18n.Current().Tag().String() != "es" {
+		t.Fatalf("saved %q, current %v", saved, i18n.Current().Tag())
 	}
-	if !strings.Contains(out, "Idioma de la interfaz: Español (es).") || !strings.Contains(out, "Guardado en /cfg/.env.toml.") {
+	if !strings.Contains(out, "Idioma de la interfaz: Español (es).") || !strings.Contains(out, "Guardado en ") {
 		t.Errorf("confirmation should already be in Spanish:\n%s", out)
 	}
 	out = captureStdout(t, func() { HandleCommand(ctx, "/help", app) })
@@ -52,22 +48,17 @@ func TestLocaleCommand(t *testing.T) {
 	}
 
 	// Unknown input changes nothing.
-	before := len(applied)
 	out = captureStdout(t, func() { HandleCommand(ctx, "/locale zz-top-9", app) })
-	if len(applied) != before || !strings.Contains(out, "Unknown language") {
-		t.Errorf("unknown locale was applied: %v\n%s", applied, out)
+	if saved := savedConfig(t).UI.Locale; saved != "en-US" || !strings.Contains(out, "Unknown language") {
+		t.Errorf("unknown locale was applied (saved %q):\n%s", saved, out)
 	}
 
 	// A save failure is reported but the session keeps the new language.
-	app.SetLocale = func(context.Context, *i18n.Localizer) (string, error) { return "", errors.New("disk full") }
+	notDir := filepath.Join(t.TempDir(), "file")
+	os.WriteFile(notDir, nil, 0o600)
+	t.Setenv("MODENV_PREFIX", notDir) // the config "directory" is a file
 	out = captureStdout(t, func() { HandleCommand(ctx, "/locale fr", app) })
-	if i18n.Current().Tag().String() != "fr" || !strings.Contains(out, "l’enregistrement a échoué : disk full") {
+	if i18n.Current().Tag().String() != "fr" || !strings.Contains(out, "l’enregistrement a échoué") {
 		t.Errorf("save failure:\n%s", out)
-	}
-
-	app.SetLocale = nil
-	out = captureStdout(t, func() { HandleCommand(ctx, "/locale es", app) })
-	if !strings.Contains(out, "n’est pas disponible") {
-		t.Errorf("without SetLocale:\n%s", out)
 	}
 }
