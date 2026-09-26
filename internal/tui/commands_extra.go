@@ -15,7 +15,6 @@ import (
 	"github.com/retail-cortex/code_puppy/internal/i18n"
 	"github.com/retail-cortex/code_puppy/internal/memory"
 	"github.com/retail-cortex/code_puppy/internal/runtime"
-	"github.com/retail-cortex/code_puppy/internal/session"
 	"github.com/retail-cortex/code_puppy/internal/textutil"
 	"github.com/retail-cortex/code_puppy/internal/tools"
 )
@@ -489,21 +488,21 @@ func cmdSessionLoad(args []string, app *App) {
 		fmt.Println(i18n.T("resume.usage"))
 		return
 	}
-	rec, branched, err := app.Storage.Open(args[0])
+	s, branched, err := app.Workspace.LoadSession(args[0])
 	if err != nil {
 		fmt.Printf("%s❌ %v%s\n", Red, err, Reset)
 		return
 	}
 	if branched {
-		fmt.Printf("%s▶️  %s%s\n", Green, i18n.T("snapshot.branched", "id", safe(rec.ID), "name", safe(args[0]), "messages", i18n.N("session.messages", rec.MessageCount)), Reset)
-		PrintRecap(rec.Messages, 3)
+		fmt.Printf("%s▶️  %s%s\n", Green, i18n.T("snapshot.branched", "id", safe(s.ID), "name", safe(args[0]), "messages", i18n.N("session.messages", s.MessageCount)), Reset)
+		PrintRecap(s.Messages, 3)
 		return
 	}
-	fmt.Printf("%s▶️  %s%s\n", Green, i18n.T("resume.done", "id", safe(rec.ID), "title", safe(sessionTitle(rec)), "messages", i18n.N("session.messages", rec.MessageCount)), Reset)
-	if rec.Workspace != "" && rec.Workspace != app.Storage.Workspace() {
-		fmt.Printf("%s⚠️  %s%s\n", Yellow, i18n.T("resume.other_workspace", "workspace", safe(rec.Workspace)), Reset)
+	fmt.Printf("%s▶️  %s%s\n", Green, i18n.T("resume.done", "id", safe(s.ID), "title", safe(sessionTitle(s)), "messages", i18n.N("session.messages", s.MessageCount)), Reset)
+	if s.Workspace != "" && s.Workspace != app.Workspace.Dir() {
+		fmt.Printf("%s⚠️  %s%s\n", Yellow, i18n.T("resume.other_workspace", "workspace", safe(s.Workspace)), Reset)
 	}
-	PrintRecap(rec.Messages, 3)
+	PrintRecap(s.Messages, 3)
 }
 
 // cmdRename names the active session (its title in /session list and the
@@ -514,20 +513,21 @@ func cmdRename(args []string, app *App) {
 		fmt.Printf("%s%s%s\n", Yellow, i18n.T("rename.usage"), Reset)
 		return
 	}
-	if err := app.Storage.Rename(name); err != nil {
+	s, err := app.Workspace.RenameSession(name)
+	if err != nil {
 		fmt.Printf("%s❌ %s%s\n", Red, i18n.T("rename.failed", "error", safe(err.Error())), Reset)
 		return
 	}
-	fmt.Printf("%s✅ %s%s\n", Green, i18n.T("rename.done", "title", safe(sessionTitle(app.Storage.Active()))), Reset)
+	fmt.Printf("%s✅ %s%s\n", Green, i18n.T("rename.done", "title", safe(sessionTitle(s))), Reset)
 }
 
 // sessionTitle is a session's title, or a placeholder until its first
 // prompt names it.
-func sessionTitle(r *session.SessionRecord) string {
-	if r == nil || r.Title == "" {
+func sessionTitle(s core.SessionInfo) string {
+	if s.Title == "" {
 		return i18n.T("session.untitled")
 	}
-	return r.Title
+	return s.Title
 }
 
 // cmdSessionSave saves the active session as a named snapshot, to return
@@ -539,25 +539,22 @@ func cmdSessionSave(args []string, app *App) {
 		fmt.Printf("%s%s%s\n", Yellow, i18n.T("snapshot.usage"), Reset)
 		return
 	}
-	active := app.Storage.Active()
-	if active == nil {
-		fmt.Println(i18n.T("session.none_active"))
-		return
-	}
 	name := args[0]
-	rec, err := app.Storage.Snapshot(active.ID, name, force)
+	s, err := app.Workspace.SaveSnapshot(name, force)
 	switch {
-	case errors.Is(err, session.ErrNameTaken):
+	case errors.Is(err, core.ErrNoActiveSession):
+		fmt.Println(i18n.T("session.none_active"))
+	case errors.Is(err, core.ErrSnapshotNameTaken):
 		fmt.Printf("%s⚠️  %s%s\n", Yellow, i18n.T("snapshot.taken", "name", safe(name)), Reset)
 	case err != nil:
 		fmt.Printf("%s❌ %s%s\n", Red, i18n.T("snapshot.failed", "error", safe(err.Error())), Reset)
 	default:
-		fmt.Printf("%s📸 %s%s\n", Green, i18n.T("snapshot.saved", "name", safe(name), "messages", i18n.N("session.messages", rec.MessageCount)), Reset)
+		fmt.Printf("%s📸 %s%s\n", Green, i18n.T("snapshot.saved", "name", safe(name), "messages", i18n.N("session.messages", s.MessageCount)), Reset)
 	}
 }
 
 // PrintRecap shows the last n messages of a resumed session.
-func PrintRecap(msgs []session.Message, n int) {
+func PrintRecap(msgs []core.Message, n int) {
 	if len(msgs) > n {
 		msgs = msgs[len(msgs)-n:]
 	}
@@ -566,7 +563,7 @@ func PrintRecap(msgs []session.Message, n int) {
 		if m.Role != "user" {
 			who = i18n.T("recap.puppy")
 		}
-		fmt.Printf("  %s%s:%s %s\n", Dim, who, Reset, safe(textutil.Ellipsize(strings.Join(strings.Fields(m.Content), " "), 160)))
+		fmt.Printf("  %s%s:%s %s\n", Dim, who, Reset, safe(textutil.Ellipsize(strings.Join(strings.Fields(m.Text), " "), 160)))
 	}
 }
 

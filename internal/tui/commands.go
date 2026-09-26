@@ -8,7 +8,6 @@ import (
 
 	core "github.com/retail-cortex/code_puppy/internal/app"
 	"github.com/retail-cortex/code_puppy/internal/i18n"
-	"github.com/retail-cortex/code_puppy/internal/session"
 )
 
 // ErrExit is returned by HandleCommand when the user asks to quit.
@@ -231,12 +230,6 @@ func handleSkillsCommand(args []string, app *App) {
 }
 
 func handleSessionCommand(args []string, app *App) {
-	storage := app.Storage
-	if storage == nil {
-		fmt.Println(i18n.T("session.disabled"))
-		return
-	}
-
 	sub := "list"
 	if len(args) > 0 {
 		sub = strings.ToLower(args[0])
@@ -245,13 +238,7 @@ func handleSessionCommand(args []string, app *App) {
 	switch sub {
 	case "list":
 		all := len(args) > 1 && (args[1] == "--all" || args[1] == "-a")
-		var list []*session.SessionRecord
-		var err error
-		if all {
-			list, err = storage.List()
-		} else {
-			list, err = storage.ListWorkspace(storage.Workspace())
-		}
+		list, err := app.Workspace.ListSessions(all)
 		if err != nil {
 			fmt.Println(i18n.T("session.list_failed", "error", err))
 			return
@@ -263,8 +250,8 @@ func handleSessionCommand(args []string, app *App) {
 		fmt.Printf("\n%s📁 %s:%s\n", Bold, title, Reset)
 		for _, s := range list {
 			snapshot := ""
-			if s.Name != "" {
-				snapshot = " " + Cyan + "📸 " + safe(s.Name) + Reset
+			if s.Snapshot != "" {
+				snapshot = " " + Cyan + "📸 " + safe(s.Snapshot) + Reset
 			}
 			fmt.Printf("  • %s%s%s (%s): %s [%s]%s\n", Bold, safe(s.ID), Reset, safe(s.Agent), safe(sessionTitle(s)), i18n.N("session.messages", s.MessageCount), snapshot)
 			if all {
@@ -287,11 +274,11 @@ func handleSessionCommand(args []string, app *App) {
 		cmdSessionSave(args[1:], app)
 
 	case "new":
-		rec, err := storage.CreateSession(session.NewSessionID(), "", app.Engine.ActiveAgent())
+		s, err := app.Workspace.NewSession()
 		if err != nil {
 			fmt.Printf("%s❌ %s%s\n", Red, i18n.T("session.create_failed", "error", err), Reset)
 			return
 		}
-		fmt.Printf("%s %s%s\n", Green, i18n.T("session.started", "id", rec.ID), Reset)
+		fmt.Printf("%s %s%s\n", Green, i18n.T("session.started", "id", s.ID), Reset)
 	}
 }

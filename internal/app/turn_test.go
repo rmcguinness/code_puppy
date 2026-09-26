@@ -9,7 +9,6 @@ import (
 
 	"github.com/retail-cortex/code_puppy/internal/config"
 	"github.com/retail-cortex/code_puppy/internal/runtime"
-	"github.com/retail-cortex/code_puppy/internal/session"
 	adksession "google.golang.org/adk/v2/session"
 	"google.golang.org/genai"
 )
@@ -21,24 +20,24 @@ func ignore(*adksession.Event) error { return nil }
 // transcript returns the active session's messages as "role: text".
 func transcript(t *testing.T, w *Workspace) []string {
 	t.Helper()
-	rec, _, err := w.Storage().Open(w.Storage().Active().ID)
-	if err != nil {
-		t.Fatal(err)
+	s, ok := w.ActiveSession()
+	if !ok {
+		t.Fatal("no active session")
 	}
 	var out []string
-	for _, m := range rec.Messages {
-		out = append(out, m.Role+": "+m.Content)
+	for _, m := range s.Messages {
+		out = append(out, m.Role+": "+m.Text)
 	}
 	return out
 }
 
-func newSession(t *testing.T, w *Workspace) *session.SessionRecord {
+func newSession(t *testing.T, w *Workspace) SessionInfo {
 	t.Helper()
-	rec, _, err := w.OpenSession("", false)
+	s, _, err := w.OpenSession("", false)
 	if err != nil {
 		t.Fatal(err)
 	}
-	return rec
+	return s
 }
 
 func TestRunRecordsBothSidesAndOmitsThoughts(t *testing.T) {

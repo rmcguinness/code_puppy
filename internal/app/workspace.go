@@ -7,7 +7,6 @@ package app
 import (
 	"context"
 	"fmt"
-	"slices"
 	"strings"
 	"time"
 
@@ -190,44 +189,6 @@ type ResumeError struct{ Err error }
 
 func (e *ResumeError) Error() string { return e.Err.Error() }
 func (e *ResumeError) Unwrap() error { return e.Err }
-
-// OpenSession picks the session to use and points the audit log at it: the
-// session resume names (an ID, or a snapshot to start a new session from),
-// the most recent one in this workspace when cont is set or resume is
-// "latest", or else a new session. It reports whether a session was resumed.
-func (w *Workspace) OpenSession(resume string, cont bool) (*session.SessionRecord, bool, error) {
-	// A new session is named after its first prompt.
-	rec, resumed, err := selectSession(w.storage, resume, cont, "", w.engine.ActiveAgent())
-	if err != nil {
-		return nil, false, err
-	}
-	w.audit.SetContext(rec.ID, w.tools.Workspace().Dir())
-	return rec, resumed, nil
-}
-
-func selectSession(st *session.Storage, resume string, cont bool, title, agent string) (*session.SessionRecord, bool, error) {
-	if resume == "" && !cont {
-		rec, err := st.CreateSession("", title, agent)
-		return rec, false, err
-	}
-	if resume == "" || resume == "latest" {
-		list, err := st.ListWorkspace(st.Workspace())
-		if err != nil {
-			return nil, false, err
-		}
-		// Snapshots are saved copies, not conversations to carry on.
-		list = slices.DeleteFunc(list, func(r *session.SessionRecord) bool { return r.Name != "" })
-		if len(list) == 0 {
-			return nil, false, &ResumeError{fmt.Errorf("no saved sessions for %s (use --resume <id> for a session from another directory)", st.Workspace())}
-		}
-		resume = list[0].ID
-	}
-	rec, _, err := st.Open(resume) // an ID, or a snapshot name to start from
-	if err != nil {
-		return nil, false, &ResumeError{err}
-	}
-	return rec, true, nil
-}
 
 // LoadAttachments loads image files (failures are errors naming the path)
 // and @image mentions in prompt (failures are warnings: the prompt may be

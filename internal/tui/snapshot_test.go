@@ -6,7 +6,6 @@ import (
 	"testing"
 
 	"github.com/retail-cortex/code_puppy/internal/runtime"
-	"github.com/retail-cortex/code_puppy/internal/session"
 	adksession "google.golang.org/adk/v2/session"
 )
 
@@ -27,22 +26,10 @@ func requestTextAt(llm *runtime.MockLLM, i int) string {
 // A snapshot restores what the model sees, not just the transcript, and
 // later turns in the original session don't leak into it.
 func TestSessionSaveAndLoadRestoreTheModelsContext(t *testing.T) {
-	app, _ := newCommandApp(t, "")
-	dir := t.TempDir()
-	st, err := session.NewStorage(dir)
-	if err != nil {
-		t.Fatal(err)
-	}
-	svc, err := session.NewPersistentService(dir)
-	if err != nil {
-		t.Fatal(err)
-	}
-	llm := runtime.NewMockLLM("gemini-3.8-flash")
-	eng, err := runtime.NewEngine(context.Background(), app.Cfg, app.Agents, app.Skills, app.Tools, llm, runtime.WithSessionService(adksession.Service(svc)))
-	if err != nil {
-		t.Fatal(err)
-	}
-	app.Engine, app.Storage = eng, st
+	app, llm := newCommandApp(t, "")
+	// The workspace keeps transcripts and the model's events side by side,
+	// which snapshots copy together.
+	st, eng := app.Workspace.Storage(), app.Workspace.Engine()
 	ctx := context.Background()
 	run := func(cmd string) string { return captureStdout(t, func() { HandleCommand(ctx, cmd, app) }) }
 	turn := func(prompt string) {

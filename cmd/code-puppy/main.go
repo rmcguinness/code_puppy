@@ -226,7 +226,7 @@ func runRoot(cmd *cobra.Command, o *rootOptions, args []string) (err error) {
 		})
 	}
 
-	if resumed && sess.Workspace != "" && sess.Workspace != w.Storage().Workspace() {
+	if resumed && sess.Workspace != "" && sess.Workspace != w.Dir() {
 		warnFn(i18n.T("resume.other_workspace_id", "id", sess.ID, "workspace", sess.Workspace))
 	}
 	if resumed {

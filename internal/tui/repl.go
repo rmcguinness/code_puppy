@@ -221,8 +221,8 @@ func RunREPL(ctx context.Context, app *App) error {
 		fmt.Println()
 	}
 
-	if app.Storage.Active() == nil {
-		if _, err := app.Storage.CreateSession("", "", app.Engine.ActiveAgent()); err != nil { // named after its first prompt
+	if _, ok := app.Workspace.ActiveSession(); !ok {
+		if _, err := app.Workspace.NewSession(); err != nil { // named after its first prompt
 			return fmt.Errorf("failed to create session: %w", err)
 		}
 	}
@@ -243,7 +243,7 @@ func RunREPL(ctx context.Context, app *App) error {
 	}()
 	goodbye := func() error {
 		fmt.Printf("\n🐾 %s%s%s\n", Cyan, i18n.T("repl.goodbye"), Reset)
-		if a := app.Storage.Active(); a != nil && a.MessageCount > 0 {
+		if a, ok := app.Workspace.ActiveSession(); ok && a.MessageCount > 0 {
 			fmt.Printf("%s%s%s\n", Dim, i18n.T("repl.resume_hint", "command", "code-puppy --resume="+a.ID), Reset)
 		}
 		return nil
@@ -252,7 +252,8 @@ func RunREPL(ctx context.Context, app *App) error {
 
 	for {
 		if app.TerminalTitle {
-			if t := "🐶 " + sessionTitle(app.Storage.Active()); t != shownTitle {
+			active, _ := app.Workspace.ActiveSession()
+			if t := "🐶 " + sessionTitle(active); t != shownTitle {
 				fmt.Printf("\033]0;%s\007", safe(t))
 				shownTitle = t
 			}
@@ -286,11 +287,11 @@ func RunREPL(ctx context.Context, app *App) error {
 			continue
 		}
 		if q, ok := strings.CutPrefix(line, "/btw"); ok && (q == "" || q[0] == ' ') {
-			active := app.Storage.Active()
+			active, ok := app.Workspace.ActiveSession()
 			switch {
 			case strings.TrimSpace(q) == "":
 				fmt.Printf("%s%s%s\n", Yellow, i18n.T("btw.usage"), Reset)
-			case active == nil:
+			case !ok:
 				fmt.Printf("%s❌ %s%s\n", Red, i18n.T("session.none_active"), Reset)
 			default:
 				runTurn(ctx, app, active.ID, strings.TrimSpace(q), interrupts, turnOptions{aside: true})
@@ -298,8 +299,8 @@ func RunREPL(ctx context.Context, app *App) error {
 			continue
 		}
 		if rest, ok := strings.CutPrefix(line, "/search"); ok && (rest == "" || rest[0] == ' ') {
-			active := app.Storage.Active()
-			if active == nil {
+			active, ok := app.Workspace.ActiveSession()
+			if !ok {
 				fmt.Printf("%s❌ %s%s\n", Red, i18n.T("session.none_active"), Reset)
 				continue
 			}
@@ -331,8 +332,8 @@ func RunREPL(ctx context.Context, app *App) error {
 		}
 
 		// Re-read each turn: /session new and /session load switch sessions.
-		active := app.Storage.Active()
-		if active == nil {
+		active, ok := app.Workspace.ActiveSession()
+		if !ok {
 			fmt.Printf("%s❌ %s%s\n", Red, i18n.T("session.none_active"), Reset)
 			continue
 		}
