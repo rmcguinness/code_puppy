@@ -153,8 +153,8 @@ prefix = "fs"
 
 ## 18. Repository and release
 
-- [ ] `git rm -r --cached go/bin` and commit (bin is now ignored).
-- [ ] Pin the actions in `.github/workflows/go-*.yml` to commit SHAs.
+- [x] `git rm -r --cached go/bin` and commit (bin is now ignored). *Done: `go/bin` isn't tracked.*
+- [x] Pin the actions in `.github/workflows/go-*.yml` to commit SHAs. *Done 2026-09-25, at the latest release of each action's current major: checkout v4.4.0, setup-go v5.6.0, cosign-installer v3.10.1, sbom-action v0.24.2, goreleaser-action v6.4.0. Newer majors exist (checkout v7, setup-go v7, cosign-installer v4, goreleaser-action v7); upgrade them separately and re-run a release.*
 - [ ] Push; both `go-ci` jobs pass; the Linux job's "Sandbox enforcement must not be skipped" step passes.
 - [ ] Tag `v0.1.0` and push the tag. **Expected:** `go-release` creates a **draft** release with 5 archives, 5 SBOMs, `checksums.txt`, `checksums.txt.sigstore.json`.
 - [ ] Download the assets and verify:

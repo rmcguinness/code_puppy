@@ -34,7 +34,7 @@ Roadmap items 1–21 are done and committed; each has its own commit:
 ## Open work, in suggested order
 
 1. **Manual verification (needs a person).** Nothing in `MANUAL_VERIFICATION.md` has been run yet. It covers real providers (💲 = paid calls), terminal behavior, the macOS and Linux sandboxes, MCP, steering, fallback and pinning. Record results in the file; any failure becomes the next task.
-2. **Release tasks** from MANUAL_VERIFICATION section 18: pin the GitHub Actions in `.github/workflows/go-*.yml` to commit SHAs, cut `v0.1.0`, and verify the cosign signature and SBOMs.
+2. **Release tasks** from MANUAL_VERIFICATION section 18. The actions are pinned to commit SHAs. Left: push, check both `go-ci` jobs pass, tag `v0.1.0`, verify the cosign signature and SBOMs, and publish the draft release. Later: upgrade the actions to their newer majors (checkout v7, setup-go v7, cosign-installer v4, goreleaser-action v7), and consider Dependabot for `github-actions` to keep the SHAs current.
 3. **Optional: reasoning settings per model.** Python's `/model_settings` also sets `reasoning_effort`, extended thinking and budgets. The Go wrapper (`pkg/runtime/settings.go`) is where they'd go, mapped to genai `ThinkingConfig`, which each adapter translates differently.
 4. **Optional, from the Antigravity review (ROADMAP, "Antigravity CLI review"):** `/copy` (last reply to the clipboard, with OSC 52 over SSH), `--add-dir <path>` at startup, `/grill-me` (the agent interviews you before coding), and `/fork [n]` (branch a new session from an earlier turn).
 5. **Optional:** the `python/` tree still names `gemini-2.5-flash` in four files. They were left alone because only the Go implementation was in scope.
