@@ -10,6 +10,7 @@ import (
 	pb "github.com/retail-cortex/code_puppy/internal/gen/codepuppy/v1"
 	"github.com/retail-cortex/code_puppy/internal/images"
 	"github.com/retail-cortex/code_puppy/internal/tools"
+	"github.com/retail-cortex/code_puppy/internal/workers"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
@@ -31,6 +32,11 @@ var sentinels = map[string]error{
 	"NO_SEARCH":           app.ErrNoSearch,
 	"NOTHING_TO_COMPACT":  app.ErrNothingToCompact,
 	"WORKSPACE_BUSY":      app.ErrWorkspaceBusy,
+	"UNKNOWN_WORKER":      app.ErrUnknownWorker,
+	"WORKER_DISABLED":     app.ErrWorkerNotEnabled,
+	"RUN_IN_PROGRESS":     app.ErrRunInProgress,
+	"WORKERS_DISABLED":    app.ErrWorkersDisabled,
+	"HASH_MISMATCH":       workers.ErrHashMismatch,
 }
 
 // fromAPI turns a failed call's error into app's typed error for its

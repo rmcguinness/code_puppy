@@ -132,12 +132,17 @@ func TestDirFlagDoesNotChangeTheWorkingDirectory(t *testing.T) {
 	}
 }
 
-// isolate points HOME and config at temp dirs.
+// isolate points HOME and config at temp dirs, and hides API keys.
 func isolate(t *testing.T) string {
 	t.Helper()
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	t.Setenv("MODENV_PREFIX", "")
+	// No real model: a key in the developer's environment would make tests
+	// call the provider (slowly, and billed). Tests that need a key set one.
+	for _, k := range []string{"GEMINI_API_KEY", "GOOGLE_API_KEY", "OPENAI_API_KEY", "ANTHROPIC_API_KEY", "LLM_PROVIDER"} {
+		t.Setenv(k, "")
+	}
 	t.Chdir(t.TempDir())
 	return home
 }

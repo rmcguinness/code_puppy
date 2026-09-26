@@ -94,7 +94,7 @@ Exit codes: 0 success, 1 error, 2 usage, 3 --max-turns reached,
 	f.BoolVar(&o.local, "local", false, "Run the workspace in this process even when the Code Puppy service is running")
 	f.StringArrayVar(&o.images, "image", nil, "Attach an image to the first prompt (repeatable); @file.png in a prompt also works")
 
-	root.AddCommand(newDoctorCommand(&o.global), newConfigCommand(&o.global), newServeCommand(&o.global))
+	root.AddCommand(newDoctorCommand(&o.global), newConfigCommand(&o.global), newServeCommand(&o.global), newWorkersCommand(&o.global))
 	return root
 }
 

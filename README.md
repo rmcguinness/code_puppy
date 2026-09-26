@@ -303,6 +303,20 @@ curl --unix-socket ~/.code_puppy/run/code-puppy.sock -H 'Content-Type: applicati
 
 When the service is running, `code-puppy` attaches to it (the REPL says so), so the CLI, the desktop app and other clients share one copy of each workspace; `--local` runs the workspace in-process instead. A workspace has one owner at a time, so `--local` on a workspace the service holds is refused. `CODE_PUPPY_SOCKET` moves the socket for both.
 
+**Workers** are workflows a workspace defines in `workers/<name>/WORKER.md`, which the service runs on a schedule, unattended:
+
+```markdown
+---
+description: Report outdated Go modules
+schedule: Weekdays at 9:30            # or cron "30 9 * * 1-5", or "@every 2h"
+permissions: ["shell:go list -m -u all", "write:reports/"]
+limits: { max_turns: 30, max_cost_usd: 0.50, timeout: 20m }
+---
+Check for outdated Go modules and write reports/deps.md.
+```
+
+`code-puppy workers` lists them; `code-puppy workers enable <name>` shows exactly what you're approving and enables that content (an edit disables it again); `workers run <name>` runs one now; `workers runs <name>` shows its history. A worker may only do what its `permissions` allow (`shell:`, `write:`, `delete:`, `web:`, `mcp:`), capped by `[workers.policy]`; anything else is refused and recorded, and it can't ask questions. Each run is a session of its own you can open with `/resume`.
+
 ## 📦 Build, Test, Release
 
 ```bash
