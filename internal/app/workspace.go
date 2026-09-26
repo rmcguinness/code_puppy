@@ -34,6 +34,9 @@ type Options struct {
 	// Model replaces the model built from the configuration (tests use a
 	// mock). Agents with their own model still get theirs.
 	Model model.LLM
+	// NewModel builds models by name for /model, pins and agents' own
+	// models (nil: runtime.NewModel).
+	NewModel func(ctx context.Context, cfg *config.Config, name string) (model.LLM, error)
 }
 
 // Workspace is one open project: everything a session needs.
@@ -49,6 +52,7 @@ type Workspace struct {
 	locales  *i18n.Bundle
 	modelErr error // set when the configured model failed to initialise
 	warn     func(string)
+	newModel func(ctx context.Context, cfg *config.Config, name string) (model.LLM, error)
 }
 
 // Open wires registries, tools, the model and the engine for cfg. It also
@@ -58,6 +62,9 @@ func Open(ctx context.Context, cfg *config.Config, o Options) (*Workspace, error
 		o.Warn = func(string) {}
 	}
 	w := &Workspace{cfg: cfg, locales: SetupLocale(cfg, o.Warn), warn: o.Warn}
+	if w.newModel = o.NewModel; w.newModel == nil {
+		w.newModel = runtime.NewModel
+	}
 	var err error
 
 	if w.agents, err = agents.NewRegistry(); err != nil {
@@ -119,7 +126,7 @@ func Open(ctx context.Context, cfg *config.Config, o Options) (*Workspace, error
 	w.memory = memory.Load(w.tools.Workspace().Dir(), cfg.Memory)
 	opts := []runtime.Option{runtime.WithSessionService(events)}
 	for agent, ref := range agentModelRefs(cfg, w.agents, o.Warn) {
-		m, err := runtime.NewModel(ctx, cfg, ref)
+		m, err := w.newModel(ctx, cfg, ref)
 		if err != nil {
 			o.Warn(i18n.T("pin.load_failed", "agent", agent, "model", ref, "error", ModelErrorSummary(err, cfg)))
 			continue
@@ -251,31 +258,6 @@ func (w *Workspace) LoadAttachments(paths []string, prompt string, warn func(str
 		add(img)
 	}
 	return out, nil
-}
-
-// NewModel builds the named model (a bare name or "provider/model") from cfg.
-func (w *Workspace) NewModel(ctx context.Context, cfg *config.Config, name string) (model.LLM, error) {
-	return runtime.NewModel(ctx, cfg, name)
-}
-
-// SaveAgentModel records (or with ref "" removes) a model pin in the config
-// file and returns the file written.
-func (w *Workspace) SaveAgentModel(agent, ref string) (string, error) {
-	if ref == "" {
-		delete(w.cfg.AgentModels, agent)
-	} else {
-		if w.cfg.AgentModels == nil {
-			w.cfg.AgentModels = map[string]string{}
-		}
-		w.cfg.AgentModels[agent] = ref
-	}
-	return config.SaveAgentModel(config.ConfigDir(""), agent, ref)
-}
-
-// SaveModelSettings records a model's settings (zero: removed) in the config
-// file and returns the file written.
-func (w *Workspace) SaveModelSettings(model string, s config.ModelSettings) (string, error) {
-	return config.SaveModelSettings(config.ConfigDir(""), model, s)
 }
 
 // ReloadMemory re-reads project instruction files into the engine and

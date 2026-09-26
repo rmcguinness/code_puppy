@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 
+	core "github.com/retail-cortex/code_puppy/internal/app"
 	"github.com/retail-cortex/code_puppy/internal/audit"
 	"github.com/retail-cortex/code_puppy/internal/i18n"
 	"github.com/retail-cortex/code_puppy/internal/memory"
@@ -17,7 +18,6 @@ import (
 	"github.com/retail-cortex/code_puppy/internal/session"
 	"github.com/retail-cortex/code_puppy/internal/textutil"
 	"github.com/retail-cortex/code_puppy/internal/tools"
-	"google.golang.org/adk/v2/model"
 )
 
 // handleExtraCommand processes commands added for checkpoints, cost,
@@ -358,14 +358,15 @@ func cmdMCP(app *App) {
 func cmdPinModel(ctx context.Context, args []string, app *App) {
 	if len(args) == 0 {
 		listed := false
-		for _, a := range app.Agents.List() {
-			if m, pinned := app.Engine.AgentModel(a.Name); pinned {
-				if !listed {
-					fmt.Printf("\n%s📌 %s%s\n", Bold, i18n.T("pin.title"), Reset)
-					listed = true
-				}
-				fmt.Printf("  %s%-18s%s %s\n", Bold, safe(a.Name), Reset, safe(m))
+		for _, a := range app.Workspace.ListAgents() {
+			if a.PinnedModel == "" {
+				continue
 			}
+			if !listed {
+				fmt.Printf("\n%s📌 %s%s\n", Bold, i18n.T("pin.title"), Reset)
+				listed = true
+			}
+			fmt.Printf("  %s%-18s%s %s\n", Bold, safe(a.Name), Reset, safe(a.PinnedModel))
 		}
 		if !listed {
 			fmt.Println(i18n.T("pin.none"))
@@ -377,25 +378,12 @@ func cmdPinModel(ctx context.Context, args []string, app *App) {
 		fmt.Printf("%s%s%s\n", Yellow, i18n.T("pin.usage"), Reset)
 		return
 	}
-	agent, ref := args[0], args[1]
-	if _, ok := app.Agents.Get(agent); !ok {
-		fmt.Printf("%s❌ %s%s\n", Red, i18n.T("pin.unknown_agent", "agent", safe(agent)), Reset)
+	res, err := app.Workspace.PinModel(ctx, args[0], args[1])
+	if printPinError(err) {
 		return
 	}
-	if app.NewModel == nil {
-		fmt.Printf("%s%s%s\n", Yellow, i18n.T("model.switch_unavailable"), Reset)
-		return
-	}
-	llm, err := app.NewModel(ctx, app.Cfg, ref)
-	if err == nil {
-		err = app.Engine.PinModel(ctx, agent, llm)
-	}
-	if err != nil {
-		fmt.Printf("%s❌ %s%s\n", Red, i18n.T("pin.failed", "error", safe(err.Error())), Reset)
-		return
-	}
-	fmt.Printf("%s📌 %s%s\n", Green, i18n.T("pin.done", "agent", safe(agent), "model", safe(llm.Name())), Reset)
-	saveAgentModel(app, agent, ref)
+	fmt.Printf("%s📌 %s%s\n", Green, i18n.T("pin.done", "agent", safe(res.Agent), "model", safe(res.Model)), Reset)
+	printSaved(res.Saved)
 }
 
 // cmdUnpin returns an agent to the configured model, or to its own
@@ -405,36 +393,35 @@ func cmdUnpin(ctx context.Context, args []string, app *App) {
 		fmt.Printf("%s%s%s\n", Yellow, i18n.T("pin.unpin_usage"), Reset)
 		return
 	}
-	agent := args[0]
-	spec, ok := app.Agents.Get(agent)
-	if !ok {
-		fmt.Printf("%s❌ %s%s\n", Red, i18n.T("pin.unknown_agent", "agent", safe(agent)), Reset)
+	res, err := app.Workspace.Unpin(ctx, args[0])
+	if printPinError(err) {
 		return
 	}
-	err := app.Engine.Unpin(ctx, agent)
-	if err == nil && spec.DefaultModel != "" && app.NewModel != nil {
-		var llm model.LLM
-		if llm, err = app.NewModel(ctx, app.Cfg, spec.DefaultModel); err == nil {
-			err = app.Engine.PinModel(ctx, agent, llm)
-		}
-	}
-	if err != nil {
-		fmt.Printf("%s❌ %s%s\n", Red, i18n.T("pin.failed", "error", safe(err.Error())), Reset)
-		return
-	}
-	m, _ := app.Engine.AgentModel(agent)
-	fmt.Printf("%s✅ %s%s\n", Green, i18n.T("pin.unpinned", "agent", safe(agent), "model", safe(m)), Reset)
-	saveAgentModel(app, agent, "")
+	fmt.Printf("%s✅ %s%s\n", Green, i18n.T("pin.unpinned", "agent", safe(res.Agent), "model", safe(res.Model)), Reset)
+	printSaved(res.Saved)
 }
 
-func saveAgentModel(app *App, agent, ref string) {
-	if app.SaveAgentModel == nil {
-		return
+// printPinError reports a failed pin or unpin, if err is one.
+func printPinError(err error) bool {
+	var unknown *core.UnknownAgentError
+	switch {
+	case errors.As(err, &unknown):
+		fmt.Printf("%s❌ %s%s\n", Red, i18n.T("pin.unknown_agent", "agent", safe(unknown.Name)), Reset)
+	case err != nil:
+		fmt.Printf("%s❌ %s%s\n", Red, i18n.T("pin.failed", "error", safe(err.Error())), Reset)
+	default:
+		return false
 	}
-	if path, err := app.SaveAgentModel(agent, ref); err != nil {
-		fmt.Printf("%s⚠️  %s%s\n", Yellow, i18n.T("pin.save_failed", "error", safe(err.Error())), Reset)
+	return true
+}
+
+// printSaved reports where a change was saved in the config file, or why it
+// wasn't.
+func printSaved(s core.Saved) {
+	if s.Err != nil {
+		fmt.Printf("%s⚠️  %s%s\n", Yellow, i18n.T("pin.save_failed", "error", safe(s.Err.Error())), Reset)
 	} else {
-		fmt.Printf("%s%s%s\n", Dim, i18n.T("pin.saved", "path", safe(path)), Reset)
+		fmt.Printf("%s%s%s\n", Dim, i18n.T("pin.saved", "path", safe(s.Path)), Reset)
 	}
 }
 

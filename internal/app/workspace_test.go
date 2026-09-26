@@ -17,6 +17,7 @@ import (
 	"github.com/retail-cortex/code_puppy/internal/i18n"
 	"github.com/retail-cortex/code_puppy/internal/runtime"
 	"github.com/retail-cortex/code_puppy/internal/session"
+	"google.golang.org/adk/v2/model"
 	"google.golang.org/genai"
 )
 
@@ -41,12 +42,31 @@ func openTestWith(t *testing.T, mutate func(*config.Config), replies ...*genai.C
 		mutate(cfg)
 	}
 	llm := runtime.NewMockLLM("gemini-3.8-flash", replies...)
-	w, err := Open(context.Background(), cfg, Options{Model: llm})
+	w, err := Open(context.Background(), cfg, Options{Model: llm, NewModel: mockModels})
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { w.Close() })
 	return w, llm
+}
+
+// mockModels builds a mock named after the reference, without its provider.
+func mockModels(_ context.Context, _ *config.Config, ref string) (model.LLM, error) {
+	if ref == "broken" {
+		return nil, errors.New("no such model")
+	}
+	_, name := runtime.ParseModelRef(ref, "")
+	return runtime.NewMockLLM(name), nil
+}
+
+// savedConfig reads back the config file that operations save to.
+func savedConfig(t *testing.T) *config.Config {
+	t.Helper()
+	cfg, err := config.Load(filepath.Join(os.Getenv("HOME"), ".code_puppy"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return cfg
 }
 
 func isResumeError(err error) bool {

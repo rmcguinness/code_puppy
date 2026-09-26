@@ -20,12 +20,8 @@ import (
 	"github.com/retail-cortex/code_puppy/internal/session"
 	"github.com/retail-cortex/code_puppy/internal/skills"
 	"github.com/retail-cortex/code_puppy/internal/tools"
-	"google.golang.org/adk/v2/model"
 	sessionsdk "google.golang.org/adk/v2/session"
 )
-
-// ModelFactory builds an LLM for the given model name (used by /model).
-type ModelFactory func(ctx context.Context, cfg *config.Config, modelName string) (model.LLM, error)
 
 // App bundles the dependencies the REPL and slash commands operate on.
 type App struct {
@@ -38,7 +34,6 @@ type App struct {
 	Skills    *skills.Provider
 	Storage   *session.Storage
 	Input     Input
-	NewModel  ModelFactory
 	// Tools gives commands access to checkpoints, approvals, MCP and hooks.
 	Tools *tools.Registry
 	// Processes are the background processes to account for on exit.
@@ -54,12 +49,6 @@ type App struct {
 	Attachments []*images.Image
 	// Locales are the loaded translation catalogs (nil: the built-in ones).
 	Locales *i18n.Bundle
-	// SaveAgentModel records a model pin (ref "" removes it) in the config
-	// file and returns the file written; nil means pins aren't saved.
-	SaveAgentModel func(agent, ref string) (string, error)
-	// SaveModelSettings records a model's settings (the zero value removes
-	// them) in the config file; nil means they aren't saved.
-	SaveModelSettings func(model string, s config.ModelSettings) (string, error)
 	// SetLocale applies a new interface language to the model's reply
 	// instructions and saves it to the config; it returns the file written.
 	SetLocale func(ctx context.Context, l *i18n.Localizer) (string, error)

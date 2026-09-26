@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 
+	core "github.com/retail-cortex/code_puppy/internal/app"
 	"github.com/retail-cortex/code_puppy/internal/i18n"
 	"github.com/retail-cortex/code_puppy/internal/session"
 )
@@ -30,7 +31,6 @@ func HandleCommand(ctx context.Context, input string, app *App) (bool, error) {
 	if cmd == "show" { // Python's /show: the settings, like /set with no arguments
 		cmd, args = "set", nil
 	}
-	cfg, eng := app.Cfg, app.Engine
 
 	switch cmd {
 	case "help":
@@ -38,15 +38,14 @@ func HandleCommand(ctx context.Context, input string, app *App) (bool, error) {
 
 	case "agents":
 		fmt.Printf("\n%s🤖 %s:%s\n", Bold, i18n.T("agents.title"), Reset)
-		active := eng.ActiveAgent()
-		for _, a := range app.Agents.List() {
+		for _, a := range app.Workspace.ListAgents() {
 			marker := "  "
-			if a.Name == active {
+			if a.Active {
 				marker = "👉"
 			}
 			pin := ""
-			if m, pinned := eng.AgentModel(a.Name); pinned {
-				pin = fmt.Sprintf(" %s[📌 %s]%s", Cyan, safe(m), Reset)
+			if a.PinnedModel != "" {
+				pin = fmt.Sprintf(" %s[📌 %s]%s", Cyan, safe(a.PinnedModel), Reset)
 			}
 			fmt.Printf("%s %s%s%s (%s)%s: %s\n", marker, Bold, safe(a.DisplayName), Reset, safe(a.Name), pin, safe(a.Description))
 		}
@@ -54,39 +53,31 @@ func HandleCommand(ctx context.Context, input string, app *App) (bool, error) {
 
 	case "agent":
 		if len(args) == 0 {
-			if spec, ok := app.Agents.Get(eng.ActiveAgent()); ok {
-				fmt.Println(i18n.T("agent.current", "name", Bold+safe(spec.DisplayName)+Reset, "id", safe(spec.Name)))
-			}
+			a := app.Workspace.ActiveAgent()
+			fmt.Println(i18n.T("agent.current", "name", Bold+safe(a.DisplayName)+Reset, "id", safe(a.Name)))
 			return true, nil
 		}
-		target := args[0]
-		if err := eng.SetActiveAgent(ctx, target); err != nil {
+		a, err := app.Workspace.SetAgent(ctx, args[0])
+		if err != nil {
 			fmt.Printf("%s❌ %s%s\n", Red, i18n.T("agent.switch_failed", "error", safe(err.Error())), Reset)
-		} else if spec, ok := app.Agents.Get(target); ok {
-			fmt.Printf("%s %s%s\n", Green, i18n.T("agent.switched", "name", Bold+safe(spec.DisplayName)), Reset)
+		} else {
+			fmt.Printf("%s %s%s\n", Green, i18n.T("agent.switched", "name", Bold+safe(a.DisplayName)), Reset)
 		}
 
 	case "model":
 		if len(args) == 0 {
-			fmt.Println(i18n.T("model.current", "model", Cyan+safe(eng.ModelName())+Reset, "provider", cfg.LLM.Provider))
+			m := app.Workspace.Model()
+			fmt.Println(i18n.T("model.current", "model", Cyan+safe(m.Name)+Reset, "provider", m.Provider))
 			return true, nil
 		}
-		if app.NewModel == nil {
-			fmt.Printf("%s%s%s\n", Yellow, i18n.T("model.switch_unavailable"), Reset)
-			return true, nil
-		}
-		llm, err := app.NewModel(ctx, cfg, args[0])
-		if err == nil {
-			err = eng.SetModel(ctx, llm)
-		}
+		pin, err := app.Workspace.SetModel(ctx, args[0])
 		if err != nil {
 			fmt.Printf("%s❌ %s%s\n", Red, i18n.T("model.switch_failed", "error", safe(err.Error())), Reset)
 			return true, nil
 		}
-		cfg.CodePuppy.DefaultModel = args[0]
 		fmt.Printf("%s %s%s\n", Green, i18n.T("model.set", "model", Cyan+safe(args[0])), Reset)
-		if m, pinned := eng.AgentModel(eng.ActiveAgent()); pinned {
-			fmt.Printf("%s%s%s\n", Dim, i18n.T("pin.active_pinned", "agent", eng.ActiveAgent(), "model", safe(m)), Reset)
+		if pin != "" {
+			fmt.Printf("%s%s%s\n", Dim, i18n.T("pin.active_pinned", "agent", app.Workspace.ActiveAgent().Name, "model", safe(pin)), Reset)
 		}
 
 	case "skills":
@@ -97,13 +88,14 @@ func HandleCommand(ctx context.Context, input string, app *App) (bool, error) {
 
 	case "set":
 		if len(args) == 0 {
+			st := app.Workspace.Settings()
 			fmt.Printf("\n%s⚙️ %s:%s\n", Bold, i18n.T("settings.title"), Reset)
-			fmt.Printf("  %-14s %s\n", i18n.T("settings.puppy_name")+":", cfg.CodePuppy.PuppyName)
-			fmt.Printf("  %-14s %s\n", i18n.T("settings.owner_name")+":", cfg.CodePuppy.OwnerName)
-			fmt.Printf("  %-14s %s\n", i18n.T("settings.agency")+":", cfg.CodePuppy.AgencyLevel)
-			fmt.Printf("  %-14s %s\n", i18n.T("settings.model")+":", i18n.T("settings.model_value", "model", eng.ModelName(), "provider", cfg.LLM.Provider))
-			fmt.Printf("  %-14s %s\n", i18n.T("settings.agent")+":", eng.ActiveAgent())
-			fmt.Printf("  %-14s %s\n\n", i18n.T("settings.locale")+":", i18n.Current().Tag())
+			fmt.Printf("  %-14s %s\n", i18n.T("settings.puppy_name")+":", st.PuppyName)
+			fmt.Printf("  %-14s %s\n", i18n.T("settings.owner_name")+":", st.OwnerName)
+			fmt.Printf("  %-14s %s\n", i18n.T("settings.agency")+":", st.Agency)
+			fmt.Printf("  %-14s %s\n", i18n.T("settings.model")+":", i18n.T("settings.model_value", "model", st.Model.Name, "provider", st.Model.Provider))
+			fmt.Printf("  %-14s %s\n", i18n.T("settings.agent")+":", st.Agent)
+			fmt.Printf("  %-14s %s\n\n", i18n.T("settings.locale")+":", st.Locale)
 			return true, nil
 		}
 		kv := strings.SplitN(strings.Join(args, " "), "=", 2)
@@ -111,30 +103,19 @@ func HandleCommand(ctx context.Context, input string, app *App) (bool, error) {
 			fmt.Printf("%s%s%s\n", Yellow, i18n.T("set.usage"), Reset)
 			return true, nil
 		}
-		k, v := strings.ToLower(strings.TrimSpace(kv[0])), strings.TrimSpace(kv[1])
-		switch k {
-		case "agency", "agency_level":
-			switch strings.ToLower(v) {
-			case "low", "medium", "high", "extreme":
-			default:
-				fmt.Printf("%s%s%s\n", Yellow, i18n.T("set.agency_invalid"), Reset)
-				return true, nil
-			}
-			cfg.CodePuppy.AgencyLevel = strings.ToLower(v)
-		case "puppy_name":
-			cfg.CodePuppy.PuppyName = v
-		case "owner_name":
-			cfg.CodePuppy.OwnerName = v
-		default:
-			fmt.Printf("%s%s%s\n", Yellow, i18n.T("set.unknown", "key", safe(k)), Reset)
-			return true, nil
-		}
-		// Instructions embed these values, so rebuild the agent tree.
-		if err := eng.Rebuild(ctx); err != nil {
+		v := strings.TrimSpace(kv[1])
+		k, err := app.Workspace.Set(ctx, kv[0], v)
+		var unknown *core.UnknownSettingError
+		switch {
+		case errors.Is(err, core.ErrInvalidAgency):
+			fmt.Printf("%s%s%s\n", Yellow, i18n.T("set.agency_invalid"), Reset)
+		case errors.As(err, &unknown):
+			fmt.Printf("%s%s%s\n", Yellow, i18n.T("set.unknown", "key", safe(unknown.Key)), Reset)
+		case err != nil:
 			fmt.Printf("%s❌ %s%s\n", Red, i18n.T("set.failed", "error", err), Reset)
-			return true, nil
+		default:
+			fmt.Printf("%s %s%s\n", Green, i18n.T("set.updated", "key", k, "value", safe(v)), Reset)
 		}
-		fmt.Printf("%s %s%s\n", Green, i18n.T("set.updated", "key", k, "value", safe(v)), Reset)
 
 	case "clear":
 		fmt.Print("\033[H\033[2J")

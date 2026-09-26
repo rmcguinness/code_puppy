@@ -1,15 +1,16 @@
 package tui
 
 import (
+	"errors"
 	"fmt"
 	"maps"
 	"slices"
 	"strconv"
 	"strings"
 
+	core "github.com/retail-cortex/code_puppy/internal/app"
 	"github.com/retail-cortex/code_puppy/internal/config"
 	"github.com/retail-cortex/code_puppy/internal/i18n"
-	"github.com/retail-cortex/code_puppy/internal/runtime"
 )
 
 // cmdModelSettings shows or changes per-model generation settings:
@@ -21,9 +22,8 @@ import (
 //
 // Changes apply from the next model call and are saved to the config file.
 func cmdModelSettings(args []string, app *App) {
-	eng := app.Engine
 	if len(args) == 0 {
-		all := eng.AllModelSettings()
+		all := app.Workspace.AllModelSettings()
 		if len(all) == 0 {
 			fmt.Println(i18n.T("msettings.none"))
 			fmt.Println()
@@ -37,90 +37,68 @@ func cmdModelSettings(args []string, app *App) {
 		return
 	}
 
-	ref := args[0]
-	provider, name := runtime.ParseModelRef(ref, app.Cfg.LLM.Provider)
-	if strings.Contains(ref, "=") || name == "" {
-		fmt.Printf("%s%s%s\n", Yellow, i18n.T("msettings.usage"), Reset)
-		return
-	}
 	if len(args) == 1 {
-		showModelSettings(name, eng.ModelSettings(name), app.Cfg)
+		info, err := app.Workspace.ModelSettings(args[0])
+		if err != nil {
+			fmt.Printf("%s%s%s\n", Yellow, i18n.T("msettings.usage"), Reset)
+			return
+		}
+		showModelSettings(info)
 		return
 	}
 
-	s := eng.ModelSettings(name)
-	if len(args) == 2 && args[1] == "reset" {
-		s = config.ModelSettings{}
-	} else {
+	reset := len(args) == 2 && args[1] == "reset"
+	var changes []core.Setting
+	if !reset {
 		for _, pair := range args[1:] {
 			key, value, ok := strings.Cut(pair, "=")
 			if !ok {
 				fmt.Printf("%s%s%s\n", Yellow, i18n.T("msettings.bad_pair", "arg", safe(pair)), Reset)
 				return
 			}
-			if err := s.Set(strings.TrimSpace(key), value); err != nil {
-				fmt.Printf("%s❌ %s%s\n", Red, i18n.T("msettings.invalid", "error", safe(err.Error())), Reset)
-				return
-			}
+			changes = append(changes, core.Setting{Key: key, Value: value})
 		}
 	}
-
-	eng.SetModelSettings(name, s)
-	if s.IsZero() {
-		fmt.Printf("%s✅ %s%s\n", Green, i18n.T("msettings.cleared", "model", safe(name)), Reset)
-	} else {
-		fmt.Printf("%s✅ %s%s\n", Green, i18n.T("msettings.updated", "model", safe(name), "settings", safe(summarizeSettings(s))), Reset)
-	}
-	var unsupported []string
-	for _, key := range config.ModelSettingKeys {
-		if _, set := s.Get(key); set && !runtime.SettingSupported(provider, name, key) {
-			unsupported = append(unsupported, key)
-		}
-	}
-	if len(unsupported) > 0 {
-		fmt.Printf("%s⚠️  %s%s\n", Yellow, i18n.T("msettings.unsupported",
-			"model", safe(name), "provider", provider, "keys", strings.Join(unsupported, ", ")), Reset)
-	}
-	if app.SaveModelSettings == nil {
+	res, err := app.Workspace.UpdateModelSettings(args[0], reset, changes)
+	var invalid *core.InvalidSettingError
+	switch {
+	case errors.Is(err, core.ErrBadModelRef):
+		fmt.Printf("%s%s%s\n", Yellow, i18n.T("msettings.usage"), Reset)
+		return
+	case errors.As(err, &invalid):
+		fmt.Printf("%s❌ %s%s\n", Red, i18n.T("msettings.invalid", "error", safe(invalid.Error())), Reset)
+		return
+	case err != nil:
+		fmt.Printf("%s❌ %s%s\n", Red, safe(err.Error()), Reset)
 		return
 	}
-	if path, err := app.SaveModelSettings(configKey(app.Cfg, name), s); err != nil {
-		fmt.Printf("%s⚠️  %s%s\n", Yellow, i18n.T("pin.save_failed", "error", safe(err.Error())), Reset)
+	if res.Settings.IsZero() {
+		fmt.Printf("%s✅ %s%s\n", Green, i18n.T("msettings.cleared", "model", safe(res.Model)), Reset)
 	} else {
-		fmt.Printf("%s%s%s\n", Dim, i18n.T("pin.saved", "path", safe(path)), Reset)
+		fmt.Printf("%s✅ %s%s\n", Green, i18n.T("msettings.updated", "model", safe(res.Model), "settings", safe(summarizeSettings(res.Settings))), Reset)
 	}
-}
-
-// configKey returns the [model_settings] key the config file already uses
-// for model name, e.g. a hand-written "openai/gpt-5", so a change edits that
-// table instead of adding a second one; otherwise name itself.
-func configKey(cfg *config.Config, name string) string {
-	if _, ok := cfg.ModelSettings[name]; ok {
-		return name
+	if len(res.Unsupported) > 0 {
+		fmt.Printf("%s⚠️  %s%s\n", Yellow, i18n.T("msettings.unsupported",
+			"model", safe(res.Model), "provider", res.Provider, "keys", strings.Join(res.Unsupported, ", ")), Reset)
 	}
-	for _, key := range slices.Sorted(maps.Keys(cfg.ModelSettings)) {
-		if _, n := runtime.ParseModelRef(key, ""); n == name {
-			return key
-		}
-	}
-	return name
+	printSaved(res.Saved)
 }
 
 // showModelSettings lists every setting for one model: its own value, or
 // where the value comes from when it has none.
-func showModelSettings(name string, s config.ModelSettings, cfg *config.Config) {
-	fmt.Printf("\n%s🎛️  %s%s\n", Bold, safe(name), Reset)
+func showModelSettings(info core.ModelSettingsInfo) {
+	fmt.Printf("\n%s🎛️  %s%s\n", Bold, safe(info.Model), Reset)
 	for _, key := range config.ModelSettingKeys {
-		if v, ok := s.Get(key); ok {
+		if v, ok := info.Settings.Get(key); ok {
 			fmt.Printf("  %-12s %s\n", key, v)
 			continue
 		}
 		inherited := i18n.T("msettings.provider_default")
 		switch {
-		case key == "temperature" && cfg.CodePuppy.Temperature > 0:
-			inherited = i18n.T("msettings.global", "value", strconv.FormatFloat(cfg.CodePuppy.Temperature, 'f', -1, 64))
-		case key == "max_tokens" && cfg.CodePuppy.MaxTokens > 0:
-			inherited = i18n.T("msettings.global", "value", strconv.Itoa(cfg.CodePuppy.MaxTokens))
+		case key == "temperature" && info.GlobalTemperature > 0:
+			inherited = i18n.T("msettings.global", "value", strconv.FormatFloat(info.GlobalTemperature, 'f', -1, 64))
+		case key == "max_tokens" && info.GlobalMaxTokens > 0:
+			inherited = i18n.T("msettings.global", "value", strconv.Itoa(info.GlobalMaxTokens))
 		}
 		fmt.Printf("  %-12s %s%s%s\n", key, Dim, inherited, Reset)
 	}

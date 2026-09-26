@@ -11,15 +11,6 @@ import (
 func TestModelSettingsCommand(t *testing.T) {
 	app, _ := newCommandApp(t, "")
 	app.Cfg.LLM.Provider = "openai"
-	type save struct {
-		model string
-		s     config.ModelSettings
-	}
-	var saved []save
-	app.SaveModelSettings = func(model string, s config.ModelSettings) (string, error) {
-		saved = append(saved, save{model, s})
-		return "/tmp/.env.toml", nil
-	}
 	run := func(cmd string) string {
 		return captureStdout(t, func() { HandleCommand(context.Background(), cmd, app) })
 	}
@@ -42,16 +33,16 @@ func TestModelSettingsCommand(t *testing.T) {
 	if s := app.Engine.ModelSettings("gpt-5"); s.Temperature == nil || *s.Temperature != 0.3 || *s.MaxTokens != 2048 {
 		t.Fatalf("engine: %+v", s)
 	}
-	if len(saved) != 1 || saved[0].model != "gpt-5" {
-		t.Fatalf("saved = %+v", saved)
+	if s, ok := savedConfig(t).ModelSettings["gpt-5"]; !ok || s.Seed == nil || *s.Seed != 7 {
+		t.Fatalf("saved = %+v", savedConfig(t).ModelSettings)
 	}
 
 	// An invalid value changes nothing, including the valid pair before it.
 	if out := run("/model_settings gpt-5 top_p=0.5 temperature=9"); !strings.Contains(out, "Nothing changed") {
 		t.Errorf("invalid:\n%s", out)
 	}
-	if s := app.Engine.ModelSettings("gpt-5"); s.TopP != nil || len(saved) != 1 {
-		t.Fatalf("partly applied: %+v, %d saves", s, len(saved))
+	if s := app.Engine.ModelSettings("gpt-5"); s.TopP != nil || savedConfig(t).ModelSettings["gpt-5"].TopP != nil {
+		t.Fatalf("partly applied: %+v", s)
 	}
 	if out := run("/model_settings gpt-5 temperature"); !strings.Contains(out, "Expected key=value") {
 		t.Errorf("bad pair:\n%s", out)
@@ -71,8 +62,8 @@ func TestModelSettingsCommand(t *testing.T) {
 	if !strings.Contains(out, "gpt-5 now uses the global settings") || !app.Engine.ModelSettings("gpt-5").IsZero() {
 		t.Errorf("reset:\n%s", out)
 	}
-	if last := saved[len(saved)-1]; last.model != "gpt-5" || !last.s.IsZero() {
-		t.Fatalf("reset not saved: %+v", last)
+	if s := savedConfig(t).ModelSettings["gpt-5"]; !s.IsZero() {
+		t.Fatalf("reset not saved: %+v", s)
 	}
 }
 
@@ -80,13 +71,9 @@ func TestModelSettingsCommand(t *testing.T) {
 func TestModelSettingsSavesUnderTheExistingKey(t *testing.T) {
 	app, _ := newCommandApp(t, "")
 	app.Cfg.ModelSettings = map[string]config.ModelSettings{"openai/gpt-5": {}}
-	var key string
-	app.SaveModelSettings = func(model string, _ config.ModelSettings) (string, error) {
-		key = model
-		return "/tmp/.env.toml", nil
-	}
 	captureStdout(t, func() { HandleCommand(context.Background(), "/model_settings gpt-5 temperature=0.4", app) })
-	if key != "openai/gpt-5" {
-		t.Fatalf("saved under %q", key)
+	saved := savedConfig(t).ModelSettings
+	if s, ok := saved["openai/gpt-5"]; !ok || s.Temperature == nil || len(saved) != 1 {
+		t.Fatalf("saved = %+v", saved)
 	}
 }

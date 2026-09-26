@@ -7,6 +7,7 @@ import (
 	"io"
 	"iter"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
@@ -212,12 +213,19 @@ func isolateHome(t *testing.T) {
 	t.Setenv("MODENV_PREFIX", "")
 }
 
+// modelFactory builds models by name, for tests of /model and pins.
+type modelFactory = func(ctx context.Context, cfg *config.Config, name string) (model.LLM, error)
+
 // openApp opens a workspace for cfg around llm and builds the App from it,
 // as main does.
 func openApp(t *testing.T, cfg *config.Config, llm model.LLM) *App {
+	return openAppWith(t, cfg, core.Options{Model: llm})
+}
+
+func openAppWith(t *testing.T, cfg *config.Config, o core.Options) *App {
 	t.Helper()
 	cfg.Session.StorageDir = t.TempDir()
-	w, err := core.Open(context.Background(), cfg, core.Options{Model: llm})
+	w, err := core.Open(context.Background(), cfg, o)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -226,14 +234,23 @@ func openApp(t *testing.T, cfg *config.Config, llm model.LLM) *App {
 		Tools: w.Tools(), Processes: w.Tools().Processes(), Printer: PrinterOptions{Out: io.Discard}}
 }
 
-func newTestApp(t *testing.T, factory ModelFactory) *App {
+// savedConfig reads back the config file that commands save to.
+func savedConfig(t *testing.T) *config.Config {
+	t.Helper()
+	cfg, err := config.Load(filepath.Join(os.Getenv("HOME"), ".code_puppy"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return cfg
+}
+
+func newTestApp(t *testing.T, factory modelFactory) *App {
 	t.Helper()
 	isolateHome(t)
 	cfg := config.DefaultConfig()
 	cfg.Tools.WorkspaceDir = t.TempDir()
 	cfg.Images.Dir = t.TempDir()
-	app := openApp(t, cfg, runtime.NewMockLLM("mock-a"))
-	app.NewModel = factory
+	app := openAppWith(t, cfg, core.Options{Model: runtime.NewMockLLM("mock-a"), NewModel: factory})
 	app.Printer = PrinterOptions{}
 	return app
 }
