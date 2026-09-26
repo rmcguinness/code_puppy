@@ -29,7 +29,8 @@ type Opener func(ctx context.Context, dir string) (*app.Workspace, error)
 type Server struct {
 	codepuppyv1connect.UnimplementedWorkerServiceHandler
 
-	open Opener
+	open   Opener
+	broker *broker
 
 	mu         sync.Mutex
 	workspaces map[string]*workspace // by canonical directory
@@ -45,7 +46,7 @@ type workspace struct {
 
 // New returns a server that opens workspaces with open.
 func New(open Opener) *Server {
-	return &Server{open: open, workspaces: map[string]*workspace{}}
+	return &Server{open: open, broker: newBroker(), workspaces: map[string]*workspace{}}
 }
 
 // Handler serves every service.
@@ -97,6 +98,9 @@ func (s *Server) workspace(ctx context.Context, dir string) (*workspace, error) 
 	if err != nil {
 		return nil, apiError(connect.CodeFailedPrecondition, "OPEN_FAILED", err, "workspace", key)
 	}
+	// Approvals and questions go to the client running the turn.
+	aw.Tools().Hooks().SetApprover(s.broker.approve)
+	aw.Tools().Hooks().SetUserPrompter(s.broker.question)
 	w := &workspace{Workspace: aw, images: map[string]*images.Image{}}
 	s.workspaces[key] = w
 	return w, nil

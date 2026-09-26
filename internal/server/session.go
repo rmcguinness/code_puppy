@@ -129,6 +129,7 @@ func (h sessionService) RunTurn(ctx context.Context, r req[pb.RunTurnRequest], s
 			sendErr = stream.Send(&pb.RunTurnResponse{Event: ev})
 		}
 	}
+	ctx = withSink(ctx, send)
 	res, runErr := w.Run(ctx, r.Msg.SessionId, app.Turn{
 		Text: t.Text, Prompt: t.Prompt, Plan: t.Plan, ReadOnly: t.ReadOnly, Aside: t.Aside, Accepted: t.Accepted,
 		Images: imgs, MaxTurns: int(t.MaxTurns), FetchGrants: t.FetchGrants,
@@ -192,12 +193,19 @@ func (h sessionService) SearchSession(ctx context.Context, r req[pb.SearchSessio
 	return ok(&pb.SearchSessionResponse{Found: int32(found), Prompt: prompt})
 }
 
-// Approve and Answer are served in step 7b, with the broker that turns the
-// agent's approval requests and questions into stream events.
-func (h sessionService) Approve(context.Context, req[pb.ApproveRequest]) (*connect.Response[pb.ApproveResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("approvals over the API are not implemented yet"))
+func (h sessionService) Approve(_ context.Context, r req[pb.ApproveRequest]) (*connect.Response[pb.ApproveResponse], error) {
+	if r.Msg.Decision == pb.Decision_DECISION_UNSPECIFIED {
+		return nil, apiError(connect.CodeInvalidArgument, "INVALID_DECISION", errors.New("decision is required"))
+	}
+	if err := h.s.broker.answer(r.Msg.RequestId, reply{decision: decision(r.Msg.Decision)}); err != nil {
+		return nil, err
+	}
+	return ok(&pb.ApproveResponse{})
 }
 
-func (h sessionService) Answer(context.Context, req[pb.AnswerRequest]) (*connect.Response[pb.AnswerResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("questions over the API are not implemented yet"))
+func (h sessionService) Answer(_ context.Context, r req[pb.AnswerRequest]) (*connect.Response[pb.AnswerResponse], error) {
+	if err := h.s.broker.answer(r.Msg.RequestId, reply{text: r.Msg.Answer}); err != nil {
+		return nil, err
+	}
+	return ok(&pb.AnswerResponse{})
 }
