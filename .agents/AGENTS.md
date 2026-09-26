@@ -8,7 +8,7 @@ The layout follows [golang-standards/project-layout](https://github.com/golang-s
 
 | Path | What |
 |---|---|
-| `cmd/code-puppy` | The CLI: flags, `--dir`, observability, output modes, one-shot runs, `doctor`, `config` |
+| `cmd/code-puppy` | The CLI: flags, `--dir`, observability, output modes, one-shot runs, `doctor`, `config`, `serve` |
 | `internal/app` | The program without a UI: `app.Open` builds a `Workspace` (registries, tools, sessions, model, engine) and exposes typed operations that return data and never print. Front ends drive it |
 | `internal/runtime` | The engine over the ADK runner: models and providers, fallback, per-model settings, compaction, steering, side questions, usage and cost |
 | `internal/tools` | Tools and their guardrails: workspace roots, approvals, command policy, OS sandbox, script sandbox (gVisor), skill scripts and their environments, web, MCP, hooks, checkpoints |
@@ -19,6 +19,7 @@ The layout follows [golang-standards/project-layout](https://github.com/golang-s
 | `internal/i18n` | Message catalogs (`en-US`, `es`, `fr-CA`) |
 | `internal/observability` | Diagnostic log and OpenTelemetry |
 | `api/codepuppy/v1` | The service API as protos (`buf.yaml`, `buf.gen.yaml` at the root): `SessionService` (sessions, turns, steering, approvals), `WorkspaceService` (everything else `internal/app` does), `WorkerService` (ROADMAP item 24) |
+| `internal/server` | The service: Connect handlers over `app.Workspace` (translation only), the approval/question broker, the Unix socket. `code-puppy serve` runs it |
 | `internal/gen` | Generated Go and Connect code, committed. Never edit it: change the protos and run `make proto` |
 | `tools` | A separate module pinning build tools (`buf`, `protoc-gen-go`, `protoc-gen-connect-go`) as `tool` directives, run with `go tool -modfile=tools/go.mod` |
 | `.github/workflows` | `ci.yml` (vet, race tests, sandbox and gVisor checks on macOS and Linux; cross-compiled binaries must be identical on both), `release.yml` (GoReleaser, SBOMs, cosign) |

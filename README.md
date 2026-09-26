@@ -292,6 +292,17 @@ Tools: `read_file`, `list_files`, `grep`, `create_file`, `replace_in_file`/`edit
 
 ---
 
+## 🔌 The service
+
+`code-puppy serve` runs Code Puppy as a per-user service that holds every workspace a client opens, for the desktop app and other clients. It listens only on a Unix socket this user can open (`~/.code_puppy/run/code-puppy.sock`, or `--socket`) and speaks the API in `api/codepuppy/v1` over Connect: gRPC, gRPC-Web, or plain JSON:
+
+```bash
+curl --unix-socket ~/.code_puppy/run/code-puppy.sock -H 'Content-Type: application/json' \
+  -d '{"workspace": "/path/to/project"}' http://localhost/codepuppy.v1.WorkspaceService/GetModel
+```
+
+A workspace has one owner at a time: while the service has it open, `code-puppy` in that directory says so instead of opening it too.
+
 ## 📦 Build, Test, Release
 
 ```bash

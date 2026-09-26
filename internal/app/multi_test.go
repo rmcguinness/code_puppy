@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"slices"
@@ -57,4 +58,34 @@ func TestTwoWorkspacesInOneProcess(t *testing.T) {
 		t.Errorf("locales a=%s b=%s", a.Settings().Locale, b.Settings().Locale)
 	}
 
+}
+
+// Only one Workspace, in any process, owns a workspace at a time.
+func TestAWorkspaceHasOneOwner(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("MODENV_PREFIX", "")
+	dir := t.TempDir()
+	link := filepath.Join(t.TempDir(), "link")
+	if err := os.Symlink(dir, link); err != nil {
+		t.Fatal(err)
+	}
+	open := func(d string) (*Workspace, error) {
+		cfg := config.DefaultConfig()
+		cfg.Tools.WorkspaceDir = d
+		cfg.Session.StorageDir = t.TempDir()
+		return Open(context.Background(), cfg, Options{Model: runtime.NewMockLLM("m")})
+	}
+	first, err := open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := open(link); !errors.Is(err, ErrWorkspaceBusy) {
+		t.Fatalf("second owner (through a symlink): %v", err)
+	}
+	first.Close()
+	again, err := open(dir)
+	if err != nil {
+		t.Fatalf("after Close: %v", err)
+	}
+	again.Close()
 }

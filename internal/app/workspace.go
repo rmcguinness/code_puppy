@@ -54,6 +54,7 @@ type Workspace struct {
 	warn     func(string)
 	// reply is the language the model replies in, per workspace.
 	reply    *i18n.Localizer
+	lock     *workspaceLock
 	newModel func(ctx context.Context, cfg *config.Config, name string) (model.LLM, error)
 }
 
@@ -77,6 +78,21 @@ func Open(ctx context.Context, cfg *config.Config, o Options) (*Workspace, error
 		return nil, fmt.Errorf("invalid workspace directory: %w", err)
 	}
 	cfg.Tools.WorkspaceDir = dir
+	// One owner per workspace, across processes.
+	real, err := filepath.EvalSymlinks(dir)
+	if err != nil {
+		return nil, fmt.Errorf("invalid workspace directory: %w", err)
+	}
+	if w.lock, err = lockWorkspace(real); err != nil {
+		return nil, err
+	}
+	// Anything failing from here on must release the lock.
+	opened := false
+	defer func() {
+		if !opened {
+			w.lock.release()
+		}
+	}()
 
 	if w.agents, err = agents.NewRegistry(); err != nil {
 		return nil, fmt.Errorf("failed to load agent registry: %w", err)
@@ -154,6 +170,7 @@ func Open(ctx context.Context, cfg *config.Config, o Options) (*Workspace, error
 		w.Close()
 		return nil, fmt.Errorf("failed to initialize engine: %w", err)
 	}
+	opened = true
 	return w, nil
 }
 
@@ -185,13 +202,15 @@ func (w *Workspace) Locales() *i18n.Bundle { return w.locales }
 // didn't). The workspace then runs on a placeholder model.
 func (w *Workspace) ModelErr() error { return w.modelErr }
 
-// Close kills background processes and MCP servers and flushes the audit log.
+// Close kills background processes and MCP servers, flushes the audit log
+// and releases the workspace.
 func (w *Workspace) Close() error {
 	var err error
 	if w.tools != nil {
 		err = w.tools.Close()
 	}
 	w.audit.Close()
+	w.lock.release()
 	return err
 }
 

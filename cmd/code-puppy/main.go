@@ -91,7 +91,7 @@ Exit codes: 0 success, 1 error, 2 usage, 3 --max-turns reached,
 	f.BoolVar(&o.plan, "plan", false, "One-shot plan: the agent may read and search but not edit or run commands")
 	f.StringArrayVar(&o.images, "image", nil, "Attach an image to the first prompt (repeatable); @file.png in a prompt also works")
 
-	root.AddCommand(newDoctorCommand(&o.global), newConfigCommand(&o.global))
+	root.AddCommand(newDoctorCommand(&o.global), newConfigCommand(&o.global), newServeCommand(&o.global))
 	return root
 }
 
@@ -151,6 +151,9 @@ func runRoot(cmd *cobra.Command, o *rootOptions, args []string) (err error) {
 	}()
 
 	w, err := app.Open(ctx, cfg, app.Options{Streaming: pretty, Warn: warnFn})
+	if errors.Is(err, app.ErrWorkspaceBusy) {
+		return withCode(exitUsage, fmt.Errorf("%w (the Code Puppy service or another code-puppy has it open)", err))
+	}
 	if err != nil {
 		return err
 	}
