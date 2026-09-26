@@ -4,7 +4,7 @@ Written 2026-09-24 at commit `7e211697` on `main`; updated 2026-09-25. Read this
 
 ## State
 
-Roadmap items 1–20 are done and committed; each has its own commit:
+Roadmap items 1–21 are done and committed; each has its own commit:
 
 | Commit | Change |
 |---|---|
@@ -22,7 +22,8 @@ Roadmap items 1–20 are done and committed; each has its own commit:
 | `36c2758b` | Removed the committed editor swap file; `*.swp` ignored |
 | `957c08b9` | Named session snapshots (`/session save`, `/session load <name>`, `--resume=<name>`) |
 | `9eeab5e6` | Google search via Gemini grounding; `/search web`, `/search session` |
-| (the commit adding `pkg/runtime/aside.go`) | Side questions (`/btw`) |
+| `1370b80f` | Side questions (`/btw`) |
+| (the commit adding `pkg/session/title_test.go`) | Session names from the first prompt, `/rename`, terminal title, resume hint on exit |
 
 `go vet ./...` and `go test -race ./...` pass.
 
@@ -35,7 +36,8 @@ Roadmap items 1–20 are done and committed; each has its own commit:
 1. **Manual verification (needs a person).** Nothing in `MANUAL_VERIFICATION.md` has been run yet. It covers real providers (💲 = paid calls), terminal behavior, the macOS and Linux sandboxes, MCP, steering, fallback and pinning. Record results in the file; any failure becomes the next task.
 2. **Release tasks** from MANUAL_VERIFICATION section 18: pin the GitHub Actions in `.github/workflows/go-*.yml` to commit SHAs, cut `v0.1.0`, and verify the cosign signature and SBOMs.
 3. **Optional: reasoning settings per model.** Python's `/model_settings` also sets `reasoning_effort`, extended thinking and budgets. The Go wrapper (`pkg/runtime/settings.go`) is where they'd go, mapped to genai `ThinkingConfig`, which each adapter translates differently.
-4. **Optional:** the `python/` tree still names `gemini-2.5-flash` in four files. They were left alone because only the Go implementation was in scope.
+4. **Optional, from the Antigravity review (`docs/AGY.md`):** `/copy` (last reply to the clipboard, with OSC 52 over SSH), `--add-dir <path>` at startup, `/grill-me` (the agent interviews you before coding), and `/fork [n]` (branch a new session from an earlier turn).
+5. **Optional:** the `python/` tree still names `gemini-2.5-flash` in four files. They were left alone because only the Go implementation was in scope.
 
 ## Decisions already made (don't redo without a reason)
 

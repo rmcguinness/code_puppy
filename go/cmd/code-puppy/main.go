@@ -207,11 +207,8 @@ func runRoot(cmd *cobra.Command, o *rootOptions, args []string) (err error) {
 		return withCode(exitUsage, err)
 	}
 
-	title := i18n.T("session.interactive_title")
-	if oneShot {
-		title = firstLine(prompt, 60)
-	}
-	sess, resumed, err := selectSession(e.storage, o.resume, o.cont, title, e.engine.ActiveAgent())
+	// A new session is named after its first prompt.
+	sess, resumed, err := selectSession(e.storage, o.resume, o.cont, "", e.engine.ActiveAgent())
 	if err != nil {
 		return err
 	}
@@ -256,6 +253,7 @@ func runRoot(cmd *cobra.Command, o *rootOptions, args []string) (err error) {
 		SetLocale:         e.setLocale,
 		SaveAgentModel:    e.saveAgentModel,
 		SaveModelSettings: e.saveModelSettings,
+		TerminalTitle:     pretty && cfg.UI.TerminalTitle,
 		Printer: tui.PrinterOptions{
 			Out: os.Stdout, Markdown: pretty && cfg.UI.Markdown, Theme: cfg.UI.Theme,
 			Width: terminalWidth(), Spinner: pretty && cfg.UI.Spinner,
@@ -297,23 +295,12 @@ func resolvePrompt(flag string, args []string, stdinTTY, interactive bool, stdin
 	}
 }
 
-func firstLine(s string, n int) string {
-	s = strings.TrimSpace(s)
-	if i := strings.IndexByte(s, '\n'); i >= 0 {
-		s = s[:i]
-	}
-	if len(s) > n {
-		s = s[:n] + "…"
-	}
-	return s
-}
-
 // newCompleter registers slash commands and dynamic argument sources.
 func newCompleter(e *env) *tui.Completer {
 	c := tui.NewCompleter(e.tools.Workspace().Dir())
 	for _, cmd := range []string{"help", "agents", "model", "skills", "session", "set", "clear", "sandbox", "exit", "quit",
 		"undo", "checkpoints", "diff", "cost", "context", "compact", "memory", "approvals", "mcp", "resume", "locale", "attach", "paste",
-		"tools", "plan", "show", "pin_model", "unpin", "model_settings", "search", "btw"} {
+		"tools", "plan", "show", "pin_model", "unpin", "model_settings", "search", "btw", "rename"} {
 		c.Command(cmd)
 	}
 	c.Command("skills", "list", "search")

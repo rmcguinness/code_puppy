@@ -183,6 +183,7 @@ func printHelp() {
 		{"/plan <goal>", "help.plan"},
 		{"/search web|session <terms>", "help.search"},
 		{"/btw <question>", "help.btw"},
+		{"/rename <name>", "help.rename"},
 		{"!<command>", "help.shell"},
 		{"/sandbox", "help.sandbox"},
 		{"/attach [path|clear]", "help.attach"},
@@ -273,7 +274,7 @@ func handleSessionCommand(args []string, app *App) {
 			if s.Name != "" {
 				snapshot = " " + Cyan + "📸 " + safe(s.Name) + Reset
 			}
-			fmt.Printf("  • %s%s%s (%s): %s [%s]%s\n", Bold, safe(s.ID), Reset, safe(s.Agent), safe(s.Title), i18n.N("session.messages", s.MessageCount), snapshot)
+			fmt.Printf("  • %s%s%s (%s): %s [%s]%s\n", Bold, safe(s.ID), Reset, safe(s.Agent), safe(sessionTitle(s)), i18n.N("session.messages", s.MessageCount), snapshot)
 			if all {
 				ws := s.Workspace
 				if ws == "" {
@@ -294,7 +295,7 @@ func handleSessionCommand(args []string, app *App) {
 		cmdSessionSave(args[1:], app)
 
 	case "new":
-		rec, err := storage.CreateSession(session.NewSessionID(), i18n.T("session.new_title"), app.Engine.ActiveAgent())
+		rec, err := storage.CreateSession(session.NewSessionID(), "", app.Engine.ActiveAgent())
 		if err != nil {
 			fmt.Printf("%s❌ %s%s\n", Red, i18n.T("session.create_failed", "error", err), Reset)
 			return

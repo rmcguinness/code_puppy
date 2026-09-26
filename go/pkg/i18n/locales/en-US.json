@@ -60,7 +60,6 @@
     "session.messages.other": "{count} messages",
     "session.workspace_unknown": "(unknown: saved before sessions were per-workspace)",
     "session.list_all_hint": "/session list --all shows other directories",
-    "session.new_title": "New Chat",
     "session.create_failed": "Failed to create session: {error}",
     "session.started": "Started new session: {id}",
     "common.not_available": "Not available in this session.",
@@ -152,7 +151,6 @@
     "spinner.thinking": "thinking",
     "spinner.working": "working",
     "repl.hint": "Type /help for commands, /sandbox for the policy. End a line with \\ or use \"\"\" for multi-line input.",
-    "session.interactive_title": "Interactive Session",
     "repl.goodbye": "Puppy is going to take a nap. Goodbye!",
     "repl.prompt_blocked": "Prompt blocked by hook: {reason}",
     "repl.interrupted": "Interrupted",
@@ -244,6 +242,12 @@
     "search.session_none": "Nothing in this session's transcript mentions it; asking the agent anyway.",
     "help.btw": "Ask a side question; the agent answers with this session's context, but nothing is added to the conversation",
     "btw.usage": "Usage: /btw <question>   answered with this session's context, then forgotten",
-    "btw.mode": "Side question: read-only, and not kept in the conversation."
+    "btw.mode": "Side question: read-only, and not kept in the conversation.",
+    "help.rename": "Name this session (shown in /session list and the terminal title)",
+    "rename.usage": "Usage: /rename <name>",
+    "rename.failed": "Could not rename the session: {error}",
+    "rename.done": "Session renamed to {title}.",
+    "session.untitled": "(untitled)",
+    "repl.resume_hint": "Resume with: {command}"
   }
 }

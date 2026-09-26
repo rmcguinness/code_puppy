@@ -1,6 +1,6 @@
 # Manual Verification Checklist
 
-Everything here needs a person, a real terminal, real credentials, or GitHub. The automated suite (382 tests on macOS and Linux) covers the logic behind each item; this list checks the parts it can't. Each item has an **expected** result — if you see something else, note it next to the item.
+Everything here needs a person, a real terminal, real credentials, or GitHub. The automated suite (386 tests on macOS and Linux) covers the logic behind each item; this list checks the parts it can't. Each item has an **expected** result — if you see something else, note it next to the item.
 
 Setup for most items: `make build`, then use `./bin/code-puppy` (or put `bin/` on your `PATH`). Use a scratch Git repository as the workspace so edits are safe.
 
@@ -296,3 +296,11 @@ Set `fallback_models = ["anthropic/claude-sonnet-5"]` with a working Anthropic k
 - [ ] `/btw create a file notes.txt`. **Expected:** it says it can't (read-only); no file.
 - [ ] `/cost` before and after a `/btw`. **Expected:** the side question's tokens are included.
 - [ ] Exit and `--continue`. **Expected:** the recap and history have no trace of the side question.
+
+## 32. Session names and resume hint
+
+- [ ] Start the REPL. **Expected:** the terminal tab/window title is "🐶 (untitled)". Send a prompt; at the next prompt the title is its first line.
+- [ ] `/rename Login work`. **Expected:** "Session renamed to Login work."; the window title follows; `/session list` shows it.
+- [ ] `/exit`. **Expected:** "Resume with: code-puppy --resume=session-…"; the terminal's own title comes back. Running that command resumes the session.
+- [ ] `ui.terminal_title = false`. **Expected:** the window title isn't touched.
+- [ ] In tmux, with `set -g set-titles on`. **Expected:** the tmux title follows the session name.

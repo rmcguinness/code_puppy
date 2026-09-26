@@ -2,7 +2,7 @@
 
 Status key: ✅ done · 🔜 next · 📋 planned · 🔍 needs investigation first
 
-Items 10–20 were added after the first plan and appear before item 9, which stays last because it needs a person. Open work and resume notes: [NEXT_STEPS.md](NEXT_STEPS.md).
+Items 10–21 were added after the first plan and appear before item 9, which stays last because it needs a person. Open work and resume notes: [NEXT_STEPS.md](NEXT_STEPS.md).
 
 Each item lists the problem, the approach, where the change lands, how it is tested, and a rough size (S ≤ half a day, M ≈ 1–2 days, L ≈ 3+ days).
 
@@ -261,6 +261,16 @@ From a review of Google's Antigravity CLI (`docs/AGY.md`): ask something without
 **Not done.** `/btw` can't be asked while a turn is running (steering covers that case), and answers can't be kept afterwards; ask again normally to keep one.
 
 **Tests.** Engine, with a persistent session service: the side question's request has the history and the question; `create_file` is refused as read-only and writes nothing; the saved event log is byte-for-byte unchanged; usage counts the side calls; the next turn's request has the history but not the question or answer. That test was confirmed to fail when the side question runs in the real session. A side question on a session with no turns. REPL: usage, the notice, the request, the next prompt, and a transcript without the side question (confirmed to fail when it is recorded).
+
+---
+
+## 21. Session names and the resume hint — ✅ done (S)
+
+Also from the Antigravity review. Every interactive session used to be titled "Interactive Session", so `/session list` was hard to scan.
+
+**Approach.** `CreateSession` with an empty title leaves it empty, and `AddMessage` names the session after the first user prompt (`session.TitleFrom`: its first non-empty line, whitespace collapsed, at most 60 characters). This applies to the REPL, `/session new` and one-shot runs; an explicit title is kept. `/rename <name>` sets it (`Storage.Rename`, saved to the metadata). Unnamed sessions show as "(untitled)". With `ui.terminal_title` (default on, TTY only), the REPL sets the window title to "🐶 <name>" before each prompt when it changes, with control characters removed, and clears it on exit. Leaving a session that has messages prints `code-puppy --resume=<id>`. The unused `session.interactive_title` / `session.new_title` strings and `firstLine` are gone.
+
+**Tests.** `TitleFrom` (blank lines, whitespace, long UTF-8). Naming from the first user prompt only, an explicit title kept, rename saved and reloaded, an empty name refused. REPL: "(untitled)", the prompt-derived name with escape characters removed, `/rename` usage and result, the window-title sequences and their reset, and the resume hint; none of them when the title is off and the session is empty.
 
 ---
 

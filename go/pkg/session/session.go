@@ -142,7 +142,8 @@ func ValidateID(id string) error {
 	return nil
 }
 
-// CreateSession starts a new session and makes it active.
+// CreateSession starts a new session and makes it active. With title ""
+// the session is named after its first prompt (see AddMessage).
 func (s *Storage) CreateSession(id, title, agent string) (*SessionRecord, error) {
 	if id == "" {
 		id = NewSessionID()
@@ -150,10 +151,6 @@ func (s *Storage) CreateSession(id, title, agent string) (*SessionRecord, error)
 	if err := ValidateID(id); err != nil {
 		return nil, err
 	}
-	if title == "" {
-		title = "New Session"
-	}
-
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -202,8 +199,49 @@ func (s *Storage) AddMessage(role, content string) error {
 
 	s.active.Messages = append(s.active.Messages, msg)
 	s.active.MessageCount = len(s.active.Messages)
+	if s.active.Title == "" && role == "user" {
+		s.active.Title = TitleFrom(content)
+	}
 	s.active.UpdatedAt = msg.Timestamp
 	return s.writeMeta(s.active)
+}
+
+// maxTitle is the longest session title kept, in runes.
+const maxTitle = 60
+
+// TitleFrom makes a session title from a prompt: its first non-empty line,
+// with whitespace collapsed and long text cut short.
+func TitleFrom(prompt string) string {
+	for line := range strings.Lines(prompt) {
+		if t := strings.Join(strings.Fields(line), " "); t != "" {
+			if r := []rune(t); len(r) > maxTitle {
+				t = strings.TrimSpace(string(r[:maxTitle-1])) + "…"
+			}
+			return t
+		}
+	}
+	return ""
+}
+
+// Rename sets the active session's title (shown in /session list and the
+// terminal title). An empty title is refused.
+func (s *Storage) Rename(title string) error {
+	title = TitleFrom(title)
+	if title == "" {
+		return errors.New("empty session name")
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.active == nil {
+		return errors.New("no active session")
+	}
+	prev := s.active.Title
+	s.active.Title = title
+	if err := s.writeMeta(s.active); err != nil {
+		s.active.Title = prev
+		return err
+	}
+	return nil
 }
 
 // Active returns a snapshot of the currently active session, or nil.

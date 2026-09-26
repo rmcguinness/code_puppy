@@ -151,6 +151,7 @@ allow_network = true
 [ui]
 markdown  = true
 spinner   = true
+terminal_title = true   # show the session's name in the terminal window title
 diff_lines = 120
 locale    = "en-US"   # interface language; change with /locale (e.g. /locale es)
 # locales_dir = "~/.code_puppy/locales"   # extra or corrected translations (*.json)

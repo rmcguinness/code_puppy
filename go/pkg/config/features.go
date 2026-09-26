@@ -7,14 +7,16 @@ import (
 
 // UIConfig controls terminal presentation.
 type UIConfig struct {
-	Markdown    bool   `toml:"markdown"`     // render model output as Markdown (TTY only)
-	Spinner     bool   `toml:"spinner"`      // show progress while waiting (TTY only)
-	HistoryFile string `toml:"history_file"` // REPL input history
-	HistorySize int    `toml:"history_size"`
-	DiffLines   int    `toml:"diff_lines"`  // max diff lines shown in approval prompts
-	Theme       string `toml:"theme"`       // glamour style: auto, dark, light, notty
-	Locale      string `toml:"locale"`      // interface language, e.g. en-US, es, fr-CA
-	LocalesDir  string `toml:"locales_dir"` // extra translation catalogs (*.json)
+	Markdown bool `toml:"markdown"` // render model output as Markdown (TTY only)
+	Spinner  bool `toml:"spinner"`  // show progress while waiting (TTY only)
+	// TerminalTitle shows the session's name in the terminal window title (TTY only).
+	TerminalTitle bool   `toml:"terminal_title"`
+	HistoryFile   string `toml:"history_file"` // REPL input history
+	HistorySize   int    `toml:"history_size"`
+	DiffLines     int    `toml:"diff_lines"`  // max diff lines shown in approval prompts
+	Theme         string `toml:"theme"`       // glamour style: auto, dark, light, notty
+	Locale        string `toml:"locale"`      // interface language, e.g. en-US, es, fr-CA
+	LocalesDir    string `toml:"locales_dir"` // extra translation catalogs (*.json)
 }
 
 // ImagesConfig controls pictures sent to the model: @file.png mentions,
@@ -181,14 +183,15 @@ func Dir() string {
 func applyFeatureDefaults(c *Config) {
 	dir := Dir()
 	c.UI = UIConfig{
-		Markdown:    true,
-		Spinner:     true,
-		HistoryFile: filepath.Join(dir, "history"),
-		HistorySize: 1000,
-		DiffLines:   120,
-		Theme:       "auto",
-		Locale:      "en-US",
-		LocalesDir:  filepath.Join(dir, "locales"),
+		Markdown:      true,
+		Spinner:       true,
+		TerminalTitle: true,
+		HistoryFile:   filepath.Join(dir, "history"),
+		HistorySize:   1000,
+		DiffLines:     120,
+		Theme:         "auto",
+		Locale:        "en-US",
+		LocalesDir:    filepath.Join(dir, "locales"),
 	}
 	c.Memory = MemoryConfig{
 		Enabled:  true,

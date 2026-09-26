@@ -60,7 +60,6 @@
     "session.messages.other": "{count} messages",
     "session.workspace_unknown": "(inconnu : enregistrée avant que les sessions soient propres à chaque espace de travail)",
     "session.list_all_hint": "/session list --all affiche les autres répertoires",
-    "session.new_title": "Nouvelle conversation",
     "session.create_failed": "Impossible de créer la session : {error}",
     "session.started": "Nouvelle session démarrée : {id}",
     "common.not_available": "Non disponible dans cette session.",
@@ -152,7 +151,6 @@
     "spinner.thinking": "réflexion",
     "spinner.working": "travail en cours",
     "repl.hint": "Tapez /help pour les commandes, /sandbox pour la politique. Terminez une ligne par \\ ou utilisez \"\"\" pour une saisie sur plusieurs lignes.",
-    "session.interactive_title": "Session interactive",
     "repl.goodbye": "Le chiot va faire la sieste. À la prochaine!",
     "repl.prompt_blocked": "Requête bloquée par un hook : {reason}",
     "repl.interrupted": "Interrompu",
@@ -244,6 +242,12 @@
     "search.session_none": "Rien dans la transcription de cette session n’en parle; je pose quand même la question à l’agent.",
     "help.btw": "Poser une question en aparté; l’agent répond avec le contexte de cette session, sans rien ajouter à la conversation",
     "btw.usage": "Utilisation : /btw <question>   répondue avec le contexte de cette session, puis oubliée",
-    "btw.mode": "Question en aparté : lecture seule, et non conservée dans la conversation."
+    "btw.mode": "Question en aparté : lecture seule, et non conservée dans la conversation.",
+    "help.rename": "Nommer cette session (affiché dans /session list et le titre du terminal)",
+    "rename.usage": "Utilisation : /rename <nom>",
+    "rename.failed": "Impossible de renommer la session : {error}",
+    "rename.done": "Session renommée {title}.",
+    "session.untitled": "(sans titre)",
+    "repl.resume_hint": "Pour la reprendre : {command}"
   }
 }

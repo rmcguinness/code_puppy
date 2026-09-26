@@ -69,6 +69,7 @@ Subcommands: `doctor [--online]`, `config init|show|path`, `completion bash|zsh|
 | `/memory [reload\|add <note>]` | Project instructions (`AGENTS.md`, `PUPPY.md`) |
 | `/approvals [revoke <n>\|clear]` | Remembered approval rules |
 | `/session list [--all]\|new\|load <id\|name>`, `/resume <id\|name>` | Saved sessions — scoped to the current workspace; `--all` shows every directory |
+| `/rename <name>` | Name this session. New sessions are named after their first prompt; the name shows in `/session list` and the terminal window title (`ui.terminal_title`, on by default). On exit, Code Puppy prints the `code-puppy --resume=<id>` command for the session |
 | `/session save <name> [--force]` | Save a snapshot of this session (📸 in `/session list`). Loading it by name starts a new session from that point and leaves the snapshot unchanged, so you can return to it again. `--continue` skips snapshots |
 | `/agents`, `/agent <name>`, `/model <name>` | Personas and models; `/model anthropic/claude-sonnet-5` can switch provider |
 | `/pin_model [<agent> <model>]`, `/unpin <agent>` | Run an agent on its own model (e.g. qa-kitten on a cheaper one); saved under `[agent_models]` |

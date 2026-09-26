@@ -56,6 +56,8 @@ func handleExtraCommand(ctx context.Context, cmd string, args []string, app *App
 		cmdPinModel(ctx, args, app)
 	case "unpin":
 		cmdUnpin(ctx, args, app)
+	case "rename":
+		cmdRename(args, app)
 	case "model_settings":
 		cmdModelSettings(args, app)
 	default:
@@ -508,11 +510,35 @@ func cmdSessionLoad(args []string, app *App) {
 		PrintRecap(rec.Messages, 3)
 		return
 	}
-	fmt.Printf("%s▶️  %s%s\n", Green, i18n.T("resume.done", "id", safe(rec.ID), "title", safe(rec.Title), "messages", i18n.N("session.messages", rec.MessageCount)), Reset)
+	fmt.Printf("%s▶️  %s%s\n", Green, i18n.T("resume.done", "id", safe(rec.ID), "title", safe(sessionTitle(rec)), "messages", i18n.N("session.messages", rec.MessageCount)), Reset)
 	if rec.Workspace != "" && rec.Workspace != app.Storage.Workspace() {
 		fmt.Printf("%s⚠️  %s%s\n", Yellow, i18n.T("resume.other_workspace", "workspace", safe(rec.Workspace)), Reset)
 	}
 	PrintRecap(rec.Messages, 3)
+}
+
+// cmdRename names the active session (its title in /session list and the
+// terminal title).
+func cmdRename(args []string, app *App) {
+	name := strings.Join(args, " ")
+	if strings.TrimSpace(name) == "" {
+		fmt.Printf("%s%s%s\n", Yellow, i18n.T("rename.usage"), Reset)
+		return
+	}
+	if err := app.Storage.Rename(name); err != nil {
+		fmt.Printf("%s❌ %s%s\n", Red, i18n.T("rename.failed", "error", safe(err.Error())), Reset)
+		return
+	}
+	fmt.Printf("%s✅ %s%s\n", Green, i18n.T("rename.done", "title", safe(sessionTitle(app.Storage.Active()))), Reset)
+}
+
+// sessionTitle is a session's title, or a placeholder until its first
+// prompt names it.
+func sessionTitle(r *session.SessionRecord) string {
+	if r == nil || r.Title == "" {
+		return i18n.T("session.untitled")
+	}
+	return r.Title
 }
 
 // cmdSessionSave saves the active session as a named snapshot, to return

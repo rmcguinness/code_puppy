@@ -63,6 +63,8 @@ type App struct {
 	// SetLocale applies a new interface language to the model's reply
 	// instructions and saves it to the config; it returns the file written.
 	SetLocale func(ctx context.Context, l *i18n.Localizer) (string, error)
+	// TerminalTitle shows the session's name in the terminal window title.
+	TerminalTitle bool
 	// Interrupts delivers Ctrl+C. If nil, RunREPL subscribes to os.Interrupt
 	// itself. At the prompt an interrupt starts exit (confirming if background
 	// processes run); during a turn it cancels only that turn.
@@ -242,7 +244,7 @@ func RunREPL(ctx context.Context, app *App) error {
 	}
 
 	if app.Storage.Active() == nil {
-		if _, err := app.Storage.CreateSession("", i18n.T("session.interactive_title"), app.Engine.ActiveAgent()); err != nil {
+		if _, err := app.Storage.CreateSession("", "", app.Engine.ActiveAgent()); err != nil { // named after its first prompt
 			return fmt.Errorf("failed to create session: %w", err)
 		}
 	}
@@ -255,13 +257,28 @@ func RunREPL(ctx context.Context, app *App) error {
 		interrupts = ch
 	}
 
+	var shownTitle string
+	defer func() {
+		if shownTitle != "" {
+			fmt.Print("\033]0;\007") // give the terminal its own title back
+		}
+	}()
 	goodbye := func() error {
 		fmt.Printf("\n🐾 %s%s%s\n", Cyan, i18n.T("repl.goodbye"), Reset)
+		if a := app.Storage.Active(); a != nil && a.MessageCount > 0 {
+			fmt.Printf("%s%s%s\n", Dim, i18n.T("repl.resume_hint", "command", "code-puppy --resume="+a.ID), Reset)
+		}
 		return nil
 	}
 	exitPrompt := ExitPrompt{CanPrompt: true, AllowCancel: true}
 
 	for {
+		if app.TerminalTitle {
+			if t := "🐶 " + sessionTitle(app.Storage.Active()); t != shownTitle {
+				fmt.Printf("\033]0;%s\007", safe(t))
+				shownTitle = t
+			}
+		}
 		prompt := fmt.Sprintf("%s🐶 [%s]> %s", Bold+Green, app.Engine.ActiveAgent(), Reset)
 		idleCtx, stopIdle := cancelOnSignal(ctx, interrupts)
 		line, err := app.Input.ReadInput(idleCtx, prompt)
