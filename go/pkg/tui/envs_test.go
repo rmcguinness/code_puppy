@@ -40,7 +40,9 @@ func TestEnvsListPruneRemove(t *testing.T) {
 	mk(needed, true, "six==1.16.0")
 	mk("0123456789abcdef", true, "requests")
 	mk("fedcba9876543210", false)
-	run := func(cmd string) string { return captureStdout(t, func() { HandleCommand(context.Background(), cmd, app) }) }
+	run := func(cmd string) string {
+		return captureStdout(t, func() { HandleCommand(context.Background(), cmd, app) })
+	}
 
 	out := run("/envs")
 	for _, want := range []string{"Script environments (3)", needed, "six==1.16.0", "used by s", "incomplete"} {
