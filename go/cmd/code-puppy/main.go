@@ -303,7 +303,7 @@ func newCompleter(e *env) *tui.Completer {
 		"tools", "plan", "show", "pin_model", "unpin", "model_settings", "search", "btw", "rename"} {
 		c.Command(cmd)
 	}
-	c.Command("skills", "list", "search")
+	c.Command("skills", "list", "show", "search")
 	c.Command("session", "list", "new", "load", "save")
 	c.Command("search", "web", "session")
 	c.Command("memory", "show", "reload", "add")

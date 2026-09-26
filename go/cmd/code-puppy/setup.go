@@ -108,6 +108,9 @@ func buildEnv(ctx context.Context, cfg *config.Config, o envOptions) (*env, erro
 		if err := e.skills.DiscoverExternal(cfg.SkillSearchPaths()); err != nil {
 			o.warn(err.Error())
 		}
+		for _, p := range cfg.Skills.Policy.Problems() {
+			o.warn(p)
+		}
 	}
 
 	if e.tools, err = tools.NewRegistry(cfg, e.agents, e.skills); err != nil {

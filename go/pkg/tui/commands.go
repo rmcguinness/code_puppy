@@ -8,7 +8,6 @@ import (
 
 	"github.com/retail-cortex/code_puppy/pkg/i18n"
 	"github.com/retail-cortex/code_puppy/pkg/session"
-	"github.com/retail-cortex/code_puppy/pkg/skills"
 )
 
 // ErrExit is returned by HandleCommand when the user asks to quit.
@@ -91,7 +90,7 @@ func HandleCommand(ctx context.Context, input string, app *App) (bool, error) {
 		}
 
 	case "skills":
-		handleSkillsCommand(args, app.Skills)
+		handleSkillsCommand(args, app)
 
 	case "session":
 		handleSessionCommand(args, app)
@@ -168,7 +167,7 @@ func printHelp() {
 		{"/pin_model [<agent> <model>]", "help.pin"},
 		{"/unpin <agent>", "help.unpin"},
 		{"/model_settings [<model> [key=value…|reset]]", "help.model_settings"},
-		{"/skills list|search <q>", "help.skills"},
+		{"/skills list|show <name>|search <q>", "help.skills"},
 		{"/session list [--all]|new|load <id|name>|save <name>", "help.session"},
 		{"/undo [--force]", "help.undo"},
 		{"/checkpoints", "help.checkpoints"},
@@ -200,7 +199,8 @@ func printHelp() {
 	fmt.Printf("\n  %s%s%s\n\n", Dim, i18n.T("help.input"), Reset)
 }
 
-func handleSkillsCommand(args []string, prov *skills.Provider) {
+func handleSkillsCommand(args []string, app *App) {
+	prov := app.Skills
 	if prov == nil {
 		fmt.Println(i18n.T("skills.disabled"))
 		return
@@ -221,8 +221,18 @@ func handleSkillsCommand(args []string, prov *skills.Provider) {
 				tags = fmt.Sprintf("[%s]", strings.Join(s.Tags, ", "))
 			}
 			fmt.Printf("  • %s%s%s %s: %s\n", Bold, safe(s.Name), Reset, Dim+safe(tags)+Reset, safe(s.Description))
+			if line := scriptSummary(s, skillPolicy(app)); line != "" {
+				fmt.Printf("      %s%s%s\n", Dim, safe(line), Reset)
+			}
 		}
 		fmt.Println()
+
+	case "show":
+		if len(args) < 2 {
+			fmt.Printf("%s%s%s\n", Yellow, i18n.T("skills.show_usage"), Reset)
+			return
+		}
+		showSkill(args[1], prov, skillPolicy(app))
 
 	case "search":
 		query := ""

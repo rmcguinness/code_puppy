@@ -193,6 +193,23 @@ enabled = true
 # search_url      = "http://localhost:8888" # searxng instance
 # search_model    = "gemini-3.8-flash"      # google: the Gemini model that searches
 
+# [skills.policy]                                  # caps what skills' scripts may do; skills can only be stricter
+# min_hitl_tier = 2                                # 1 auto + audit, 2 also checkpoint, 3 always ask
+# allow_hitl_bypass = false                        # honour a skill's TIER_0_BYPASS_ALL (e.g. in CI)
+# languages = ["python"]
+# network = "none"                                 # none | allowlist
+# network_allow = []                               # skills allowed the network (with network = "allowlist")
+# env_passthrough = []                             # host variables skills may receive, e.g. ["GITHUB_TOKEN"]
+# max_timeout_seconds = 300
+# trusted_hashes = []                              # only these skill contents may run scripts (see /skills show)
+# deny_tools = []                                  # e.g. ["Bash:sudo*"]
+# [skills.policy.packages]
+# index = "https://pypi.org/simple"
+# wheels_only = true
+# require_hashes = false
+# allow = []
+# deny = []
+
 # [agent_models]                                   # run agents on their own model (/pin_model, /unpin)
 # qa-kitten = "anthropic/claude-haiku-4-5"
 

@@ -82,7 +82,8 @@ Subcommands: `doctor [--online]`, `config init|show|path`, `completion bash|zsh|
 | `!<command>` | Run a command yourself, like in your own terminal: in the workspace, with your environment, outside the agent's sandbox and approvals. The agent doesn't see it; the audit log records it |
 | `/attach [path\|clear]`, `/paste` | Queue an image (or the clipboard's) for your next message |
 | `/locale [code]` | Interface language (see below) |
-| `/skills`, `/set` (`/show`), `/clear`, `/exit` | |
+| `/skills list\|show <name>\|search <q>` | Skills; `show` gives a skill's scripts, dependencies, approval tier and what `[skills.policy]` allows |
+| `/set` (`/show`), `/clear`, `/exit` | |
 
 ### Images
 
@@ -186,6 +187,32 @@ command = "grep -qv 'password' || { echo 'no secrets' >&2; exit 2; }"
 - `brave` or `tavily`: key in `web.search_api_key` or `BRAVE_API_KEY` / `TAVILY_API_KEY`.
 
 (Google's Custom Search JSON API isn't supported: it's closed to new customers and shuts down on 2027-01-01.) The agent's `web_search` asks for approval (rememberable per provider) because the query leaves your machine; your own `/search web` doesn't. Results from `web.deny_domains` are dropped. `code-puppy doctor --online` runs a test search. See [Search](#search) for `/search` and its limitations.
+
+**Skills** — `SKILL.md` files in `~/.code_puppy/skills` (and, with `trust_workspace`, the project's `./skills` and `.agents/skills`). Frontmatter takes the Agent Skills fields (`name`, `description`, `license`, `compatibility`, `allowed-tools`, `metadata`) and the fields of Castor's skill definition (`castor.skills.v1.SkillDefinition`), under their proto names:
+```yaml
+---
+name: gh-issues
+description: Triage GitHub issues
+tool_requirements:
+  - {name: Bash, scopes: ["gh:*"], description: read issues}
+execution_hints:
+  hitl_tier: TIER_2_AUDITED_WRITE      # a tier name, never a number
+  environment_variables: [GITHUB_TOKEN]
+  custom_hints: {network: "true"}      # the scripts need the network
+scripts:
+  - name: list
+    language: python
+    relative_path: scripts/list.py
+    dependencies: ["requests>=2.31"]
+    timeout_seconds: 60
+---
+```
+`[skills.policy]` caps what skills may ask for: approval tier, script languages, network, which environment variables pass through, timeouts, trusted content hashes, denied tools and scopes, and packages (index, wheels only, allow/deny, pinning). The stricter of the skill's request and the policy always applies:
+- A missing tier gets `min_hitl_tier` (default 2).
+- `TIER_0_BYPASS_ALL` needs both the skill's `allow_hitl_bypass` and the policy's; otherwise it becomes tier 3.
+- Dependencies must be plain package requirements: URLs, paths and pip options are refused.
+
+`/skills show <name>` lists every decision and the skill's content hash, for `trusted_hashes`. `doctor` reports skills that don't parse and scripts the policy blocks. **Scripts aren't run yet:** isolated environments and the sandbox come next (ROADMAP item 22).
 
 **Forged tools** — tools built by `universal_constructor` are saved with a manifest in `~/.code_puppy/uc_tools` and reloaded on start; `action: "delete"` removes one.
 

@@ -1,6 +1,6 @@
 # Manual Verification Checklist
 
-Everything here needs a person, a real terminal, real credentials, or GitHub. The automated suite (386 tests on macOS and Linux) covers the logic behind each item; this list checks the parts it can't. Each item has an **expected** result — if you see something else, note it next to the item.
+Everything here needs a person, a real terminal, real credentials, or GitHub. The automated suite (399 tests on macOS and Linux) covers the logic behind each item; this list checks the parts it can't. Each item has an **expected** result — if you see something else, note it next to the item.
 
 Setup for most items: `make build`, then use `./bin/code-puppy` (or put `bin/` on your `PATH`). Use a scratch Git repository as the workspace so edits are safe.
 
@@ -306,3 +306,12 @@ Set `fallback_models = ["anthropic/claude-sonnet-5"]` with a working Anthropic k
 - [ ] `/exit`. **Expected:** "Resume with: code-puppy --resume=session-…"; the terminal's own title comes back. Running that command resumes the session.
 - [ ] `ui.terminal_title = false`. **Expected:** the window title isn't touched.
 - [ ] In tmux, with `set -g set-titles on`. **Expected:** the tmux title follows the session name.
+
+## 33. Skill definitions and `[skills.policy]`
+
+- [ ] Put a Castor-style `SKILL.md` (with `scripts`, `tool_requirements`, `execution_hints`) in `~/.code_puppy/skills/<name>/`. `/skills list`. **Expected:** a line such as "1 script · TIER_2_AUDITED_WRITE · allowed by skills.policy".
+- [ ] `/skills show <name>`. **Expected:** the content hash, required tools, tier, network, passed and withheld variables, and each script with ✓/✗ and its reasons.
+- [ ] Add `custom_hints: {network: "true"}`. **Expected:** the scripts are blocked ("needs the network…"). Set `network = "allowlist"` and `network_allow = ["<name>"]`: allowed.
+- [ ] Put the hash from `/skills show` in `trusted_hashes`, then edit the script. **Expected:** blocked ("isn't in skills.policy.trusted_hashes").
+- [ ] Break the frontmatter (`hitl_tier: TIER_9`). **Expected:** a startup warning naming the file; `doctor` shows it too.
+- [ ] `[skills.policy] sandbox = "docker"`. **Expected:** `doctor` warns: use auto, gvisor or os.

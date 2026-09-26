@@ -140,6 +140,87 @@ func (c *Config) ModelName() string {
 type SkillsConfig struct {
 	Enabled bool     `toml:"enabled"`
 	Paths   []string `toml:"paths"`
+	// Policy caps what skills may ask for; a skill can make its own
+	// settings stricter but never looser.
+	Policy SkillPolicy `toml:"policy"`
+}
+
+// SkillPolicy is the host's limit on what skills' scripts may do. For each
+// setting the stricter of the skill's request and this policy applies.
+type SkillPolicy struct {
+	// MinHITLTier is the lowest approval tier a skill gets (0-3): 1 runs
+	// automatically with an audit entry, 2 also takes a checkpoint, 3 asks
+	// every time. A skill may ask for a higher tier, never a lower one.
+	MinHITLTier int `toml:"min_hitl_tier"`
+	// AllowHITLBypass lets a skill that declares tier 0 and
+	// allow_hitl_bypass skip approval (e.g. in CI). Off: tier 0 is tier 3.
+	AllowHITLBypass bool `toml:"allow_hitl_bypass"`
+	// Languages are the script languages that may run: python, typescript.
+	Languages []string `toml:"languages"`
+	// Sandbox runs scripts under gvisor, the OS sandbox (os), or whichever
+	// is available (auto).
+	Sandbox string `toml:"sandbox"`
+	// Network is "none" (no script gets the network) or "allowlist" (only
+	// skills in NetworkAllow that ask for it).
+	Network      string   `toml:"network"`
+	NetworkAllow []string `toml:"network_allow"`
+	// EnvPassthrough lists the environment variables (globs allowed) a
+	// skill may receive from the host when it asks for them. Nothing else
+	// is passed.
+	EnvPassthrough []string `toml:"env_passthrough"`
+	// MaxTimeoutSeconds caps every script's run time.
+	MaxTimeoutSeconds int `toml:"max_timeout_seconds"`
+	// TrustedHashes, when set, are the only skill contents (ContentHash,
+	// "sha256:…") whose scripts may run.
+	TrustedHashes []string `toml:"trusted_hashes"`
+	// DenyTools refuses tool requirements by tool or "tool:scope" (globs,
+	// e.g. "Bash:sudo*"); scripts of a skill that needs one don't run.
+	DenyTools []string `toml:"deny_tools"`
+	// Packages limits script dependencies.
+	Packages PackagePolicy `toml:"packages"`
+}
+
+// Problems reports settings the policy can't honour as written.
+func (p SkillPolicy) Problems() []string {
+	var probs []string
+	if p.MinHITLTier < 0 || p.MinHITLTier > 3 {
+		probs = append(probs, fmt.Sprintf("skills.policy.min_hitl_tier = %d; use 0-3", p.MinHITLTier))
+	}
+	switch strings.ToLower(p.Sandbox) {
+	case "", "auto", "gvisor", "os":
+	default:
+		probs = append(probs, fmt.Sprintf("skills.policy.sandbox = %q; use auto, gvisor or os", p.Sandbox))
+	}
+	switch strings.ToLower(p.Network) {
+	case "", "none", "allowlist":
+	default:
+		probs = append(probs, fmt.Sprintf("skills.policy.network = %q; use none or allowlist", p.Network))
+	}
+	if len(p.NetworkAllow) > 0 && !strings.EqualFold(p.Network, "allowlist") {
+		probs = append(probs, "skills.policy.network_allow is ignored unless network = \"allowlist\"")
+	}
+	for _, l := range p.Languages {
+		if !strings.EqualFold(l, "python") && !strings.EqualFold(l, "typescript") {
+			probs = append(probs, fmt.Sprintf("skills.policy.languages: unknown language %q (python, typescript)", l))
+		}
+	}
+	if p.MaxTimeoutSeconds < 0 {
+		probs = append(probs, "skills.policy.max_timeout_seconds can't be negative")
+	}
+	return probs
+}
+
+// PackagePolicy limits the packages skill scripts may install.
+type PackagePolicy struct {
+	Index string `toml:"index"` // package index URL
+	// WheelsOnly installs pre-built packages only, so no package code runs
+	// during installation.
+	WheelsOnly bool `toml:"wheels_only"`
+	// RequireHashes requires every dependency to be pinned with "==", so
+	// installs can be checked against hashes.
+	RequireHashes bool     `toml:"require_hashes"`
+	Allow         []string `toml:"allow"` // package names (globs); empty allows any not denied
+	Deny          []string `toml:"deny"`  // package names (globs)
 }
 
 // ToolsConfig configures shell execution, file operations, and permissions.
@@ -255,6 +336,14 @@ func DefaultConfig() *Config {
 				filepath.Join(homeDir, ".code_puppy", "skills"),
 				"./skills",
 				".agents/skills",
+			},
+			Policy: SkillPolicy{
+				MinHITLTier:       2,
+				Languages:         []string{"python"},
+				Sandbox:           "auto",
+				Network:           "none",
+				MaxTimeoutSeconds: 300,
+				Packages:          PackagePolicy{Index: "https://pypi.org/simple", WheelsOnly: true},
 			},
 		},
 		Tools: ToolsConfig{

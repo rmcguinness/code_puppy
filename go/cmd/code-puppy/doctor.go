@@ -16,6 +16,7 @@ import (
 	"github.com/retail-cortex/code_puppy/pkg/memory"
 	"github.com/retail-cortex/code_puppy/pkg/observability"
 	"github.com/retail-cortex/code_puppy/pkg/runtime"
+	"github.com/retail-cortex/code_puppy/pkg/skills"
 	"github.com/retail-cortex/code_puppy/pkg/tools"
 	"github.com/retail-cortex/code_puppy/pkg/tui"
 	"github.com/spf13/cobra"
@@ -82,6 +83,7 @@ func runDoctor(ctx context.Context, g *globalFlags, online bool) []check {
 		return checks
 	}
 	add("config parse", statusOK, "provider %s, model %s, agent %s", cfg.LLM.Provider, cfg.ModelName(), cfg.CodePuppy.DefaultAgent)
+	checkSkills(cfg, add)
 
 	switch key := apiKeyFor(cfg); {
 	case cfg.LLM.Provider == "anthropic" && key == "":
@@ -354,4 +356,46 @@ func refPrefix(ref string) string {
 		return ""
 	}
 	return ref + ": "
+}
+
+// checkSkills reports skills that don't load, the skills policy's own
+// problems, and skills whose scripts the policy blocks.
+func checkSkills(cfg *config.Config, add func(name string, st checkStatus, format string, args ...any)) {
+	if !cfg.Skills.Enabled {
+		return
+	}
+	for _, p := range cfg.Skills.Policy.Problems() {
+		add("skills policy", statusWarn, "%s", p)
+	}
+	prov, err := skills.NewProvider()
+	if err != nil {
+		add("skills", statusFail, "%v", err)
+		return
+	}
+	if err := prov.DiscoverExternal(cfg.SkillSearchPaths()); err != nil {
+		for _, line := range strings.Split(err.Error(), "\n") {
+			add("skills", statusWarn, "%s", line)
+		}
+	}
+	all := prov.List()
+	withScripts, blocked := 0, 0
+	for _, s := range all {
+		if len(s.Scripts) == 0 {
+			continue
+		}
+		withScripts++
+		ev := skills.Evaluate(s, cfg.Skills.Policy)
+		if ev.Runnable() {
+			continue
+		}
+		blocked++
+		reason := "no script may run"
+		if len(ev.Blocked) > 0 {
+			reason = ev.Blocked[0]
+		} else if len(ev.Scripts[0].Reasons) > 0 {
+			reason = ev.Scripts[0].Reasons[0]
+		}
+		add("skill "+s.Name, statusWarn, "scripts blocked: %s (/skills show %s)", reason, s.Name)
+	}
+	add("skills", statusOK, "%d loaded, %d with scripts, %d blocked by skills.policy", len(all), withScripts, blocked)
 }

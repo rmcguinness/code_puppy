@@ -267,3 +267,16 @@ auto_approve = ["git status"]
 		t.Errorf("command lists not loaded: %+v", c)
 	}
 }
+
+func TestSkillPolicyProblems(t *testing.T) {
+	if p := DefaultConfig().Skills.Policy.Problems(); len(p) != 0 {
+		t.Fatalf("defaults have problems: %v", p)
+	}
+	p := SkillPolicy{MinHITLTier: 5, Sandbox: "docker", Network: "some", NetworkAllow: []string{"x"}, Languages: []string{"python", "rust"}, MaxTimeoutSeconds: -1}
+	got := strings.Join(p.Problems(), "\n")
+	for _, want := range []string{"min_hitl_tier = 5", `sandbox = "docker"`, `network = "some"`, "network_allow is ignored", `unknown language "rust"`, "max_timeout_seconds"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("missing %q in:\n%s", want, got)
+		}
+	}
+}

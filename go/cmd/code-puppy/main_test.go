@@ -426,3 +426,38 @@ func TestAgentModelRefsPrecedence(t *testing.T) {
 		t.Fatalf("warnings = %v", warnings)
 	}
 }
+
+func TestDoctorSkillsCheck(t *testing.T) {
+	home := isolate(t)
+	cp := filepath.Join(home, ".code_puppy")
+	for name, doc := range map[string]string{
+		"ok":     "---\nname: ok-skill\nscripts:\n  - name: run\n    language: python\n    inline_code: \"print(1)\"\n---\n",
+		"net":    "---\nname: net-skill\nexecution_hints: {custom_hints: {network: \"true\"}}\nscripts:\n  - name: run\n    language: python\n    inline_code: \"print(1)\"\n---\n",
+		"broken": "---\nname: broken\nexecution_hints: {hitl_tier: TIER_9}\n---\n",
+		"plain":  "---\nname: plain\n---\nJust instructions.\n",
+	} {
+		os.MkdirAll(filepath.Join(cp, "skills", name), 0o700)
+		os.WriteFile(filepath.Join(cp, "skills", name, "SKILL.md"), []byte(doc), 0o600)
+	}
+	os.WriteFile(filepath.Join(cp, ".env.toml"), []byte("[skills.policy]\nsandbox = \"docker\"\n"), 0o600)
+	byName := map[string][]check{}
+	for _, c := range runDoctor(context.Background(), &globalFlags{}, false) {
+		byName[c.name] = append(byName[c.name], c)
+	}
+	has := func(name string, st checkStatus, text string) {
+		t.Helper()
+		for _, c := range byName[name] {
+			if c.status == st && strings.Contains(c.detail, text) {
+				return
+			}
+		}
+		t.Errorf("no %q check with %q: %+v", name, text, byName[name])
+	}
+	has("skills policy", statusWarn, `sandbox = "docker"`)
+	has("skills", statusWarn, "TIER_9")
+	has("skill net-skill", statusWarn, "needs the network")
+	has("skills", statusOK, "2 with scripts, 1 blocked")
+	if len(byName["skill ok-skill"]) != 0 {
+		t.Errorf("ok-skill reported: %+v", byName["skill ok-skill"])
+	}
+}

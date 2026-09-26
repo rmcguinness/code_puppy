@@ -47,6 +47,7 @@ func (p *Provider) loadEmbeddedSkills() error {
 
 		skill, err := ParseSkillMD(data, "builtin://"+path)
 		if err == nil && skill.Name != "" {
+			skill.fsys, skill.root = builtin.FS, filepath.ToSlash(filepath.Dir(path))
 			p.skills[skill.Name] = skill
 			p.builtin[skill.Name] = true
 		}
@@ -82,13 +83,20 @@ func (p *Provider) DiscoverExternal(dirs []string) error {
 			}
 
 			skill, err := ParseSkillMD(data, path)
-			if err == nil && p.builtin[skill.Name] {
+			if err != nil {
+				// Reported rather than skipped silently: a typo in the
+				// frontmatter shouldn't make a skill vanish without a word.
+				errs = append(errs, fmt.Errorf("%s: %w", path, err))
+				return nil
+			}
+			if p.builtin[skill.Name] {
 				errs = append(errs, fmt.Errorf("%s: skill name %q is reserved by a built-in skill", path, skill.Name))
 				return nil
 			}
-			if err == nil && skill.Name != "" {
+			if skill.Name != "" {
 				// Discover any neighboring resource files
 				skillDir := filepath.Dir(path)
+				skill.fsys, skill.root = os.DirFS(skillDir), "."
 				resources := []string{}
 				entries, _ := os.ReadDir(skillDir)
 				for _, entry := range entries {
