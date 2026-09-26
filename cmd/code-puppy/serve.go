@@ -11,7 +11,9 @@ import (
 	"time"
 
 	"github.com/retail-cortex/code_puppy/internal/app"
+	"github.com/retail-cortex/code_puppy/internal/config"
 	"github.com/retail-cortex/code_puppy/internal/server"
+	"github.com/retail-cortex/code_puppy/internal/workers"
 	"github.com/spf13/cobra"
 )
 
@@ -56,6 +58,14 @@ func runServe(ctx context.Context, g *globalFlags, socket string) error {
 	warn := func(msg string) { slog.Warn(msg) }
 	defer startObservability(ctx, cfg, warn)()
 
+	// One record of enabled workers and their runs, shared by every
+	// workspace the service opens.
+	store, err := workers.OpenStore(config.ExpandHome("~/.code_puppy/workers.json"))
+	if err != nil {
+		return err
+	}
+	runs := workers.OpenRunLog(config.ExpandHome("~/.code_puppy/worker-runs"))
+
 	// Each workspace gets its own configuration: a workspace owns and
 	// changes it.
 	s := server.New(func(ctx context.Context, dir string) (*app.Workspace, error) {
@@ -67,6 +77,7 @@ func runServe(ctx context.Context, g *globalFlags, socket string) error {
 		w, err := app.Open(ctx, cfg, app.Options{
 			Streaming: true,
 			Warn:      func(msg string) { slog.Warn(msg, "workspace", dir) },
+			Workers:   store,
 		})
 		if err != nil {
 			return nil, err
@@ -76,7 +87,7 @@ func runServe(ctx context.Context, g *globalFlags, socket string) error {
 		}
 		slog.Info("workspace opened", "workspace", dir)
 		return w, nil
-	})
+	}, server.WithScheduler(server.SchedulerConfig{Store: store, Runs: runs, MaxConcurrent: cfg.Workers.Policy.MaxConcurrent}))
 	defer s.Close()
 
 	l, err := server.Listen(socket)
@@ -87,6 +98,9 @@ func runServe(ctx context.Context, g *globalFlags, socket string) error {
 		return err
 	}
 	defer os.Remove(socket)
+	if cfg.Workers.Enabled {
+		s.StartScheduler(ctx)
+	}
 	fmt.Fprintf(os.Stderr, "🐶 Code Puppy service listening on %s\n", socket)
 	slog.Info("serve", "socket", socket)
 	return server.Serve(ctx, l, s.Handler(), serveGrace)

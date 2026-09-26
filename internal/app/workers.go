@@ -39,6 +39,9 @@ type WorkerInfo struct {
 	Next     time.Time
 	Agent    string
 	Model    string
+	// CatchUp is "once" when a run missed while nothing was running should
+	// happen as soon as possible, otherwise "none".
+	CatchUp string
 	// Permissions and Limits are what the worker gets after the host
 	// policy (see workers.Apply).
 	Permissions []string
@@ -92,7 +95,7 @@ func (w *Workspace) workerInfo(wk *workers.Worker, loadErr error, now time.Time)
 	info := WorkerInfo{
 		Workspace: w.Dir(), Name: wk.Name, Description: wk.Description, Path: wk.Path, Hash: wk.Hash,
 		State:    w.workerStore.State(w.Dir(), wk, loadErr),
-		Schedule: wk.Schedule.Text, Cron: wk.Schedule.Cron, Agent: wk.Agent, Model: wk.Model,
+		Schedule: wk.Schedule.Text, Cron: wk.Schedule.Cron, Agent: wk.Agent, Model: wk.Model, CatchUp: wk.CatchUp,
 	}
 	if wk.Schedule.Location != nil {
 		info.Timezone = wk.Schedule.Location.String()
@@ -200,7 +203,17 @@ const unattendedPreamble = "You are running unattended as the scheduled worker %
 // permissions after the host policy (anything else is refused and
 // recorded), and stops at its limits. on receives the turn's events.
 // A run of the same worker still going makes this ErrRunInProgress.
-func (w *Workspace) RunWorker(ctx context.Context, name string, manual bool, on func(Event)) (workers.Run, error) {
+// RunOptions configure RunWorker.
+type RunOptions struct {
+	// Manual: started on request rather than by the schedule.
+	Manual bool
+	// OnStart receives the run's record as it starts (its ID and session).
+	OnStart func(workers.Run)
+	// OnEvent receives the turn's events.
+	OnEvent func(Event)
+}
+
+func (w *Workspace) RunWorker(ctx context.Context, name string, o RunOptions) (workers.Run, error) {
 	wk, loadErr, err := w.worker(name)
 	if err != nil {
 		return workers.Run{}, err
@@ -211,7 +224,12 @@ func (w *Workspace) RunWorker(ctx context.Context, name string, manual bool, on 
 	w.runsMu.Lock()
 	if w.running[name] {
 		w.runsMu.Unlock()
-		return workers.Run{}, ErrRunInProgress
+		skipped := workers.Run{ID: newRunID(), Workspace: w.Dir(), Worker: name, Hash: wk.Hash, Status: workers.RunSkipped,
+			Manual: o.Manual, Started: time.Now(), Error: ErrRunInProgress.Error()}
+		if !o.Manual { // a scheduled run that couldn't happen is worth a record
+			w.runLog.Append(skipped)
+		}
+		return skipped, ErrRunInProgress
 	}
 	w.running[name] = true
 	w.runsMu.Unlock()
@@ -222,7 +240,7 @@ func (w *Workspace) RunWorker(ctx context.Context, name string, manual bool, on 
 	}()
 
 	eff := workers.Apply(wk, w.cfg.Workers.Policy)
-	run := workers.Run{ID: newRunID(), Workspace: w.Dir(), Worker: name, Hash: wk.Hash, Status: workers.RunRunning, Manual: manual, Started: time.Now()}
+	run := workers.Run{ID: newRunID(), Workspace: w.Dir(), Worker: name, Hash: wk.Hash, Status: workers.RunRunning, Manual: o.Manual, Started: time.Now()}
 
 	st, err := session.NewStorage(w.cfg.Session.StorageDir)
 	if err != nil {
@@ -234,6 +252,9 @@ func (w *Workspace) RunWorker(ctx context.Context, name string, manual bool, on 
 		return run, err
 	}
 	run.SessionID = rec.ID
+	if o.OnStart != nil {
+		o.OnStart(run)
+	}
 
 	var refusalsMu sync.Mutex
 	decide := func(_ context.Context, req tools.ApprovalRequest) (tools.Decision, error) {
@@ -252,6 +273,7 @@ func (w *Workspace) RunWorker(ctx context.Context, name string, manual bool, on 
 		runCtx, stop = context.WithTimeoutCause(runCtx, eff.Limits.Timeout, fmt.Errorf("the run reached its time limit (%s)", eff.Limits.Timeout))
 		defer stop()
 	}
+	on := o.OnEvent
 	if on == nil {
 		on = func(Event) {}
 	}

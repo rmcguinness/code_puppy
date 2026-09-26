@@ -102,16 +102,20 @@ func TestRunWorkerEnforcesPermissions(t *testing.T) {
 	addWorker(t, w, "deps", "---\nschedule: daily at 6 AM\npermissions: [\"write:reports/\"]\n---\nWrite reports/deps.md.\n")
 	user := newSession(t, w)
 
-	if _, err := w.RunWorker(context.Background(), "deps", true, nil); !errors.Is(err, ErrWorkerNotEnabled) {
+	if _, err := w.RunWorker(context.Background(), "deps", RunOptions{Manual: true}); !errors.Is(err, ErrWorkerNotEnabled) {
 		t.Fatalf("not enabled: %v", err)
 	}
 	enable(t, w, "deps")
 	var results []string
-	run, err := w.RunWorker(context.Background(), "deps", true, func(e Event) {
+	var started workers.Run
+	run, err := w.RunWorker(context.Background(), "deps", RunOptions{Manual: true, OnStart: func(r workers.Run) { started = r }, OnEvent: func(e Event) {
 		if e.ToolResult != nil {
 			results = append(results, fmt.Sprint(e.ToolResult.Result))
 		}
-	})
+	}})
+	if started.ID != run.ID || started.Status != workers.RunRunning {
+		t.Errorf("started %+v", started)
+	}
 	if err != nil || run.Status != workers.RunSucceeded || !run.Manual || run.SessionID == "" || run.SessionID == user.ID {
 		t.Fatalf("run %+v %v", run, err)
 	}
@@ -146,7 +150,7 @@ func TestRunWorkerStopsAtItsTurnLimit(t *testing.T) {
 	w, _ := openTestWith(t, nil, list, list, list, text("done"))
 	addWorker(t, w, "loop", "---\nschedule: hourly\nlimits: {max_turns: 2}\n---\nLook around.\n")
 	enable(t, w, "loop")
-	run, err := w.RunWorker(context.Background(), "loop", false, nil)
+	run, err := w.RunWorker(context.Background(), "loop", RunOptions{})
 	if err != nil || run.Status != workers.RunLimited || run.Error == "" {
 		t.Errorf("run %+v %v", run, err)
 	}

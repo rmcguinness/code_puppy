@@ -18,6 +18,7 @@ import (
 	pb "github.com/retail-cortex/code_puppy/internal/gen/codepuppy/v1"
 	"github.com/retail-cortex/code_puppy/internal/gen/codepuppy/v1/codepuppyv1connect"
 	"github.com/retail-cortex/code_puppy/internal/images"
+	"github.com/retail-cortex/code_puppy/internal/workers"
 )
 
 // Opener opens the workspace in dir, an absolute directory. The server
@@ -27,9 +28,8 @@ type Opener func(ctx context.Context, dir string) (*app.Workspace, error)
 
 // Server holds the open workspaces and serves the API.
 type Server struct {
-	codepuppyv1connect.UnimplementedWorkerServiceHandler
-
 	open   Opener
+	sched  *scheduler // nil: workers aren't run
 	broker *broker
 
 	mu         sync.Mutex
@@ -45,8 +45,12 @@ type workspace struct {
 }
 
 // New returns a server that opens workspaces with open.
-func New(open Opener) *Server {
-	return &Server{open: open, broker: newBroker(), workspaces: map[string]*workspace{}}
+func New(open Opener, opts ...Option) *Server {
+	s := &Server{open: open, broker: newBroker(), workspaces: map[string]*workspace{}}
+	for _, o := range opts {
+		o(s)
+	}
+	return s
 }
 
 // Handler serves every service.
@@ -54,7 +58,7 @@ func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.Handle(codepuppyv1connect.NewSessionServiceHandler(sessionService{s}))
 	mux.Handle(codepuppyv1connect.NewWorkspaceServiceHandler(workspaceService{s}))
-	mux.Handle(codepuppyv1connect.NewWorkerServiceHandler(s))
+	mux.Handle(codepuppyv1connect.NewWorkerServiceHandler(workerService{s}))
 	return mux
 }
 
@@ -188,6 +192,7 @@ func toAPI(err error) error {
 		invalidSetting *app.InvalidSettingError
 		unknownSetting *app.UnknownSettingError
 		blocked        *app.BlockedError
+		invalidWorker  *workers.InvalidError
 	)
 	switch {
 	case errors.As(err, &unknownAgent):
@@ -200,6 +205,8 @@ func toAPI(err error) error {
 		return apiError(connect.CodeInvalidArgument, "UNKNOWN_SETTING", err, "key", unknownSetting.Key)
 	case errors.As(err, &blocked):
 		return apiError(connect.CodePermissionDenied, "PROMPT_BLOCKED", err, "reason", blocked.Reason)
+	case errors.As(err, &invalidWorker):
+		return apiError(connect.CodeFailedPrecondition, "WORKER_INVALID", err)
 	}
 	for _, m := range []struct {
 		target error
@@ -217,6 +224,11 @@ func toAPI(err error) error {
 		{app.ErrNoFetch, connect.CodeFailedPrecondition, "NO_FETCH"},
 		{app.ErrNoSearch, connect.CodeFailedPrecondition, "NO_SEARCH"},
 		{app.ErrNothingToCompact, connect.CodeFailedPrecondition, "NOTHING_TO_COMPACT"},
+		{app.ErrUnknownWorker, connect.CodeNotFound, "UNKNOWN_WORKER"},
+		{app.ErrWorkerNotEnabled, connect.CodeFailedPrecondition, "WORKER_DISABLED"},
+		{app.ErrRunInProgress, connect.CodeFailedPrecondition, "RUN_IN_PROGRESS"},
+		{app.ErrWorkersDisabled, connect.CodeFailedPrecondition, "WORKERS_DISABLED"},
+		{workers.ErrHashMismatch, connect.CodeFailedPrecondition, "HASH_MISMATCH"},
 	} {
 		if errors.Is(err, m.target) {
 			return apiError(m.code, m.reason, err)
